@@ -1,10 +1,16 @@
-# Torima Auto（開発・検証用）
+# Torima Auto (Android 個人用検証アプリ)
 
-トリマ画面のAccessibility UIツリーを検証する個人用Androidプロジェクト。公式アプリではありません。
+トリマのAccessibility UIツリーを検証するための個人用Androidプロジェクトです。トリマ公式アプリではありません。
 
-- Android Studioで開くフォルダは、このREADMEがあるプロジェクトルート。
-- 既存のインストール済みテストアプリとの互換性維持のため、`applicationId` とKotlinパッケージ名は `com.neru.powlautotest` のまま。
-- トリマの対象パッケージ名は `jp.co.incrementp.milemobile`。
-- `.github/workflows/android.yml` でmainへのpush時にデバッグAPKを生成し、ActionsのArtifactsに保存。
-- **まだアプリ内更新機能は未実装**。GitHub ActionsのデバッグAPKは恒久的な更新署名の保証がないため、次の段階で固定のリリース署名とアプリ内更新機能を導入する。
-- Accessibilityサービスの許可と操作対象アプリの利用規約に注意。
+- **GitHubリポジトリは1つ**: https://github.com/Wacky1425/torima-auto （Public）
+- GitHub ActionsでDebug APKを生成します。
+- GitHub Actionsに署名鍵Secretsが登録されていれば、署名付きRelease APKを作り、同じリポジトリの**Releases**に公開します。
+- アプリ内の「アプリの更新を確認」から、同じリポジトリの最新Releasesを読み取ります。
+- Android Studioで開くのは、このREADMEがある`TorimaAuto`フォルダです。
+- 既存のテストアプリとの互換性維持のため、`applicationId`とKotlinパッケージ名は`com.neru.powlautotest`のままです。
+- 操作対象のトリマのパッケージ名は`jp.co.incrementp.milemobile`です。
+- **毎回、配布する際に`app/build.gradle.kts`の`versionCode`と`versionName`を増やしてください**。同じタグの既存Releaseは上書きしません。
+
+セットアップの詳細は [`SETUP_UPDATE_JA.md`](SETUP_UPDATE_JA.md) にあります。
+
+注意: GitHubをPublicにすると、ソースコード・コミット履歴・ReleaseのAPKが誰でも見られます。署名鍵、認証情報や個人情報をcommitしないでください。トリマの利用規約にも注意してください。

@@ -19,6 +19,10 @@ keystore.properties
 .DS_Store
 Thumbs.db
 
-*.jks
-*.keystore
-*.p12
+
+# Misc secrets / local environment
+.env
+.env.*
+!.env.example
+*.apk
+*.aab

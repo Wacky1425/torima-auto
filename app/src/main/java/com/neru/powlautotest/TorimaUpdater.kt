@@ -16,7 +16,7 @@ import java.net.URL
 
 /** Public release APK only. Never embed a GitHub token in the application. */
 class TorimaUpdater(private val activity: Activity, private val status: TextView) {
-    private val endpoint = "https://api.github.com/repos/Wacky1425/torima-auto-distribution/releases/latest"
+    private val endpoint = "https://api.github.com/repos/Wacky1425/torima-auto/releases/latest"
     private fun show(s: String) = activity.runOnUiThread { status.text = s }
     private fun connection(url: String): HttpURLConnection {
         val c = URL(url).openConnection() as HttpURLConnection
@@ -35,7 +35,7 @@ class TorimaUpdater(private val activity: Activity, private val status: TextView
                 val code = c.responseCode
                 if (code != 200) {
                     c.disconnect()
-                    show("更新情報を取得できません（HTTP $code）。公開配布リポジトリのReleaseを確認してください。")
+                    show("更新情報を取得できません（HTTP $code）。torima-auto のReleasesを確認してください。")
                     return@Thread
                 }
                 val release = c.inputStream.bufferedReader().use { JSONObject(it.readText()) }
@@ -49,16 +49,16 @@ class TorimaUpdater(private val activity: Activity, private val status: TextView
                     val a = assets.getJSONObject(i)
                     if (a.optString("name") == "TorimaAuto-release.apk") apkUrl = a.optString("browser_download_url")
                 }
-                if (remote.isEmpty() || apkUrl.isEmpty() || !apkUrl.startsWith("https://github.com/Wacky1425/torima-auto-distribution/releases/download/")) {
+                if (remote.isEmpty() || apkUrl.isEmpty() || !apkUrl.startsWith("https://github.com/Wacky1425/torima-auto/releases/download/")) {
                     show("配布情報が不完全です。タグとTorimaAuto-release.apkを確認してください。")
                     return@Thread
                 }
                 if (compareVersions(remote, local) <= 0) {
-                    show("最新版です（現在 v${local.joinToString(".")} / 配布 v$tag）")
+                    show("最新版です（現在 v${local.joinToString(".")} / 配布 $tag）")
                 } else {
-                    show("更新があります：v$tag（現在 v${local.joinToString(".")}）")
+                    show("更新があります：$tag（現在 v${local.joinToString(".")}）")
                     activity.runOnUiThread {
-                        AlertDialog.Builder(activity).setTitle("Torima Auto v$tag")
+                        AlertDialog.Builder(activity).setTitle("Torima Auto $tag")
                             .setMessage("APKをダウンロードしてAndroidのインストール確認画面を開きます。")
                             .setNegativeButton("キャンセル", null)
                             .setPositiveButton("ダウンロード") { _, _ -> download(apkUrl) }.show()

@@ -1,16 +1,5 @@
-【初回GitHub登録】
-1. https://github.com/new を開き、Repository name=torima-auto、Privateを選び、README/.gitignore/licenseは追加せず作成。
-2. このZIPを展開する。展開したTorimaAutoフォルダをAndroid Studioで開ける。
-3. PowerShellで展開したTorimaAutoフォルダに移動し、次を順に実行。
-   git init
-   git branch -M main
-   git add .
-   git commit -m "Initial Torima Auto project"
-   git remote add origin https://github.com/ユーザー名/torima-auto.git
-   git push -u origin main
-   ※ ユーザー名はGitHubの自分のユーザー名に変更。Git未設定なら git config --global user.name "表示名" / git config --global user.email "GitHub登録メール"
-4. GitHubリポジトリのActionsを開く。Android APK build が成功すればAPKビルドの設定は完了。
-5. 次の開発ステップで固定署名鍵・Release APK・アプリ内更新機能を追加する。現時点ではAPK自動ビルドのみ。
-
-【注意】
-GitHubへはZIP自体ではなく、展開したプロジェクトファイルをpushする。
+【現在の構成】
+GitHubは https://github.com/Wacky1425/torima-auto の1リポジトリのみ（Public）。
+GitHubへの初回登録は完了しています。
+今後は README.md と SETUP_UPDATE_JA.md を参照してください。
+別の配布用リポジトリやGitHub Personal Access Tokenは必要ありません。
