@@ -18,6 +18,7 @@ class MainActivity:AppCompatActivity(){
  }}
  override fun onCreate(b:Bundle?){super.onCreate(b);setContentView(R.layout.activity_main)
   results=findViewById(R.id.results);state=findViewById(R.id.debugStatus)
+  findViewById<Button>(R.id.checkUpdate).setOnClickListener{ TorimaUpdater(this,findViewById(R.id.updateStatus)).check() }
   findViewById<Button>(R.id.openSettings).setOnClickListener{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}
   findViewById<Button>(R.id.checkHome).setOnClickListener{runTest(false)}
   findViewById<Button>(R.id.tapHome).setOnClickListener{runTest(true)}

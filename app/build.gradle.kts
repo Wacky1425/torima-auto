@@ -9,8 +9,25 @@ android {
         applicationId = "com.neru.powlautotest"
         minSdk = 24
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.9"
+        versionCode = 10
+        versionName = "1.0"
+    }
+    signingConfigs {
+        create("distribution") {
+            val store = System.getenv("TORIMA_KEYSTORE")
+            if (!store.isNullOrBlank()) {
+                storeFile = file(store)
+                storePassword = System.getenv("TORIMA_STORE_PASSWORD")
+                keyAlias = System.getenv("TORIMA_KEY_ALIAS")
+                keyPassword = System.getenv("TORIMA_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("distribution")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
