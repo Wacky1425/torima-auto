@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Torima Auto</string>
+    <string name="accessibility_desc">トリマの自動操作方式を検証するためのテストサービス</string>
+</resources>
