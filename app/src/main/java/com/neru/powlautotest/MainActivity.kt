@@ -38,7 +38,7 @@ class MainActivity:AppCompatActivity(){
   val s=PowlAccessibilityService.instance
   if(s==null){Toast.makeText(this,"アクセシビリティを有効にしてください",Toast.LENGTH_LONG).show();return}
   s.scheduleAdScan()
-  Toast.makeText(this,"5秒以内に広告画面へ。×は押しません",Toast.LENGTH_LONG).show()
+  Toast.makeText(this,"15秒以内に広告画面へ。15/17/19秒で3回診断します（タップなし）",Toast.LENGTH_LONG).show()
  }
  private fun runTest(tap:Boolean){val s=PowlAccessibilityService.instance
   if(s==null){Toast.makeText(this,"アクセシビリティを有効にしてください",Toast.LENGTH_LONG).show();return}
