@@ -17,58 +17,148 @@ class PowlAccessibilityService:AccessibilityService(){
  override fun onAccessibilityEvent(e:AccessibilityEvent?){}
  override fun onDestroy(){stopSequence();if(instance===this)instance=null;super.onDestroy()}
 
+
  private var sequenceActive=false
  private var sequenceStarted=0L
  private var closeAttempted=false
+ private var runId=0
+ private var homeFallbackUsed=false
+ private var homeTransitionStart=0L
+ private var homeTransitionCount=0
+ private var homeTapBounds=Rect()
+ private val homeTrace=ArrayList<String>()
  private val adTrace=ArrayList<String>()
  private var lastAdState=""
  private var lastAdTraceAt=0L
  private val adPoll=object:Runnable{override fun run(){checkAdClose()}}
+
+ private fun appendHomeTrace(message:String){
+  homeTrace.add(message)
+  while(homeTrace.size>22)homeTrace.removeAt(0)
+ }
+ private fun homeLog():String=homeTrace.joinToString("\n")
+
  fun stopSequence(){
+  runId++
   sequenceActive=false
   h.removeCallbacks(adPoll)
   report="停止しました。\n"+report
  }
  fun startSequence(){
+  runId++
   sequenceActive=false
   h.removeCallbacks(adPoll)
   closeAttempted=false
+  homeFallbackUsed=false
+  homeTransitionCount=0
+  homeTrace.clear()
   adTrace.clear();lastAdState="";lastAdTraceAt=0L
-  report="5秒後にHOMEを確認して紫ボタンを1回押します。\n広告は最大90秒待機します。"
-  h.postDelayed({startHomeSequence()},5000)
+  val id=runId
+  report="5秒後にHOME判定。画面遷移を確認できた場合だけ広告待機へ進みます。"
+  h.postDelayed({if(runId==id)startHomeSequence(id)},5000)
  }
- private fun startHomeSequence(){
+ private fun startHomeSequence(id:Int){
+  if(runId!=id)return
   val root=rootInActiveWindow ?: run{report="HOME取得失敗。操作なし";return}
   val nodes=ArrayList<AccessibilityNodeInfo>()
-  fun walk(n:AccessibilityNodeInfo){if(nodes.size>=350)return;nodes.add(n);for(i in 0 until n.childCount)n.getChild(i)?.let{walk(it)}}
+  fun walk(n:AccessibilityNodeInfo){
+   if(nodes.size>=350)return
+   nodes.add(n)
+   for(i in 0 until n.childCount)n.getChild(i)?.let{walk(it)}
+  }
   walk(root)
   val texts=nodes.map{it.text?.toString().orEmpty()+" "+it.contentDescription?.toString().orEmpty()}
   val remaining=texts.any{Regex("あと\\s*[0-9０-９]+\\s*回獲得できます").containsMatchIn(it)}
-  val tank=texts.any{it.contains("タンク") && (it.contains("マイル")||it.contains("満タン"))}
+  val tank=texts.any{it.contains("タンク")&&(it.contains("マイル")||it.contains("満タン"))}
   val move=nodes.any{it.contentDescription?.toString()=="move"}
-  val candidates=nodes.filter{val b=Rect();it.getBoundsInScreen(b);it.isClickable&&it.isEnabled&&it.isVisibleToUser&&b.left>=0&&b.right<=1080&&b.top in 1100..1300&&b.width()>=600&&b.height() in 90..230}
-  if(root.packageName?.toString()!="jp.co.incrementp.milemobile"||!remaining||!tank||!move||candidates.size!=1||texts.any{it.contains("友達にシェアする")||it.contains("このまま受け取る")}){
-   report="HOME判定失敗。操作なし。 remaining=$remaining tank=$tank move=$move candidates=${candidates.size}";return
+  val candidates=nodes.filter{
+   val b=Rect();it.getBoundsInScreen(b)
+   it.isClickable && it.isEnabled && it.isVisibleToUser &&
+    b.left>=0 && b.right<=1080 && b.top in 1100..1300 &&
+    b.width()>=600 && b.height() in 90..230
   }
-  val target=candidates.single()
-  val bounds=Rect();target.getBoundsInScreen(bounds)
-  val ok=target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-  if(ok){beginAdWait("HOME ACTION_CLICK=true")}
-  else{
-   val path=Path().apply{moveTo(bounds.exactCenterX(),bounds.exactCenterY())}
-   val gesture=GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path,0,120)).build()
-   val accepted=dispatchGesture(gesture,object:GestureResultCallback(){
-    override fun onCompleted(g:GestureDescription?){beginAdWait("HOME gesture completed")}
-    override fun onCancelled(g:GestureDescription?){report="HOME gesture cancelled。停止"}
-   },null)
-   if(!accepted)report="HOME gesture rejected。停止"
+  val pkg=root.packageName?.toString().orEmpty()
+  appendHomeTrace("HOME判定 pkg=$pkg nodes=${nodes.size} remaining=$remaining tank=$tank move=$move candidates=${candidates.size}")
+  if(pkg!="jp.co.incrementp.milemobile"||!remaining||!tank||!move||candidates.size!=1||
+   texts.any{it.contains("友達にシェアする")||it.contains("このまま受け取る")}){
+   report="HOME判定失敗。操作なし\n"+homeLog()
+   return
   }
+  val button=candidates.single()
+  button.getBoundsInScreen(homeTapBounds)
+  appendHomeTrace("HOMEボタン ${homeTapBounds.toShortString()} / ACTION_CLICK開始")
+  homeTransitionStart=android.os.SystemClock.elapsedRealtime()
+  val ok=button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+  appendHomeTrace("HOME ACTION_CLICK=$ok（実際の遷移は未確認）")
+  if(ok){
+   report="HOMEタップ命令受付。遷移確認中...\n"+homeLog()
+   h.postDelayed({verifyHomeTransition(id)},2400)
+  }else{
+   homeFallbackUsed=true
+   sendHomeGesture(id,"ACTION_CLICK=false")
+  }
+ }
+ private fun sendHomeGesture(id:Int,reason:String){
+  if(runId!=id)return
+  appendHomeTrace("HOME gesture試行: $reason / ${homeTapBounds.toShortString()}")
+  val path=Path().apply{moveTo(homeTapBounds.exactCenterX(),homeTapBounds.exactCenterY())}
+  val gesture=GestureDescription.Builder()
+   .addStroke(GestureDescription.StrokeDescription(path,0,120)).build()
+  val accepted=dispatchGesture(gesture,object:GestureResultCallback(){
+   override fun onCompleted(g:GestureDescription?){
+    if(runId!=id)return
+    appendHomeTrace("HOME gesture=COMPLETED（画面遷移は未確認）")
+    h.postDelayed({verifyHomeTransition(id)},2000)
+   }
+   override fun onCancelled(g:GestureDescription?){
+    if(runId!=id)return
+    report="HOME gesture=CANCELLED。停止\n"+homeLog()
+   }
+  },null)
+  if(!accepted)report="HOME gesture=REJECTED。停止\n"+homeLog()
+  else report="HOMEのタップを確認中...\n"+homeLog()
+ }
+ private fun verifyHomeTransition(id:Int){
+  if(runId!=id || sequenceActive)return
+  val elapsed=android.os.SystemClock.elapsedRealtime()-homeTransitionStart
+  val root=rootInActiveWindow
+  val pkg=root?.packageName?.toString().orEmpty()
+  var count=0;var remaining=false;var tank=false;var move=false
+  if(root!=null){
+   walkNodes(root){node->
+    count++
+    val value=node.text?.toString().orEmpty()+" "+node.contentDescription?.toString().orEmpty()
+    if(Regex("あと\\s*[0-9０-９]+\\s*回獲得できます").containsMatchIn(value))remaining=true
+    if(value.contains("タンク") && (value.contains("マイル")||value.contains("満タン")))tank=true
+    if(node.contentDescription?.toString()=="move")move=true
+   }
+  }
+  val stillHome=pkg=="jp.co.incrementp.milemobile" && remaining && tank && move
+  val differentTarget=pkg=="jp.co.incrementp.milemobile" && count>=3 && !stillHome
+  appendHomeTrace("遷移確認 ${elapsed/1000}s pkg=$pkg nodes=$count HOME=$stillHome")
+  if(differentTarget)homeTransitionCount++ else homeTransitionCount=0
+  if(homeTransitionCount>=2){
+   appendHomeTrace("HOME以外のトリマ画面を2回確認。広告待機開始（広告の種類は未確定）")
+   beginAdWait("HOMEからの画面遷移を確認")
+   return
+  }
+  if(stillHome && !homeFallbackUsed && elapsed>=2200){
+   homeFallbackUsed=true
+   sendHomeGesture(id,"ACTION_CLICK後もHOMEのまま")
+   return
+  }
+  if(elapsed>=16500){
+   report="HOMEからの遷移を確認できないため停止（広告待機には進まない）。\n"+homeLog()
+   return
+  }
+  report="HOMEの画面遷移を確認中...\n"+homeLog()
+  h.postDelayed({verifyHomeTransition(id)},1500)
  }
  private fun beginAdWait(prefix:String){
   sequenceActive=true
   sequenceStarted=android.os.SystemClock.elapsedRealtime()
-  report="$prefix\n広告Close Adを待機中..."
-  h.postDelayed(adPoll,1500)
+  report="$prefix\n広告Close Adを待機中...\n--- HOME履歴 ---\n"+homeLog()
+  h.postDelayed(adPoll,1200)
  }
  private fun recordAdState(state:String, elapsed:Long){
   if(state!=lastAdState || elapsed-lastAdTraceAt>=10000){
@@ -255,6 +345,21 @@ class PowlAccessibilityService:AccessibilityService(){
        .append(" text=${txt.take(90)} desc=${desc.take(90)}\n")
      }
     }
+   }
+
+   if(ui.node.packageName?.toString()=="jp.co.incrementp.milemobile"){
+    sb.append("参考ノード（最大45件、文字/descまたはクリック可能）:\n")
+    var detailCount=0
+    for(node in nodes){
+     val t=node.text?.toString().orEmpty()
+     val d=node.contentDescription?.toString().orEmpty()
+     if(t.isBlank() && d.isBlank() && !node.isClickable)continue
+     detailCount++
+     if(detailCount>45)break
+     val rect=Rect();node.getBoundsInScreen(rect)
+     sb.append(" - ${rect.toShortString()} click=${node.isClickable} enabled=${node.isEnabled} visible=${node.isVisibleToUser} text=${t.take(70)} desc=${d.take(70)}\n")
+    }
+    if(detailCount==0)sb.append(" 表示できる詳細ノードなし\n")
    }
    sb.append("候補数=$found\n")
    if(count<=2){
