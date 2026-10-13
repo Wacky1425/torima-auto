@@ -233,10 +233,19 @@ class PowlAccessibilityService:AccessibilityService(){
   for(ui in roots){
    if(ui.node.packageName?.toString()!="jp.co.incrementp.milemobile")continue
    walkNodes(ui.node){node->
-    val label=node.contentDescription?.toString()?.trim()
-    if(label?.equals("Close Ad",ignoreCase=true)==true){
+    val label=node.contentDescription?.toString()?.trim().orEmpty()
+    val isCloseAd=label.equals("Close Ad",ignoreCase=true)
+    val isCloseButton=label.equals("Close button",ignoreCase=true)
+    if(isCloseAd||isCloseButton){
      val rect=Rect();node.getBoundsInScreen(rect)
-     if(rect.width()>0 && rect.height()>0){
+     val screenWidth=resources.displayMetrics.widthPixels
+     // "Close button" is generic: only accept a small, visible Button at the top right.
+     val safeCloseButton=!isCloseButton || (
+      node.className?.toString()?.substringAfterLast('.')=="Button" &&
+      rect.left>=screenWidth*7/10 && rect.right<=screenWidth &&
+      rect.top in 0..400 && rect.width() in 24..180 && rect.height() in 24..180
+     )
+     if(safeCloseButton && rect.width()>0 && rect.height()>0){
       val key="${node.windowId}/${rect.left},${rect.top},${rect.right},${rect.bottom}"
       if(!unique.containsKey(key))unique[key]=CloseCandidate(node,rect,ui.label)
      }
@@ -261,13 +270,13 @@ class PowlAccessibilityService:AccessibilityService(){
   val roots=currentRoots()
   val closes=findCloseCandidates(roots)
   val valid=closes.filter{isActionableClose(it)}
-  recordAdState("${describeRoots(roots)} / CloseAd=${closes.size} 有効=${valid.size}",elapsed)
+  recordAdState("${describeRoots(roots)} / CloseCandidates=${closes.size} 有効=${valid.size}",elapsed)
   if(valid.size==1){
    closeAttempted=true;sequenceActive=false
    val candidate=valid.single()
    val b=candidate.bounds
    val clicked=candidate.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-   report="Close Ad検出 ${b.toShortString()} (${candidate.source})\nACTION_CLICK=$clicked\nクリック後を確認中...\n"+adLog()
+   report="閉じるボタン検出 [${candidate.node.contentDescription}] ${b.toShortString()} (${candidate.source})\nACTION_CLICK=$clicked\nクリック後を確認中...\n"+adLog()
    if(!clicked){
     tapCloseCenter(b,"ACTION_CLICK=false（Close Ad特定済み）")
    }else{
@@ -286,12 +295,12 @@ class PowlAccessibilityService:AccessibilityService(){
   }
   if(valid.size>1){
    sequenceActive=false
-   report="Close Ad候補が複数のため停止。\n"+adLog()
+   report="広告の閉じるボタン候補が複数のため停止。\n"+adLog()
    return
   }
   if(elapsed>90000){
    sequenceActive=false
-   report="90秒経過。Close Ad未検出のため停止。\n--- 途中ログ ---\n"+adLog()
+   report="90秒経過。広告の閉じるボタン未検出のため停止。\n--- 途中ログ ---\n"+adLog()
    return
   }
   report="広告Close Ad待機中 ${elapsed/1000}秒 / 90秒\n--- 途中ログ ---\n"+adLog()
@@ -369,8 +378,8 @@ class PowlAccessibilityService:AccessibilityService(){
   }
   if(roots.isEmpty())sb.append("取得可能なウィンドウなし\n")
   val closes=findCloseCandidates(roots)
-  sb.append("重複除去後 Close Ad=${closes.size} 有効=${closes.count{isActionableClose(it)}}\n")
-  if(closes.isEmpty())sb.append("Close AdはUIツリーに見つかりませんでした。\n")
+  sb.append("重複除去後 閉じるボタン=${closes.size} 有効=${closes.count{isActionableClose(it)}}\n")
+  if(closes.isEmpty())sb.append("対応する閉じるボタンはUIツリーに見つかりませんでした。\n")
   return sb.toString().take(15000)
  }
  fun scheduleHomeTest(tap:Boolean){
