@@ -20,6 +20,9 @@ class PowlAccessibilityService:AccessibilityService(){
  private var sequenceActive=false
  private var sequenceStarted=0L
  private var closeAttempted=false
+ private val adTrace=ArrayList<String>()
+ private var lastAdState=""
+ private var lastAdTraceAt=0L
  private val adPoll=object:Runnable{override fun run(){checkAdClose()}}
  fun stopSequence(){
   sequenceActive=false
@@ -30,6 +33,7 @@ class PowlAccessibilityService:AccessibilityService(){
   sequenceActive=false
   h.removeCallbacks(adPoll)
   closeAttempted=false
+  adTrace.clear();lastAdState="";lastAdTraceAt=0L
   report="5秒後にHOMEを確認して紫ボタンを1回押します。\n広告は最大90秒待機します。"
   h.postDelayed({startHomeSequence()},5000)
  }
@@ -66,32 +70,96 @@ class PowlAccessibilityService:AccessibilityService(){
   report="$prefix\n広告Close Adを待機中..."
   h.postDelayed(adPoll,1500)
  }
+ private fun recordAdState(state:String, elapsed:Long){
+  if(state!=lastAdState || elapsed-lastAdTraceAt>=10000){
+   lastAdState=state;lastAdTraceAt=elapsed
+   adTrace.add("${elapsed/1000}s: $state")
+   while(adTrace.size>18)adTrace.removeAt(0)
+  }
+ }
+ private fun adLog():String=adTrace.joinToString("\n")
+ private fun closeNodes(root:AccessibilityNodeInfo):List<AccessibilityNodeInfo>{
+  val result=ArrayList<AccessibilityNodeInfo>()
+  var scanned=0
+  fun walk(n:AccessibilityNodeInfo){
+   if(++scanned>450)return
+   if(n.contentDescription?.toString()?.trim()?.equals("Close Ad",ignoreCase=true)==true)result.add(n)
+   for(i in 0 until n.childCount)n.getChild(i)?.let{walk(it)}
+  }
+  walk(root)
+  return result
+ }
+ private fun tapCloseCenter(bounds:Rect, reason:String){
+  val x=bounds.exactCenterX();val y=bounds.exactCenterY()
+  val path=Path().apply{moveTo(x,y)}
+  val gesture=GestureDescription.Builder()
+   .addStroke(GestureDescription.StrokeDescription(path,0,120)).build()
+  val accepted=dispatchGesture(gesture,object:GestureResultCallback(){
+   override fun onCompleted(g:GestureDescription?){
+    report="Close Ad座標タップ完了 ($x,$y)\nreason=$reason\n" + adLog()
+   }
+   override fun onCancelled(g:GestureDescription?){
+    report="Close Ad座標タップ中止。\nreason=$reason\n" + adLog()
+   }
+  },null)
+  if(!accepted)report="Close Ad座標タップ拒否。\nreason=$reason\n"+adLog()
+ }
  private fun checkAdClose(){
   if(!sequenceActive||closeAttempted)return
   val elapsed=android.os.SystemClock.elapsedRealtime()-sequenceStarted
-  if(elapsed>90000){sequenceActive=false;report="90秒経過。Close Ad未検出のため停止。";return}
   val root=rootInActiveWindow
-  if(root!=null && root.packageName?.toString()=="jp.co.incrementp.milemobile"){
-   val found=ArrayList<AccessibilityNodeInfo>()
-   fun walk(n:AccessibilityNodeInfo){
-    if(n.contentDescription?.toString()?.trim()?.equals("Close Ad",true)==true && n.isClickable && n.isEnabled && n.isVisibleToUser){
-     val b=Rect();n.getBoundsInScreen(b)
-     if(b.width()>0&&b.height()>0)found.add(n)
-    }
-    for(i in 0 until n.childCount)n.getChild(i)?.let{walk(it)}
+  if(root==null){
+   recordAdState("root=null",elapsed)
+  }else{
+   root.refresh()
+   val pkg=root.packageName?.toString().orEmpty()
+   val matches=closeNodes(root)
+   val valid=matches.filter{
+    val b=Rect();it.getBoundsInScreen(b)
+    it.isClickable && it.isEnabled && it.isVisibleToUser && b.width()>0 && b.height()>0
    }
-   walk(root)
-   if(found.size==1){
-    closeAttempted=true
-    sequenceActive=false
-    val b=Rect();found.single().getBoundsInScreen(b)
-    val clicked=found.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)
-    report="Close Ad検出 ${b.toShortString()}\nACTION_CLICK=$clicked\n操作はここで終了。次の画面を確認してください。"
+   val state="pkg=$pkg CloseAd=${matches.size} 有効=${valid.size}"
+   recordAdState(state,elapsed)
+   if(pkg=="jp.co.incrementp.milemobile" && valid.size==1){
+    closeAttempted=true;sequenceActive=false
+    val n=valid.single()
+    val b=Rect();n.getBoundsInScreen(b)
+    val clicked=n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    report="Close Ad検出 ${b.toShortString()}\nACTION_CLICK=$clicked\nクリック後を確認中...\n"+adLog()
+    if(!clicked){
+     tapCloseCenter(b,"ACTION_CLICK=false（Close Ad特定済み）")
+    }else{
+     h.postDelayed({
+      val current=rootInActiveWindow
+      if(current?.packageName?.toString()=="jp.co.incrementp.milemobile"){
+       val still=closeNodes(current).filter{
+        val rect=Rect();it.getBoundsInScreen(rect)
+        it.isEnabled && it.isVisibleToUser && rect==b
+       }
+       if(still.size==1){
+        tapCloseCenter(b,"ACTION_CLICK後も同じClose Adが表示")
+       }else{
+        report="ACTION_CLICK=true。Close Adが消えました（画面確認が必要）。\n"+adLog()
+       }
+      }else{
+       report="ACTION_CLICK=true。広告画面からの遷移を検出。\n"+adLog()
+      }
+     },1800)
+    }
     return
    }
-   if(found.size>1){sequenceActive=false;report="Close Adが複数。安全停止。";return}
+   if(pkg=="jp.co.incrementp.milemobile" && valid.size>1){
+    sequenceActive=false
+    report="Close Ad候補が複数のため停止。\n"+adLog()
+    return
+   }
   }
-  report="広告Close Ad待機中 ${elapsed/1000}秒 / 90秒"
+  if(elapsed>90000){
+   sequenceActive=false
+   report="90秒経過。Close Ad未検出のため停止。\n--- 途中ログ ---\n"+adLog()
+   return
+  }
+  report="広告Close Ad待機中 ${elapsed/1000}秒 / 90秒\n--- 途中ログ ---\n"+adLog()
   h.postDelayed(adPoll,2000)
  }
  fun scheduleAdScan(){
