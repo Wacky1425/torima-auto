@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v1.3" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v1.4" android:textSize="23sp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
 <Button android:id="@+id/checkHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME判定（タップなし）"/>
 <Button android:id="@+id/tapHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME判定＋1回だけタップ"/>
-<Button android:id="@+id/runSequence" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME→画面遷移確認→広告Close Ad"/>
+<Button android:id="@+id/runSequence" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME→広告の×を閉じる（1回）"/>
 <Button android:id="@+id/stopSequence" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="広告待機を停止"/>
 <Button android:id="@+id/scanAd" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="15秒後に広告の全操作候補を3回診断（押さない）"/>
 <Button android:id="@+id/copyResults" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="診断結果をコピー"/>
