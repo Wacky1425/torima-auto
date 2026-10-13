@@ -11,12 +11,27 @@ import android.view.accessibility.AccessibilityNodeInfo
 class PowlAccessibilityService:AccessibilityService(){
  companion object{@Volatile var instance:PowlAccessibilityService?=null}
  private val h=Handler(Looper.getMainLooper())
+ private val screenCollector by lazy { ScreenCollector(this) }
  @Volatile var report="未実行"
  override fun onServiceConnected(){super.onServiceConnected();instance=this;report="サービス接続完了"}
  override fun onInterrupt(){}
  override fun onAccessibilityEvent(e:AccessibilityEvent?){}
- override fun onDestroy(){stopSequence();if(instance===this)instance=null;super.onDestroy()}
+ override fun onDestroy(){screenCollector.hide();stopSequence();if(instance===this)instance=null;super.onDestroy()}
 
+
+
+ fun showScreenCollector():String {
+  stopSequence()
+  val message=screenCollector.show()
+  report=message
+  return message
+ }
+ fun hideScreenCollector():String {
+  screenCollector.hide()
+  val message="画面記録バーを終了。アプリで『収集ログをまとめてコピー』を押してください。"
+  report=message
+  return message
+ }
 
  private var sequenceActive=false
  private var sequenceStarted=0L
