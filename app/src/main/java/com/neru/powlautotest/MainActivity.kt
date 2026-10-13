@@ -4,6 +4,7 @@ import android.os.*
 import android.provider.Settings
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 class MainActivity:AppCompatActivity(){
  private val h=Handler(Looper.getMainLooper())
  private lateinit var results:TextView
@@ -22,6 +23,32 @@ class MainActivity:AppCompatActivity(){
   findViewById<Button>(R.id.openSettings).setOnClickListener{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}
   findViewById<Button>(R.id.checkHome).setOnClickListener{runTest(false)}
   findViewById<Button>(R.id.tapHome).setOnClickListener{runTest(true)}
+
+  findViewById<Button>(R.id.startCollector).setOnClickListener{
+   val service=PowlAccessibilityService.instance
+   val message=service?.showScreenCollector() ?:"アクセシビリティが未接続です。先に有効にしてください。"
+   Toast.makeText(this,message,Toast.LENGTH_LONG).show()
+  }
+  findViewById<Button>(R.id.stopCollector).setOnClickListener{
+   val message=PowlAccessibilityService.instance?.hideScreenCollector() ?: "記録バーは表示されていません"
+   Toast.makeText(this,message,Toast.LENGTH_LONG).show()
+  }
+  findViewById<Button>(R.id.copyCollector).setOnClickListener{
+   val data=ScreenCollector.export(this)
+   (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+    .setPrimaryClip(ClipData.newPlainText("Torima screen samples",data))
+   Toast.makeText(this,"${ScreenCollector.count(this)}画面分のログをコピーしました（${data.length}文字）",Toast.LENGTH_LONG).show()
+  }
+  findViewById<Button>(R.id.clearCollector).setOnClickListener{
+   AlertDialog.Builder(this)
+    .setTitle("収集ログを全件削除しますか？")
+    .setMessage("コピー前に削除すると元に戻せません。")
+    .setNegativeButton("キャンセル",null)
+    .setPositiveButton("削除"){_,_->
+     ScreenCollector.clear(this)
+     Toast.makeText(this,"収集ログを削除しました",Toast.LENGTH_SHORT).show()
+    }.show()
+  }
   findViewById<Button>(R.id.scanAd).setOnClickListener{runAdScan(false)}
   findViewById<Button>(R.id.scanAdTap).setOnClickListener{runAdScan(true)}
   findViewById<Button>(R.id.runSequence).setOnClickListener{
