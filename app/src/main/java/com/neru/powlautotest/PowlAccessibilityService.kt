@@ -42,12 +42,14 @@ class PowlAccessibilityService:AccessibilityService(){
   runId++
   sequenceActive=false
   h.removeCallbacks(adPoll)
+  h.removeCallbacks(adScanPoll)
   report="停止しました。\n"+report
  }
  fun startSequence(){
   runId++
   sequenceActive=false
   h.removeCallbacks(adPoll)
+  h.removeCallbacks(adScanPoll)
   closeAttempted=false
   homeFallbackUsed=false
   homeTransitionCount=0
@@ -134,11 +136,14 @@ class PowlAccessibilityService:AccessibilityService(){
    }
   }
   val stillHome=pkg=="jp.co.incrementp.milemobile" && remaining && tank && move
-  val differentTarget=pkg=="jp.co.incrementp.milemobile" && count>=3 && !stillHome
+  // A rendered ad sometimes exposes just one opaque accessibility node.
+  // Require persistence before treating that screen as a likely transition.
+  val opaqueTarget=pkg=="jp.co.incrementp.milemobile" && count==1 && elapsed>=4500L
+  val differentTarget=pkg=="jp.co.incrementp.milemobile" && !stillHome && (count>=3 || opaqueTarget)
   appendHomeTrace("遷移確認 ${elapsed/1000}s pkg=$pkg nodes=$count HOME=$stillHome")
   if(differentTarget)homeTransitionCount++ else homeTransitionCount=0
   if(homeTransitionCount>=2){
-   appendHomeTrace("HOME以外のトリマ画面を2回確認。広告待機開始（広告の種類は未確定）")
+   appendHomeTrace("HOME以外の画面を連続確認（nodes=$count）。広告待機開始（広告かどうかは未確定）")
    beginAdWait("HOMEからの画面遷移を確認")
    return
   }
@@ -307,26 +312,81 @@ class PowlAccessibilityService:AccessibilityService(){
   h.postDelayed(adPoll,2000)
  }
 
+
+ private var adScanTapMode=false
+ private var adScanTapped=false
+ private var adScanResult=""
+ private var adScanId=0
+
+ private fun displayAdScan(){
+  report=adScanPoll.snapshots.joinToString("\n\n")+
+   (if(adScanTapMode)"\n\n--- タップ診断 ---\n"+adScanResult else "")
+ }
+ private fun tryScanCloseTap(){
+  if(!adScanTapMode||adScanTapped)return
+  val valid=findCloseCandidates(currentRoots()).filter{isActionableClose(it)}
+  if(valid.size!=1){
+   adScanResult=if(valid.size==0)"安全な閉じるボタンを特定できず。タップなし。"
+    else "閉じる候補が複数。タップなし。"
+   return
+  }
+  adScanTapped=true
+  val candidate=valid.single()
+  val bounds=candidate.bounds
+  val id=adScanId
+  val x=bounds.exactCenterX()
+  val y=bounds.exactCenterY()
+  val label=candidate.node.contentDescription?.toString().orEmpty()
+  adScanResult="検出: $label ${bounds.toShortString()} / 中央を1回タップ試行中"
+  val path=Path().apply{moveTo(x,y)}
+  val gesture=GestureDescription.Builder()
+   .addStroke(GestureDescription.StrokeDescription(path,0,120)).build()
+  val accepted=dispatchGesture(gesture,object:GestureResultCallback(){
+   override fun onCompleted(g:GestureDescription?){
+    if(id!=runId)return
+    adScanResult="検出: $label ${bounds.toShortString()}\nジェスチャー完了 ($x,$y)。画面が閉じたかは実機で確認。"
+    displayAdScan()
+   }
+   override fun onCancelled(g:GestureDescription?){
+    if(id!=runId)return
+    adScanResult="検出: $label ${bounds.toShortString()}\nジェスチャーがキャンセルされました。"
+    displayAdScan()
+   }
+  },null)
+  if(!accepted)adScanResult="検出: $label ${bounds.toShortString()}\nジェスチャーが拒否されました。"
+ }
  private val adScanPoll=object:Runnable{
   var count=0
   val snapshots=ArrayList<String>()
   override fun run(){
+   if(adScanId!=runId)return
    count++
    snapshots.add(scanAdSnapshot(count))
-   report=snapshots.joinToString("\n\n")
+   if(adScanTapMode&&!adScanTapped)tryScanCloseTap()
+   if(count==3&&adScanTapMode&&!adScanTapped){
+    adScanResult+="\n3回診断終了。閉じるボタンを特定できないため押していません。"
+   }
+   displayAdScan()
    if(count<3)h.postDelayed(this,2000)
   }
  }
- fun scheduleAdScan(){
+ fun scheduleAdScan(tap:Boolean=false){
+  runId++
+  sequenceActive=false
+  h.removeCallbacks(adPoll)
   h.removeCallbacks(adScanPoll)
+  adScanId=runId
+  adScanTapMode=tap
+  adScanTapped=false
+  adScanResult=if(tap)"診断待機中。識別できた閉じるボタンだけ1回押します。" else ""
   adScanPoll.count=0
   adScanPoll.snapshots.clear()
-  report="15秒後に広告UI診断開始（15・17・19秒の3回、タップなし）"
+  report="15秒後に広告UIを3回診断（${if(tap)"識別した×のみ1回タップ" else "タップなし"}）"
   h.postDelayed(adScanPoll,15000)
  }
  private fun scanAdSnapshot(number:Int):String{
   val roots=currentRoots()
-  val sb=StringBuilder("広告診断 #$number（自動タップなし）\n")
+  val sb=StringBuilder("広告診断 #$number（${if(adScanTapMode)"識別した×のみタップ" else "自動タップなし"}）\n")
   sb.append("root数=${roots.size}\n")
   for(ui in roots){
    val nodes=ArrayList<AccessibilityNodeInfo>()
