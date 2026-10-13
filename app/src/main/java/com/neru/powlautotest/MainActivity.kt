@@ -26,7 +26,7 @@ class MainActivity:AppCompatActivity(){
   findViewById<Button>(R.id.runSequence).setOnClickListener{
    val service=PowlAccessibilityService.instance
    if(service==null)Toast.makeText(this,"アクセシビリティをONにしてください",Toast.LENGTH_LONG).show()
-   else{service.startSequence();Toast.makeText(this,"5秒以内にトリマ HOMEへ",Toast.LENGTH_LONG).show()}
+   else{service.startSequence();Toast.makeText(this,"5秒以内にトリマ HOMEへ。紫ボタンが押せたか自動確認します",Toast.LENGTH_LONG).show()}
   }
   findViewById<Button>(R.id.stopSequence).setOnClickListener{PowlAccessibilityService.instance?.stopSequence()}
   findViewById<Button>(R.id.copyResults).setOnClickListener{
