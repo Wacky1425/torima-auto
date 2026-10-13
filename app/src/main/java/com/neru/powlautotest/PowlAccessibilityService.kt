@@ -104,55 +104,100 @@ class PowlAccessibilityService:AccessibilityService(){
   },null)
   if(!accepted)report="Close Ad座標タップ拒否。\nreason=$reason\n"+adLog()
  }
+
+ private data class UiRoot(val label:String,val node:AccessibilityNodeInfo)
+ private data class CloseCandidate(val node:AccessibilityNodeInfo,val bounds:Rect,val source:String)
+
+ // Active window may only contain a placeholder FrameLayout (nodes=1).
+ // Check all accessible windows as well. The same node may be exposed twice.
+ private fun currentRoots():List<UiRoot>{
+  val roots=ArrayList<UiRoot>()
+  rootInActiveWindow?.let{roots.add(UiRoot("active",it))}
+  try{
+   windows?.forEachIndexed{index,window->
+    window.root?.let{root->
+     roots.add(UiRoot("window$index(id=${window.id},type=${window.type},layer=${window.layer},active=${window.isActive})",root))
+    }
+   }
+  }catch(e:Exception){
+   // Some Android builds may temporarily reject window enumeration.
+  }
+  return roots
+ }
+ private fun walkNodes(root:AccessibilityNodeInfo,limit:Int=450,visit:(AccessibilityNodeInfo)->Unit):Int{
+  var visited=0
+  fun walk(node:AccessibilityNodeInfo){
+   if(visited>=limit)return
+   visited++
+   visit(node)
+   for(i in 0 until node.childCount){
+    if(visited>=limit)break
+    node.getChild(i)?.let{walk(it)}
+   }
+  }
+  walk(root)
+  return visited
+ }
+ private fun findCloseCandidates(roots:List<UiRoot>):List<CloseCandidate>{
+  val unique=LinkedHashMap<String,CloseCandidate>()
+  for(ui in roots){
+   if(ui.node.packageName?.toString()!="jp.co.incrementp.milemobile")continue
+   walkNodes(ui.node){node->
+    val label=node.contentDescription?.toString()?.trim()
+    if(label?.equals("Close Ad",ignoreCase=true)==true){
+     val rect=Rect();node.getBoundsInScreen(rect)
+     if(rect.width()>0 && rect.height()>0){
+      val key="${node.windowId}/${rect.left},${rect.top},${rect.right},${rect.bottom}"
+      if(!unique.containsKey(key))unique[key]=CloseCandidate(node,rect,ui.label)
+     }
+    }
+   }
+  }
+  return unique.values.toList()
+ }
+ private fun isActionableClose(candidate:CloseCandidate):Boolean{
+  val node=candidate.node
+  return node.isClickable && node.isEnabled && node.isVisibleToUser
+ }
+ private fun describeRoots(roots:List<UiRoot>):String=
+  if(roots.isEmpty())"root=none" else roots.joinToString(" | "){ui->
+   val pkg=ui.node.packageName?.toString().orEmpty()
+   val count=walkNodes(ui.node){}
+   "${ui.label}:$pkg nodes=$count"
+  }
  private fun checkAdClose(){
   if(!sequenceActive||closeAttempted)return
   val elapsed=android.os.SystemClock.elapsedRealtime()-sequenceStarted
-  val root=rootInActiveWindow
-  if(root==null){
-   recordAdState("root=null",elapsed)
-  }else{
-   root.refresh()
-   val pkg=root.packageName?.toString().orEmpty()
-   val matches=closeNodes(root)
-   val valid=matches.filter{
-    val b=Rect();it.getBoundsInScreen(b)
-    it.isClickable && it.isEnabled && it.isVisibleToUser && b.width()>0 && b.height()>0
+  val roots=currentRoots()
+  val closes=findCloseCandidates(roots)
+  val valid=closes.filter{isActionableClose(it)}
+  recordAdState("${describeRoots(roots)} / CloseAd=${closes.size} 有効=${valid.size}",elapsed)
+  if(valid.size==1){
+   closeAttempted=true;sequenceActive=false
+   val candidate=valid.single()
+   val b=candidate.bounds
+   val clicked=candidate.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+   report="Close Ad検出 ${b.toShortString()} (${candidate.source})\nACTION_CLICK=$clicked\nクリック後を確認中...\n"+adLog()
+   if(!clicked){
+    tapCloseCenter(b,"ACTION_CLICK=false（Close Ad特定済み）")
+   }else{
+    h.postDelayed({
+     val still=findCloseCandidates(currentRoots()).filter{
+      isActionableClose(it) && it.bounds==b
+     }
+     if(still.size==1){
+      tapCloseCenter(b,"ACTION_CLICK後も同じClose Adが表示")
+     }else{
+      report="ACTION_CLICK=true。Close Adが消えました（次の画面を確認してください）。\n"+adLog()
+     }
+    },1800)
    }
-   val state="pkg=$pkg CloseAd=${matches.size} 有効=${valid.size}"
-   recordAdState(state,elapsed)
-   if(pkg=="jp.co.incrementp.milemobile" && valid.size==1){
-    closeAttempted=true;sequenceActive=false
-    val n=valid.single()
-    val b=Rect();n.getBoundsInScreen(b)
-    val clicked=n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-    report="Close Ad検出 ${b.toShortString()}\nACTION_CLICK=$clicked\nクリック後を確認中...\n"+adLog()
-    if(!clicked){
-     tapCloseCenter(b,"ACTION_CLICK=false（Close Ad特定済み）")
-    }else{
-     h.postDelayed({
-      val current=rootInActiveWindow
-      if(current?.packageName?.toString()=="jp.co.incrementp.milemobile"){
-       val still=closeNodes(current).filter{
-        val rect=Rect();it.getBoundsInScreen(rect)
-        it.isEnabled && it.isVisibleToUser && rect==b
-       }
-       if(still.size==1){
-        tapCloseCenter(b,"ACTION_CLICK後も同じClose Adが表示")
-       }else{
-        report="ACTION_CLICK=true。Close Adが消えました（画面確認が必要）。\n"+adLog()
-       }
-      }else{
-       report="ACTION_CLICK=true。広告画面からの遷移を検出。\n"+adLog()
-      }
-     },1800)
-    }
-    return
-   }
-   if(pkg=="jp.co.incrementp.milemobile" && valid.size>1){
-    sequenceActive=false
-    report="Close Ad候補が複数のため停止。\n"+adLog()
-    return
-   }
+   return
+  }
+  if(valid.size>1){
+   sequenceActive=false
+   report="Close Ad候補が複数のため停止。\n"+adLog()
+   return
   }
   if(elapsed>90000){
    sequenceActive=false
@@ -162,61 +207,66 @@ class PowlAccessibilityService:AccessibilityService(){
   report="広告Close Ad待機中 ${elapsed/1000}秒 / 90秒\n--- 途中ログ ---\n"+adLog()
   h.postDelayed(adPoll,2000)
  }
- fun scheduleAdScan(){
-  report="5秒後に広告UIを取得します（操作なし）"
-  h.postDelayed({scanAd()},5000)
- }
- private fun scanAd(){
-  val root=rootInActiveWindow
-  if(root==null){report="広告診断: root=null。操作なし";return}
-  val nodes=ArrayList<AccessibilityNodeInfo>()
-  fun walk(n:AccessibilityNodeInfo){
-   if(nodes.size>=400)return
-   nodes.add(n)
-   for(i in 0 until n.childCount)n.getChild(i)?.let{walk(it)}
+
+ private val adScanPoll=object:Runnable{
+  var count=0
+  val snapshots=ArrayList<String>()
+  override fun run(){
+   count++
+   snapshots.add(scanAdSnapshot(count))
+   report=snapshots.joinToString("\n\n")
+   if(count<3)h.postDelayed(this,2000)
   }
-  walk(root)
-  val pkg=root.packageName?.toString().orEmpty()
-  val sb=StringBuilder()
-  sb.append("広告診断（自動タップなし）\npackage=$pkg nodes=${nodes.size}\n")
-  val words=listOf("閉じる","とじる","close","skip","スキップ","終了","×","✕","✖","dismiss")
-  var found=0
-  for(n in nodes){
-   val text=n.text?.toString().orEmpty()
-   val desc=n.contentDescription?.toString().orEmpty()
-   val label=(text+" "+desc).trim()
-   val rect=Rect();n.getBoundsInScreen(rect)
-   val match=words.any{label.contains(it,ignoreCase=true)}
-   // List potential unlabeled clickable controls near the top corners as diagnostics only.
-   val topCorner=n.isClickable && rect.width() in 15..200 && rect.height() in 15..200 &&
-    rect.top in 0..380 && (rect.left in 0..200 || rect.right in 880..1080)
-   if(match || topCorner){
-    found++
-    sb.append("#$found ").append(n.className?.toString()?.substringAfterLast('.'))
-      .append(" bounds=").append(rect.toShortString())
-      .append(" clickable=").append(n.isClickable)
-      .append(" enabled=").append(n.isEnabled)
-      .append(" visible=").append(n.isVisibleToUser)
-      .append(" selected=").append(n.isSelected)
-      .append(" text=").append(text.take(120))
-      .append(" desc=").append(desc.take(120))
-      .append("\n")
+ }
+ fun scheduleAdScan(){
+  h.removeCallbacks(adScanPoll)
+  adScanPoll.count=0
+  adScanPoll.snapshots.clear()
+  report="15秒後に広告UI診断開始（15・17・19秒の3回、タップなし）"
+  h.postDelayed(adScanPoll,15000)
+ }
+ private fun scanAdSnapshot(number:Int):String{
+  val roots=currentRoots()
+  val sb=StringBuilder("広告診断 #$number（自動タップなし）\n")
+  sb.append("root数=${roots.size}\n")
+  for(ui in roots){
+   val nodes=ArrayList<AccessibilityNodeInfo>()
+   val count=walkNodes(ui.node,400){nodes.add(it)}
+   sb.append("[${ui.label}] package=${ui.node.packageName} nodes=$count")
+   if(count==400)sb.append(" (上限到達)")
+   sb.append("\n")
+   var found=0
+   for(node in nodes){
+    val txt=node.text?.toString().orEmpty()
+    val desc=node.contentDescription?.toString().orEmpty()
+    val label="$txt $desc"
+    val rect=Rect();node.getBoundsInScreen(rect)
+    val match=listOf("Close Ad","閉じる","とじる","close","skip","スキップ","終了","×","✕","✖","dismiss")
+     .any{label.contains(it,ignoreCase=true)}
+    val corner=node.isClickable && rect.width() in 15..200 && rect.height() in 15..200 &&
+     rect.top in 0..380 && (rect.left in 0..200 || rect.right in 880..1080)
+    if(match||corner){
+     found++
+     if(found<=20){
+      sb.append(" #$found ${node.className?.toString()?.substringAfterLast('.')} ")
+       .append(rect.toShortString())
+       .append(" clickable=${node.isClickable} enabled=${node.isEnabled}")
+       .append(" visible=${node.isVisibleToUser}")
+       .append(" text=${txt.take(90)} desc=${desc.take(90)}\n")
+     }
+    }
+   }
+   sb.append("候補数=$found\n")
+   if(count<=2){
+    val r=Rect();ui.node.getBoundsInScreen(r)
+    sb.append("root bounds=${r.toShortString()} childCount=${ui.node.childCount}\n")
    }
   }
-  sb.append("候補数=$found\n")
-  if(found==0)sb.append("閉じる候補がUIツリーに見つかりませんでした。\n")
-  sb.append("\n--- 参考: 表示中の文字・クリック可能ノード（最大120件） ---\n")
-  var shown=0
-  for(n in nodes){
-   if(shown>=120)break
-   val t=n.text?.toString().orEmpty()
-   val d=n.contentDescription?.toString().orEmpty()
-   if(t.isBlank() && d.isBlank() && !n.isClickable)continue
-   val rect=Rect();n.getBoundsInScreen(rect)
-   sb.append("${shown+1}. ${rect.toShortString()} click=${n.isClickable} enabled=${n.isEnabled} text=${t.take(70)} desc=${d.take(70)}\n")
-   shown++
-  }
-  report=sb.toString()
+  if(roots.isEmpty())sb.append("取得可能なウィンドウなし\n")
+  val closes=findCloseCandidates(roots)
+  sb.append("重複除去後 Close Ad=${closes.size} 有効=${closes.count{isActionableClose(it)}}\n")
+  if(closes.isEmpty())sb.append("Close AdはUIツリーに見つかりませんでした。\n")
+  return sb.toString().take(15000)
  }
  fun scheduleHomeTest(tap:Boolean){
   report="5秒後にHOME判定。タップ=${if(tap)"あり" else "なし"}"
