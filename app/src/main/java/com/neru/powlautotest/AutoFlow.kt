@@ -27,6 +27,8 @@ class AutoFlow(
  }
  private val h=Handler(Looper.getMainLooper())
  private val learned by lazy{LearnedActions(service)}
+ private val collection by lazy{CollectionRunStore(service)}
+ fun collectionStatus():String=CollectionRunStore.summary(service)
  private var playRecoveryStep=0
  private var playRecoveryAt=0L
  private var playRecoveryAttempts=0
@@ -91,7 +93,8 @@ class AutoFlow(
   playRecoveryStep=0
   playRecoveryAt=0L
   playRecoveryAttempts=0
-  update("起動中：画面判定を開始。登録済み${LearnedActions.count(service)}件の学習ルールも照合")
+  collection.begin()
+  update("起動中：タンク動画回収を開始（上限3時間）。学習ルール${LearnedActions.count(service)}件も照合")
   h.postDelayed(poll,450)
   return "自動操作を開始しました。不明な画面では一切タップしません。"
  }
@@ -105,7 +108,10 @@ class AutoFlow(
   cardResultVisibleSince=0L
   verifiedAdKey=""
   verifiedAdSince=0L
-  if(wasRunning)update("停止中（ユーザー操作で停止）")
+  if(wasRunning){
+   collection.finish("STOPPED","ユーザーが自動操作を停止")
+   update("停止中（ユーザー操作で停止）")
+  }
   else statusCallback("停止中")
   return "自動操作を停止しました。"
  }
@@ -113,9 +119,11 @@ class AutoFlow(
   if(value==lastInfo)return
   lastInfo=value
   TeachOverlay.recordAutomatic(service,value)
-  val msg="自動操作：$value\n成功確認前の画面では繰り返し押しません。操作回数=$steps/$MAX_ACTIONS"
+  val progress=if(collection.isActive())collection.shortStatus()
+   else CollectionRunStore.summary(service)
+  val msg="自動操作：$value\n$progress\n成功確認前の画面では繰り返し押しません。操作回数=$steps/$MAX_ACTIONS"
   service.report=msg
-  statusCallback(value)
+  statusCallback("$value | $progress")
  }
  private fun next(delay:Long=POLL_MS) {
   if(running)h.postDelayed(poll,delay)
@@ -418,7 +426,38 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  collection.finish("FAILED",reason)
   update("停止：$reason")
+ }
+ private fun completeCollection(){
+  running=false
+  generation++
+  h.removeCallbacks(poll)
+  update("タンク動画回収タスク完了。HOMEの残り0回を繰り返し確認")
+ }
+ /**
+  * Only count progress on the selected HOME move tab, with the "または" divider
+  * and the exact visible remaining-reward label. Ad and gacha screens cannot
+  * prove that a task is complete.
+  */
+ private fun monitorCollection(snap:Snapshot,now:Long):Boolean{
+  val home=snap.nodes.any{it.node.isVisibleToUser && it.node.isSelected && it.desc=="move"} &&
+   snap.nodes.any{it.node.isVisibleToUser && it.text.trim()=="または"}
+  if(!home || snap.has("友達にシェアする") ||
+    snap.has("カードを1枚選んでください") || snap.has("持っている枚数") ||
+    snap.has("ガチャWチャンスに挑戦") || snap.has("動画を見て再チャレンジ"))return false
+  val count=snap.nodes.asSequence().filter{it.node.isVisibleToUser}
+   .mapNotNull{CollectionTaskPolicy.remaining(it.text)}.firstOrNull()?:return false
+  if(collection.observeHome(count,now)){
+   completeCollection()
+   return true
+  }
+  if(count==0){
+   update("HOMEの残り0回を確認。誤判定防止のため再確認中")
+   next(900)
+   return true
+  }
+  return false
  }
 
  // Play Store may appear as another app or as an accessible modal window.
@@ -478,6 +517,7 @@ class AutoFlow(
   val pkg=activePackage()
   if(pkg==TARGET){
    if(playRecoveryStep!=0){
+    collection.playReturned()
     update("Google Playからトリマへの復帰を確認。現在画面を再判定")
     waitingKey=null
     fallbackAttempted=false
@@ -563,6 +603,10 @@ class AutoFlow(
   if(!running)return
   try {
    val now=SystemClock.elapsedRealtime()
+   if(collection.budgetExceeded()){
+    stopWithReason("実行時間が3時間に達したため未完了として停止")
+    return
+   }
    if(recoverPlay(now)){
     next(950)
     return
@@ -580,7 +624,9 @@ class AutoFlow(
     next()
     return
    }
+   if(monitorCollection(snapshot,now))return
    val decision=choose(snapshot)
+   collection.stage(decision.kind)
    // Bound repeated Play loops within a single ad, but do not penalize valid new reward cycles.
    if(decision.kind in listOf("HOME","SKIP_NO","RETRY","W_CHANCE",
      "CARDS","CARD_RESULT","SHARE_CLOSE")){
