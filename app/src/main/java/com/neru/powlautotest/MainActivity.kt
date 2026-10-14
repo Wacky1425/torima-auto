@@ -9,16 +9,20 @@ class MainActivity:AppCompatActivity(){
  private val h=Handler(Looper.getMainLooper())
  private lateinit var results:TextView
  private lateinit var state:TextView
+ private lateinit var collectionOverview:TextView
  private var lastShown=""
  private val refresh=object:Runnable{override fun run(){
   val s=PowlAccessibilityService.instance
   state.text=if(s==null)"Service: 未接続" else "Service: 接続済み"
+  collectionOverview.text=CollectionRunStore.summary(this@MainActivity)
   val text=s?.report.orEmpty()
   if(text.isNotBlank() && text!=lastShown){lastShown=text;results.text=text}
   h.postDelayed(this,500)
  }}
  override fun onCreate(b:Bundle?){super.onCreate(b);setContentView(R.layout.activity_main)
   results=findViewById(R.id.results);state=findViewById(R.id.debugStatus)
+  collectionOverview=findViewById(R.id.collectionOverview)
+  collectionOverview.text=CollectionRunStore.summary(this)
   findViewById<Button>(R.id.checkUpdate).setOnClickListener{ TorimaUpdater(this,findViewById(R.id.updateStatus)).check() }
   findViewById<Button>(R.id.openSettings).setOnClickListener{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}
   findViewById<Button>(R.id.checkHome).setOnClickListener{runTest(false)}
@@ -50,6 +54,12 @@ class MainActivity:AppCompatActivity(){
     }.show()
   }
 
+  findViewById<Button>(R.id.copyCollectionHistory).setOnClickListener{
+   val data=CollectionRunStore.export(this)
+   (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+    .setPrimaryClip(ClipData.newPlainText("Torima 回収タスク履歴",data))
+   Toast.makeText(this,"回収履歴をコピーしました",Toast.LENGTH_LONG).show()
+  }
   findViewById<Button>(R.id.copyActionHistory).setOnClickListener{
    val data=TeachOverlay.export(this)
    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
