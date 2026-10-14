@@ -477,7 +477,7 @@ class AutoFlow(
   gestureTap(rect,"HOME試行 ${trial.id}",trial.durationMs,point,trial.tinyDriftPx)
   return true
  }
- private fun handleHomeTrial(decision:Decision,now:Long):Boolean{
+ private fun handleHomeTrial(decision:Decision,snapshot:Snapshot,now:Long):Boolean{
   if(homeExperimentStartedAt==0L){
    if(decision.kind!="HOME" || decision.target==null)return false
    // No in-flight old action may be reused as a HOME click.
@@ -543,15 +543,24 @@ class AutoFlow(
    update("HOMEから画面変化：${decision.kind}。安定表示の確認中")
    return true
   }
+  // An UNKNOWN screen may be the HOME button's transient touch fade.
+  // Never restart the whole trial sequence on a brief incomplete tree.
+  if(decision.kind=="UNKNOWN" && now-homeNonHomeSince<4_000L){
+   update("HOME試行後は画面認識が不安定。4秒以内は追加タップせず待機")
+   return true
+  }
   if(now-homeNonHomeSince<HomeTouchTrials.NON_HOME_CONFIRM_MS)return true
-  if(HomeTouchTrials.plausibleTransition(decision.kind)){
+  val independentAdProof=trustedAdEvidence(snapshot)!=null
+  val positive=HomeTouchTrials.plausibleTransition(decision.kind) &&
+   (!GachaSafety.requiresAdEvidence(decision.kind) || independentAdProof)
+  if(positive){
    val trial=homeLastTrial
    if(trial!=null){
     HomeTouchProfile.markSuccessfulTrial(service,trial.id)
     update("HOMEの画面遷移を確認：${decision.kind}。成功した${trial.durationMs}msを次回優先")
    }
   }else{
-   update("HOMEから不明画面へ変化。押下成功とは断定せず通常の安全判定へ移行")
+   update("HOMEから不明／未検証の画面に変化。成功パターンは保存せず安全判定へ")
   }
   resetHomeExperiment()
   return false
@@ -818,7 +827,7 @@ class AutoFlow(
    }
    // HOME experiments are independent from the generic click fallback.
    // This must also run for HOME_WAIT, which occurs while the button fades.
-   if(handleHomeTrial(decision,now)){
+   if(handleHomeTrial(decision,snapshot,now)){
     next(900)
     return
    }
