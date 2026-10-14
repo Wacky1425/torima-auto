@@ -51,6 +51,8 @@ class AutoFlow(
  private var cardResultVisibleSince=0L
  private var verifiedAdKey=""
  private var verifiedAdSince=0L
+ private var lastGachaBucket=-1L
+ private var lastGachaCandidate=""
  private val poll=object:Runnable{override fun run(){check()}}
 
  private data class Item(val node:AccessibilityNodeInfo,val text:String,val desc:String,val rect:Rect) {
@@ -89,6 +91,8 @@ class AutoFlow(
   cardResultVisibleSince=0L
   verifiedAdKey=""
   verifiedAdSince=0L
+  lastGachaBucket=-1L
+  lastGachaCandidate=""
   lastInfo=""
   playRecoveryStep=0
   playRecoveryAt=0L
@@ -132,32 +136,38 @@ class AutoFlow(
   if(running)h.postDelayed(poll,delay)
  }
  private fun readCurrent():Snapshot?{
-  val roots=ArrayList<AccessibilityNodeInfo>()
-  service.rootInActiveWindow?.let {if(it.packageName?.toString()==TARGET)roots.add(it)}
-  try{
-   service.windows?.forEach {window->
-    window.root?.let{if(it.packageName?.toString()==TARGET)roots.add(it)}
-   }
-  }catch(_:Exception){}
-  var selected:Snapshot?=null
-  for(root in roots){
+  // Choose the *actual active window*. The previous "largest node count wins"
+  // logic could select stale or background Torima windows during gacha results,
+  // losing a clearly visible reward dialog and incorrectly waiting 90 seconds.
+  fun snapshot(root:AccessibilityNodeInfo):Snapshot{
    val items=ArrayList<Item>()
    var visited=0
    fun walk(node:AccessibilityNodeInfo){
     if(visited>=450)return
     visited++
     val rect=Rect();node.getBoundsInScreen(rect)
-    items.add(Item(node,node.text?.toString().orEmpty(),node.contentDescription?.toString().orEmpty(),rect))
+    items.add(Item(node,node.text?.toString().orEmpty(),
+     node.contentDescription?.toString().orEmpty(),rect))
     for(i in 0 until node.childCount){
      if(visited>=450)break
      node.getChild(i)?.let{walk(it)}
     }
    }
    walk(root)
-   val snap=Snapshot(items,visited,root.packageName?.toString().orEmpty(),root)
-   if(selected==null || snap.count>selected.count)selected=snap
+   return Snapshot(items,visited,root.packageName?.toString().orEmpty(),root)
   }
-  return selected
+  val foreground=service.rootInActiveWindow
+  if(foreground?.packageName?.toString()==TARGET)return snapshot(foreground)
+  // Only use a window fallback if Android does not expose the active root.
+  // An unrelated/stale background window must never be picked by node count.
+  try{
+   service.windows?.forEach{window->
+    if(!window.isActive && !window.isFocused)return@forEach
+    val root=window.root?:return@forEach
+    if(root.packageName?.toString()==TARGET)return snapshot(root)
+   }
+  }catch(_:Exception){}
+  return null
  }
  /**
   * A generic "Close", "×" or "Skip" is not proof of an ad.
@@ -210,12 +220,19 @@ class AutoFlow(
   if(gachaPhase==GachaSafety.Phase.NONE)return false
   val accepted=GachaSafety.allows(gachaPhase,decision.kind,waitingKey==decision.key)
   val seconds=(now-gachaPhaseSince)/1000L
-  if(seconds>=90L){
-   stopWithReason("ガチャ中の次画面を90秒確認できなかったため停止（$gachaPhase）")
+  if(seconds>=150L){
+   stopWithReason("ガチャ中の次画面を150秒確認できなかったため停止（$gachaPhase）")
    return true
   }
   if(!accepted){
-   update("ガチャ演出保護（$gachaPhase / ${seconds}秒）：広告の×・学習操作は押さず待機。候補=${decision.kind}")
+   // Reduce diagnostics spam: otherwise the 80-entry action history loses the
+   // action that actually entered the stuck phase within only two minutes.
+   val bucket=seconds/10L
+   if(bucket!=lastGachaBucket || decision.kind!=lastGachaCandidate){
+    lastGachaBucket=bucket
+    lastGachaCandidate=decision.kind
+    update("ガチャ保護（$gachaPhase / ${seconds}秒）：誤タップを防止して待機。画面=${decision.display}")
+   }
    return true
   }
   if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD &&
@@ -231,6 +248,8 @@ class AutoFlow(
   gachaPhase=GachaSafety.newPhaseAfter(kind)?:gachaPhase
   gachaPhaseSince=now
   cardResultVisibleSince=0L
+  lastGachaBucket=-1L
+  lastGachaCandidate=""
   update("ガチャ進行記録：${kind} → ${gachaPhase}。演出中の×を保護")
  }
 
