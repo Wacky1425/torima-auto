@@ -216,7 +216,7 @@ class AutoFlow(
   return null
  }
 
- private fun gachaProtects(decision:Decision,now:Long):Boolean{
+ private fun gachaProtects(decision:Decision,now:Long,snapshot:Snapshot):Boolean{
   if(gachaPhase==GachaSafety.Phase.NONE)return false
   val accepted=GachaSafety.allows(gachaPhase,decision.kind,waitingKey==decision.key)
   val seconds=(now-gachaPhaseSince)/1000L
@@ -229,8 +229,13 @@ class AutoFlow(
    // action that actually entered the stuck phase within only two minutes.
    val bucket=seconds/10L
    if(bucket!=lastGachaBucket || decision.kind!=lastGachaCandidate){
+    val changed=decision.kind!=lastGachaCandidate
     lastGachaBucket=bucket
     lastGachaCandidate=decision.kind
+    if(changed || bucket%3L==0L){
+     TeachOverlay.recordGachaDiagnostic(service,snapshot.root,
+      "$gachaPhase/${decision.kind}/${seconds}秒")
+    }
     update("ガチャ保護（$gachaPhase / ${seconds}秒）：誤タップを防止して待機。画面=${decision.display}")
    }
    return true
@@ -665,7 +670,7 @@ class AutoFlow(
    }
    // An ongoing gacha cycle has absolute priority over all ad-close and
    // learned rules. Never dismiss an animation just because a clickable X exists.
-   if(gachaProtects(decision,now)){
+   if(gachaProtects(decision,now,snapshot)){
     next()
     return
    }
