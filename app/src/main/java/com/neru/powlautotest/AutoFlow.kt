@@ -441,6 +441,11 @@ class AutoFlow(
     return
    }
    val decision=choose(snapshot)
+   // Bound repeated Play loops within a single ad, but do not penalize valid new reward cycles.
+   if(decision.kind in listOf("HOME","SKIP_NO","RETRY","W_CHANCE",
+     "CARDS","CARD_RESULT","SHARE_CLOSE")){
+    playRecoveryAttempts=0
+   }
    if(decision.kind!=lastKind){
     lastKind=decision.kind
     if(decision.kind=="LEARNED_TEXT")learnedTextSeenAt=now
