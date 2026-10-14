@@ -51,6 +51,10 @@ class AutoFlow(
  private var homeTrialInFlight=false
  private var homeNonHomeSince=0L
  private var homeNonHomeKind=""
+ // Leave HOME only after a user-like touch; defer success until an actual
+ // recognized ad/retry screen is seen, never credit an opaque window alone.
+ private var deferredHomeTrial:HomeTouchTrials.Trial?=null
+ private var deferredHomeSince=0L
  private val recentActions=LinkedHashMap<String,Long>()
  private var lastInfo=""
  private var unknownSince=0L
@@ -96,6 +100,10 @@ class AutoFlow(
   homeNonHomeSince=0L
   homeNonHomeKind=""
  }
+ private fun clearDeferredHome(){
+  deferredHomeTrial=null
+  deferredHomeSince=0L
+ }
  fun isRunning():Boolean=running
  fun start():String{
   if(running)return "自動操作はすでに実行中です。"
@@ -106,6 +114,7 @@ class AutoFlow(
   fallbackAttempted=false
   homeHoldAttempted=false
   resetHomeExperiment()
+  clearDeferredHome()
   recentActions.clear()
   unknownSince=0L
   lastKind=""
@@ -207,6 +216,17 @@ class AutoFlow(
   if(sdkIa)return "IA_INTERSTITIAL"
   val ids=visible.map{it.node.viewIdResourceName.orEmpty()}
   if(TeachRulePolicy.provenWebAdFrame(ids))return "AD_WEB_DISMISS"
+  val r=Rect();snap.root.getBoundsInScreen(r)
+  val screenH=maxOf(service.resources.displayMetrics.heightPixels,r.bottom)
+  val screenW=service.resources.displayMetrics.widthPixels
+  val imageCorner=visible.any{item->
+   TeachRulePolicy.isCornerImageTarget(
+    item.node.className?.toString()?.substringAfterLast('.').orEmpty(),
+    item.rect.left,item.rect.top,item.rect.right,item.rect.bottom,
+    screenW,screenH)
+  }
+  if(imageCorner && TeachRulePolicy.hasImageEndcardEvidence(
+   visible.flatMap{listOf(it.text,it.desc)}))return "BRANDED_IMAGE_ENDCARD"
   if(ids.any{it.endsWith("android-product-view-close-button") ||
     it.endsWith("lcec-next-button") || it.endsWith("lcec-cta") ||
     it.endsWith("image_0-fullscreen-overlay") || it.endsWith("fullscreen-overlay") ||
@@ -440,7 +460,8 @@ class AutoFlow(
   if(memory!=null){
    val item=Item(memory.node,memory.node.text?.toString().orEmpty(),
     memory.node.contentDescription?.toString().orEmpty(),memory.bounds)
-   return Decision(if(memory.gestureOnly)"LEARNED_TEXT" else "LEARNED",memory.title,
+   return Decision(if(memory.visualIcon)"LEARNED_ICON"
+    else if(memory.gestureOnly)"LEARNED_TEXT" else "LEARNED",memory.title,
     "LEARNED:${memory.bounds.toShortString()}:${memory.title}",item,
     "ユーザーが登録した画面と閉じる領域だけを操作",memory.tapPoint)
   }
@@ -568,6 +589,11 @@ class AutoFlow(
   }else{
    update("HOMEから不明／未検証の画面に変化。成功パターンは保存せず安全判定へ")
   }
+  if(decision.kind in listOf("UNKNOWN","OPAQUE") && homeLastTrial!=null){
+   deferredHomeTrial=homeLastTrial
+   deferredHomeSince=now
+   update("HOME後の広告らしい画面を検出。次の明確な画面まで押し方の評価を保留")
+  }
   resetHomeExperiment()
   return false
  }
@@ -610,6 +636,7 @@ class AutoFlow(
   generation++
   h.removeCallbacks(poll)
   resetHomeExperiment()
+  clearDeferredHome()
   collection.finish("FAILED",reason)
   update("停止：$reason")
  }
