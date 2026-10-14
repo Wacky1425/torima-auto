@@ -1,1 +1,1 @@
-<?xml version="1.0" encoding="utf-8"?><paths xmlns:android="http://schemas.android.com/apk/res/android"><cache-path name="update" path="updates/"/><cache-path name="visual_diagnostics" path="visual_exports/"/></paths>
+<?xml version="1.0" encoding="utf-8"?><paths xmlns:android="http://schemas.android.com/apk/res/android"><cache-path name="update" path="updates/"/><cache-path name="visual_diagnostics" path="visual_diagnostics/"/><cache-path name="visual_diagnostics" path="visual_exports/"/></paths>
