@@ -40,6 +40,17 @@ class AutoFlow(
  private var lastActionTitle=""
  private var fallbackAttempted=false
  private var homeHoldAttempted=false
+ // Independent HOME touch experiments: temporary button dimming/HOME_WAIT
+ // must not erase the trial, and one failed 110ms gesture must not jump to 2.4s.
+ private var homeExperimentStartedAt=0L
+ private var homeExperimentStartingCount:Int?=null
+ private var homeTrialList=emptyList<HomeTouchTrials.Trial>()
+ private var homeTrialIndex=0
+ private var homeLastTrial:HomeTouchTrials.Trial?=null
+ private var homeLastTrialAt=0L
+ private var homeTrialInFlight=false
+ private var homeNonHomeSince=0L
+ private var homeNonHomeKind=""
  private val recentActions=LinkedHashMap<String,Long>()
  private var lastInfo=""
  private var unknownSince=0L
@@ -73,6 +84,17 @@ class AutoFlow(
   val detail:String=""
  )
 
+ private fun resetHomeExperiment(){
+  homeExperimentStartedAt=0L
+  homeExperimentStartingCount=null
+  homeTrialList=emptyList()
+  homeTrialIndex=0
+  homeLastTrial=null
+  homeLastTrialAt=0L
+  homeTrialInFlight=false
+  homeNonHomeSince=0L
+  homeNonHomeKind=""
+ }
  fun isRunning():Boolean=running
  fun start():String{
   if(running)return "自動操作はすでに実行中です。"
@@ -82,6 +104,7 @@ class AutoFlow(
   waitingKey=null
   fallbackAttempted=false
   homeHoldAttempted=false
+  resetHomeExperiment()
   recentActions.clear()
   unknownSince=0L
   lastKind=""
@@ -107,6 +130,7 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  resetHomeExperiment()
   playRecoveryStep=0
   gachaPhase=GachaSafety.Phase.NONE
   cardResultVisibleSince=0L
@@ -453,6 +477,7 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  resetHomeExperiment()
   collection.finish("FAILED",reason)
   update("停止：$reason")
  }
