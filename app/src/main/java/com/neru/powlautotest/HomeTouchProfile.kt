@@ -14,14 +14,29 @@ object HomeTouchProfile {
  private const val K_X="x_fraction"
  private const val K_Y="y_fraction"
  private const val K_CONFIRMED="confirmed"
+ private const val K_LAST_WORKED_TRIAL="last_worked_trial"
+ private const val K_LAST_WORKED_AT="last_worked_at"
+ fun bestTrialId(ctx:Context):String?=
+  ctx.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(K_LAST_WORKED_TRIAL,null)
+ fun markSuccessfulTrial(ctx:Context,id:String){
+  if(HomeTouchTrials.variants.none{it.id==id})return
+  ctx.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit()
+   .putString(K_LAST_WORKED_TRIAL,id)
+   .putLong(K_LAST_WORKED_AT,System.currentTimeMillis())
+   .apply()
+ }
+ fun rightCenter(bounds:Rect):Point=
+  Point(bounds.left+(bounds.width()*0.593f).toInt(),
+   bounds.top+bounds.height()/2)
  fun current(ctx:Context,bounds:Rect):Point {
   val w=ctx.resources.displayMetrics.widthPixels
   val h=ctx.resources.displayMetrics.heightPixels
   val prefs=ctx.getSharedPreferences(PREF,Context.MODE_PRIVATE)
   // Default is based on the user's successful 110ms guided tap at (624,1253)
   // on a 1080x2412 screen. Relative to the 900px-wide video button: x=59.3%.
-  val defaultX=bounds.left+(bounds.width()*0.593f).toInt()
-  val defaultY=bounds.top+bounds.height()/2
+  val default=rightCenter(bounds)
+  val defaultX=default.x
+  val defaultY=default.y
   if(!prefs.getBoolean(K_CONFIRMED,false))return Point(defaultX,defaultY)
   val x=(prefs.getFloat(K_X,0.5778f)*w).toInt()
   val y=(prefs.getFloat(K_Y,0.5195f)*h).toInt()
@@ -54,7 +69,8 @@ object HomeTouchProfile {
   ctx.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit()
    .putFloat(K_X,x.toFloat()/w)
    .putFloat(K_Y,y.toFloat()/h)
-   .putBoolean(K_CONFIRMED,true).apply()
+   .putBoolean(K_CONFIRMED,true)
+   .remove(K_LAST_WORKED_TRIAL).apply()
   return "HOMEの成功したタップ位置 ($x,$y) を登録。次回から自動で使用します"
  }
  fun hasCalibration(ctx:Context):Boolean =
