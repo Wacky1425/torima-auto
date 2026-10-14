@@ -39,6 +39,15 @@ class TeachOverlay(
    return if(data.length()==0)"操作記録はまだありません。" else
     JSONObject().put("count",data.length()).put("events",data).toString(2)
   }
+  fun recordAutomatic(ctx:Context,title:String){
+   try{
+    record(ctx,JSONObject().apply{
+     put("type","auto_state")
+     put("at",System.currentTimeMillis())
+     put("message",title.take(180))
+    })
+   }catch(_:Exception){}
+  }
   private fun record(ctx:Context,item:JSONObject){
    val current=read(ctx)
    if(current.length()>=MAX_LOG)current.remove(0)
