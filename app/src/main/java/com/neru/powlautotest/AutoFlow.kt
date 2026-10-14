@@ -290,7 +290,11 @@ class AutoFlow(
 
  // Play Store may appear as another app or as an accessible modal window.
  private fun activePackage():String{
-  val active=service.rootInActiveWindow?.packageName?.toString().orEmpty()
+  val foregroundRoot=service.rootInActiveWindow
+  val active=foregroundRoot?.packageName?.toString().orEmpty()
+  if(active=="com.android.vending" || service.isPlayBrandedInstallPopup(foregroundRoot)){
+   return "com.android.vending"
+  }
   try{
    val modal=service.windows?.firstOrNull{window->
     if(!window.isActive && !window.isFocused)return@firstOrNull false
@@ -468,8 +472,8 @@ class AutoFlow(
      if(decision.kind=="HOME" && !homeHoldAttempted && seconds>=8 &&
       decision.target!=null){
       homeHoldAttempted=true
-      update("HOMEの画面遷移なし。紫ボタンを短めに420ms長押し（今回1回のみ）")
-      gestureTap(decision.target.rect,"HOME紫ボタン短押し保持",420L)
+      update("HOMEの画面遷移なし。紫ボタンを600ms長押し（今回1回のみ）")
+      gestureTap(decision.target.rect,"HOME紫ボタン短めの長押し",600L)
       next()
       return
      }
