@@ -9,6 +9,11 @@ internal object TeachRulePolicy {
  private val sensitive=Regex("(?i)インストール|install|友達にシェア|share|購入|課金|許可|同意|subscribe|購入する")
  fun isDismissLabel(label:String):Boolean = label.trim().lowercase() in closers
  fun isForbidden(label:String):Boolean = sensitive.containsMatchIn(label)
+ fun isForbiddenTargetId(id:String):Boolean{
+  val simple=id.substringAfterLast('/').substringAfterLast(':').lowercase()
+  return listOf("install","purchase","subscribe","buy","share","lcec-cta",
+   "skip-ticket","skip_ticket").any{simple.contains(it)}
+ }
  fun isWebAdDismissId(id:String):Boolean =
   id.substringAfterLast('/').lowercase()=="dismiss-button"
  /** Both the interstitial frame and advertiser creative must be present. */
