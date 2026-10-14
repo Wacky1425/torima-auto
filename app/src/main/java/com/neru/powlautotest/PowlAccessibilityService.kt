@@ -16,6 +16,15 @@ class PowlAccessibilityService:AccessibilityService(){
  private val learnedActions by lazy { LearnedActions(this) }
  private val teachOverlay by lazy { TeachOverlay(this,learnedActions){msg->screenCollector.updateAutoStatus(msg)} }
  private val autoFlow by lazy { AutoFlow(this){ message -> screenCollector.updateAutoStatus(message) } }
+ private val imageDiagnostics by lazy{ScreenshotDiagnostics(this)}
+ fun saveVisualScreenshot(stage:String,nodeCount:Int=0,manual:Boolean=true,
+  onDone:(String)->Unit={}){
+  imageDiagnostics.capture(stage,nodeCount,manual){message->
+   if(manual)report=message
+   else TeachOverlay.recordAutomatic(this,message)
+   onDone(message)
+  }
+ }
  @Volatile var report="未実行"
  private var lastObservedTopPackage=""
  private var confirmedPlayTransitionAt=0L
