@@ -164,6 +164,11 @@ class TeachOverlay(
   status("タップ位置 ($x,$y) を取得。実際の画面遷移を記録中")
   h.postDelayed({
    if(teachId!=id)return@postDelayed
+   if(service.rootInActiveWindow?.packageName?.toString()!=APP){
+    proposed=null
+    status("対象がトリマ以外になったため操作をキャンセルしました。")
+    return@postDelayed
+   }
    val path=Path().apply{moveTo(x.toFloat(),y.toFloat())}
    val gesture=GestureDescription.Builder()
     .addStroke(GestureDescription.StrokeDescription(path,0,110)).build()
