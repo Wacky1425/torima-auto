@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v2.4" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v2.5" android:textSize="23sp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
@@ -25,7 +25,7 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="学習操作・復帰ログ" android:textSize="18sp" android:layout_marginTop="12dp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="広告で止まったら『停止』→『学習』→正しい箇所を指定→成功したら『登録』。HOMEの紫ボタンも、学習で正しく画面遷移できた位置を『登録』できます。登録した位置・操作ルールは次回の自動開始から使用します。Wチャンス・カード選択後のガチャ演出中は、×や学習済みの広告操作を実行しません。結果画面の表示を確認してから次へ進みます。"/>
+ android:text="広告で止まったら『停止』→『学習』→正しい箇所を指定→成功したら『登録』。HOMEの紫ボタンも、学習で正しく画面遷移できた位置を『登録』できます。登録した位置・操作ルールは次回の自動開始から使用します。Wチャンス・カード選択後のガチャ演出中は、×や学習済み広告操作を実行しません。画面判定は現在の前面ウィンドウを優先。ガチャ後の判定不能画面はノード情報を自動記録し、誤タップせず安全に待機します。"/>
 <Button android:id="@+id/copyActionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作履歴をコピー"/>
 <Button android:id="@+id/copyLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習済み操作をコピー"/>
 <Button android:id="@+id/clearLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作をすべて削除"/>
