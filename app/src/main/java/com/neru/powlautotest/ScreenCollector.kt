@@ -128,7 +128,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    autoControls.addView(control("登録"){updateAutoStatus(service.saveTaughtTap())})
    panel.addView(autoControls)
    val status=TextView(service).apply{
-    textSize=11f;setTextColor(Color.rgb(210,225,240));maxLines=2
+    textSize=11f;setTextColor(Color.rgb(210,225,240));maxLines=4
    }
    panel.addView(status);info=status
    val params=WindowManager.LayoutParams(
