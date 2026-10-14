@@ -13,6 +13,9 @@
 <TextView android:id="@+id/collectionOverview" android:layout_width="match_parent"
  android:layout_height="wrap_content" android:padding="10dp"
  android:text="回収タスク：実行記録なし" android:textIsSelectable="true"/>
+<TextView android:id="@+id/homeExperimentInfo" android:layout_width="match_parent"
+ android:layout_height="wrap_content" android:padding="8dp"
+ android:text="HOME押し方：成功した方式はまだ未記録" android:textIsSelectable="true"/>
 <Button android:id="@+id/copyCollectionHistory" android:layout_width="match_parent"
  android:layout_height="wrap_content" android:text="回収タスク・所要時間の履歴をコピー"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
