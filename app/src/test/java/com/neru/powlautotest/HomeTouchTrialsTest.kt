@@ -33,6 +33,7 @@ class HomeTouchTrialsTest {
   assertFalse(HomeTouchTrials.plausibleTransition("HOME_WAIT"))
   assertFalse(HomeTouchTrials.plausibleTransition("UNKNOWN"))
   assertTrue(HomeTouchTrials.plausibleTransition("SKIP_NO"))
-  assertTrue(HomeTouchTrials.plausibleTransition("OPAQUE"))
+  assertFalse(HomeTouchTrials.plausibleTransition("OPAQUE"))
+  assertTrue(HomeTouchTrials.plausibleTransition("RETRY"))
  }
 }
