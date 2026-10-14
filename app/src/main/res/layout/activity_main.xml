@@ -28,7 +28,7 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="学習操作・復帰ログ" android:textSize="18sp" android:layout_marginTop="12dp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="広告で止まったら『停止』→『学習』→正しい箇所を指定→成功したら『登録』。HOMEの紫ボタンも、学習で正しく画面遷移できた位置を『登録』できます。登録した位置・操作ルールは次回の自動開始から使用します。Wチャンス・カード選択後のガチャ演出中は、×や学習済み広告操作を実行しません。画面判定は現在の前面ウィンドウを優先。ガチャ後の判定不能画面はノード情報を自動記録し、誤タップせず安全に待機します。"/>
+ android:text="広告で止まったら『停止』→『学習』→閉じたい位置を指定→画面の変化を確認して『登録』。閉じる文字がクリック不可でも、広告固有の親ボタンと座標を学習できます。登録操作は必ず保存し、自動使用できる場合は『自動操作ルール』、画面の特徴が不足する場合は『学習例（保留）』として分けて表示します。学習例は自動では押しません。ガチャ演出中の×は引き続き押さず、カード結果後の広告は広告固有の情報が確認できる場合のみ操作します。"/>
 <Button android:id="@+id/copyActionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作履歴をコピー"/>
 <Button android:id="@+id/copyLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習済み操作をコピー"/>
 <Button android:id="@+id/clearLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作をすべて削除"/>
