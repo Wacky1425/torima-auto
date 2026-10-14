@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v2.7" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v2.8" android:textSize="23sp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
@@ -28,7 +28,7 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="学習操作・復帰ログ" android:textSize="18sp" android:layout_marginTop="12dp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="広告で止まったら『停止』→『学習』→閉じたい位置を指定→画面の変化を確認して『登録』。閉じる文字がクリック不可でも、広告固有の親ボタンと座標を学習できます。登録操作は必ず保存し、自動使用できる場合は『自動操作ルール』、画面の特徴が不足する場合は『学習例（保留）』として分けて表示します。学習例は自動では押しません。ガチャ演出中の×は引き続き押さず、カード結果後の広告は広告固有の情報が確認できる場合のみ操作します。"/>
+ android:text="広告で止まったら『停止』→『学習』→閉じたい位置を指定→画面の変化を確認して『登録』。閉じる文字がクリック不可でも、広告固有の親ボタンと座標を学習できます。登録操作は必ず保存し、自動使用できる場合は『自動操作ルール』、画面の特徴が不足する場合は『学習例（保留）』として分けて表示します。学習例は原則として自動では押しません。ただし、以前ユーザーが登録した右上の無記名画像×について、広告の固有文字・位置・画面一致を十分確認できたものだけ自動ルールに昇格します。Google Oneの閉じるは広告SDKと表示領域を優先して照合します。ガチャ演出中の×は引き続き押さず、カード結果後の広告も識別できた場合のみ操作します。"/>
 <Button android:id="@+id/copyActionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作履歴をコピー"/>
 <Button android:id="@+id/copyLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習済み操作をコピー"/>
 <Button android:id="@+id/clearLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作をすべて削除"/>
