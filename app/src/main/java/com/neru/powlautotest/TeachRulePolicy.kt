@@ -5,6 +5,25 @@ package com.neru.powlautotest
  * A close-like word by itself is not enough: gacha results use the same word.
  */
 internal object TeachRulePolicy {
+ const val TAUGHT_CORNER_AD_IMAGE="__taught_ad_corner_image_close__"
+ /**
+  * A user-demonstrated unlabeled image X can be learned ONLY on the same
+  * distinctive Google-Play-branded ad creative, in a small upper-right area.
+  * Opaque one-node screens and gacha frames never qualify.
+  */
+ fun isTaughtAdCornerImage(clazz:String,left:Int,top:Int,right:Int,bottom:Int,
+  width:Int,height:Int,signature:String?):Boolean{
+  if(clazz!="ImageView" || width<=0 || height<=0)return false
+  val tags=signature?.split("|")?:return false
+  if(tags.none{it.equals("Google Play",true)} || tags.none{it=="ダウンロード"})return false
+  if(tags.none{it.length>=15 && it!="Google Play" && it!="ダウンロード"})return false
+  val w=right-left
+  val h=bottom-top
+  return left>=width*82/100 && right<=width &&
+   top>=0 && top<=height*16/100 &&
+   w in 28..180 && h in 28..180 &&
+   right>left && bottom>top
+ }
  private val closers=setOf("閉じる","×","✕","✖","close","dismiss")
  private val sensitive=Regex("(?i)インストール|install|友達にシェア|share|購入|課金|許可|同意|subscribe|購入する")
  fun isDismissLabel(label:String):Boolean = label.trim().lowercase() in closers
