@@ -37,6 +37,9 @@ class LearnedActions(private val ctx:Context) {
     .put("count",list.length())
     .put("rules",list)
     .put("pendingCount",pending.length())
+    .put("pendingAttempts",(0 until pending.length()).sumOf{
+     pending.optJSONObject(it)?.optInt("attempts",1)?:1
+    })
     .put("pendingDemonstrations",pending).toString(2)
   }
  }
@@ -61,7 +64,56 @@ class LearnedActions(private val ctx:Context) {
   * and independent live ad evidence.
   */
  init{
-  try{promoteConfirmedImageExamples()}catch(_:Exception){}
+  try{
+   promoteConfirmedImageExamples()
+   compactPendingExamples()
+  }catch(_:Exception){}
+ }
+ /** Collapse repeated teaching by problem family without losing attempts. */
+ private fun compactPendingExamples():Int{
+  val incoming=demonstrationList(ctx)
+  val seen=LinkedHashMap<String,JSONObject>()
+  val sw=ctx.resources.displayMetrics.widthPixels
+  val sh=ctx.resources.displayMetrics.heightPixels
+  for(i in 0 until incoming.length()){
+   val item=incoming.optJSONObject(i)?:continue
+   val sig=item.optString("signature").takeIf{it!="null" && it.isNotBlank()}
+   val key=PendingLearningPolicy.groupKey(sig,item.optString("class"),
+    item.optString("viewId"),item.optString("label"),
+    item.optInt("x"),item.optInt("y"),sw,sh)
+   val current=seen[key]
+   val attempts=item.optInt("attempts",1).coerceAtLeast(1)
+   if(current==null){
+    val copy=JSONObject(item.toString())
+    copy.put("group",key)
+    copy.put("attempts",attempts)
+    copy.put("firstAt",item.optLong("firstAt",item.optLong("at")))
+    copy.put("lastAt",item.optLong("lastAt",item.optLong("at")))
+    val examples=JSONArray()
+    if(sig!=null)examples.put(sig)
+    copy.put("examples",examples)
+    seen[key]=copy
+   }else{
+    current.put("attempts",current.optInt("attempts",1)+attempts)
+    current.put("lastAt",maxOf(current.optLong("lastAt"),
+     item.optLong("lastAt",item.optLong("at"))))
+    val examples=current.optJSONArray("examples")?:JSONArray()
+    if(sig!=null && (0 until examples.length()).none{examples.optString(it)==sig}
+      && examples.length()<8)examples.put(sig)
+    current.put("examples",examples)
+    // Keep details of the most recent demonstration and previous signatures.
+    if(item.optLong("at")>=current.optLong("at")){
+     for(field in listOf("at","signature","label","viewId","class",
+      "x","y","bounds","screenChanged","reason"))if(item.has(field))
+       current.put(field,item.get(field))
+    }
+   }
+  }
+  val packed=JSONArray()
+  for(record in seen.values.toList().takeLast(24))packed.put(record)
+  if(packed.toString()!=incoming.toString())
+   demonstrationFile(ctx).writeText(packed.toString(),Charsets.UTF_8)
+  return packed.length()
  }
  private fun promoteConfirmedImageExamples(){
   val old=demonstrationList(ctx)
@@ -82,7 +134,8 @@ class LearnedActions(private val ctx:Context) {
    }
    val coords=match.groupValues.drop(1).map{it.toInt()}
    val r=Rect(coords[0],coords[1],coords[2],coords[3])
-   val valid=TeachRulePolicy.canPromoteRecordedIcon(
+   val valid=!entry.optString("reason").contains("前面アプリがトリマではありません") &&
+    TeachRulePolicy.canPromoteRecordedIcon(
     signature,entry.optString("class"),
     entry.optInt("x"),entry.optInt("y"),
     r.left,r.top,r.right,r.bottom,
@@ -250,7 +303,8 @@ class LearnedActions(private val ctx:Context) {
    put("reason",reason.take(170))
   })
   demonstrationFile(ctx).writeText(data.toString(),Charsets.UTF_8)
-  return "操作例を保存しました（記録合計${data.length()}件）。画面識別が不足するため自動実行は保留"
+  val groups=compactPendingExamples()
+  return "操作例を記録（未解決の画面種類${groups}件）。同じ操作を繰り返し学習する必要はありません。自動実行には画面判定の改善が必要です。"
  }
  // Use stable ad-SDK and screen markers rather than volatile ad titles, image hashes,
  // randomized URLs or base64 blobs. Both the saved and current screens still need
