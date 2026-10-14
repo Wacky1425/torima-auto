@@ -16,13 +16,14 @@ internal object HomeTouchTrials {
  )
  enum class Position { UPPER_BUTTON_RIGHT_CENTER, LEARNED }
  val variants=listOf(
-  Trial("right_300","やや長めのタップ",300L,Position.UPPER_BUTTON_RIGHT_CENTER),
-  Trial("learned_520","学習位置で短い長押し",520L,Position.LEARNED),
-  Trial("right_750_drift","指を少し動かす短い長押し",750L,
-   Position.UPPER_BUTTON_RIGHT_CENTER,4)
+  // The user's actual successful taught gesture was about 110ms, not 520ms.
+  Trial("learned_110","学習位置を実際の手動タップに近い110ms",110L,Position.LEARNED),
+  Trial("learned_240","学習位置で少し長めの240ms",240L,Position.LEARNED),
+  Trial("learned_520","学習位置で520ms",520L,Position.LEARNED),
+  Trial("right_300","別位置で300ms",300L,Position.UPPER_BUTTON_RIGHT_CENTER)
  )
  const val DELAY_BETWEEN_TRIALS_MS=6_500L
- const val MAX_EXPERIMENT_MS=34_000L
+ const val MAX_EXPERIMENT_MS=48_000L
  const val NON_HOME_CONFIRM_MS=1_200L
 
  fun ordered(winnerId:String?):List<Trial>{
