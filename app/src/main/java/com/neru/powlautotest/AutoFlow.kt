@@ -226,7 +226,7 @@ class AutoFlow(
   }
   // Identify the top reward-video button from its position above the "または"
   // separator, not fixed vertical pixels. The two large buttons must be distinct.
-  val move=n.any{it.canPress && it.desc=="move" && it.node.isSelected}
+  val move=n.any{it.canPress && it.desc=="move"}
   val tank=snap.has("タンクが満タン")
   val remaining=n.firstOrNull{
    it.node.isVisibleToUser && Regex("あと\\s*[0-9０-９]+\\s*回獲得できます")
@@ -263,6 +263,11 @@ class AutoFlow(
    return Decision("HOME","HOME／紫ボタン","HOME:$remaining",button,
     "動画ボタン候補=${above.size} / 下のボタン=${below.size} / " +
      "または=${separator!=null} / タンク=$tank / $remaining")
+  }
+  if(move && remaining.isNotBlank() && (tank || separator!=null)){
+   return Decision("HOME_WAIT","HOME／紫ボタンが未特定","HOME_WAIT",null,
+    "ボタン候補=${above.size} / 幅広ボタン=${wideButtons.size} / " +
+     "下のボタン=${below.size} / または=${separator!=null} / タンク=$tank")
   }
   val close=closeButton(snap)
   if(close.isNotEmpty()){
@@ -480,7 +485,7 @@ class AutoFlow(
     lastKind=decision.kind
     if(decision.kind=="LEARNED_TEXT")learnedTextSeenAt=now
     if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE" ||
-     decision.kind=="SHARE")unknownSince=now else unknownSince=0L
+     decision.kind=="HOME_WAIT" || decision.kind=="SHARE")unknownSince=now else unknownSince=0L
    }
    if(waitingKey!=null){
     if(waitingKey==decision.key){
