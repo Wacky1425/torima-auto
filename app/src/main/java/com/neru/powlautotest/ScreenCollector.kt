@@ -79,6 +79,11 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  private var top=false
  private var title:TextView?=null
  private var info:TextView?=null
+ private var autoStatus="停止中"
+ fun updateAutoStatus(text:String){
+  autoStatus=text
+  info?.text="自動: $autoStatus\n保存 ${count(service)} 件"
+ }
  private fun dp(n:Int)=(n*service.resources.displayMetrics.density+0.5f).toInt()
  private fun control(label:String,action:()->Unit)=TextView(service).apply{
   text=label
@@ -112,6 +117,13 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    controls.addView(control("上下"){top=!top;position()})
    controls.addView(control("終了"){hide()})
    panel.addView(controls)
+   val autoControls=LinearLayout(service).apply{
+    orientation=LinearLayout.HORIZONTAL
+    gravity=Gravity.CENTER_VERTICAL
+   }
+   autoControls.addView(control("▶ 開始"){updateAutoStatus(service.startAutomaticOperation())})
+   autoControls.addView(control("■ 停止"){updateAutoStatus(service.stopAutomaticOperation())})
+   panel.addView(autoControls)
    val status=TextView(service).apply{
     textSize=11f;setTextColor(Color.rgb(210,225,240));maxLines=2
    }
@@ -136,6 +148,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   }
  }
  fun hide(){
+  service.stopAutomaticOperation()
   val view=bar
   bar=null;lp=null;title=null;info=null
   if(view!=null)try{wm?.removeView(view)}catch(_:Exception){}
@@ -149,7 +162,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  }
  private fun refresh(){
   title?.text="${stages[index].first} → ${stages[index].second}"
-  info?.text="保存 ${count(service)} 件。トリマは自分で操作"
+  info?.text="自動: $autoStatus\n保存 ${count(service)} 件（記録は手動）"
  }
  private fun sanitized(value:CharSequence?):String{
   return (value?.toString()?:"")
@@ -210,7 +223,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
     put("timestamp",System.currentTimeMillis())
     put("node_count",best.count);put("nodes",best.nodes)
    })
-   info?.text="保存OK: ${stage.first} / ${best.count} nodes（累計${count(service)}件）"
+   info?.text="保存OK: ${stage.first} / ${best.count} nodes（累計${count(service)}件）\n自動: $autoStatus"
   }catch(e:Exception){info?.text="保存エラー: ${e.javaClass.simpleName}"}
  }
 }
