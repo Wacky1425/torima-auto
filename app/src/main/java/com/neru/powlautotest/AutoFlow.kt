@@ -47,7 +47,7 @@ class AutoFlow(
  private data class Item(val node:AccessibilityNodeInfo,val text:String,val desc:String,val rect:Rect) {
   val canPress:Boolean get()=node.isClickable && node.isEnabled && node.isVisibleToUser
  }
- private data class Snapshot(val nodes:List<Item>,val count:Int,val packageName:String){
+ private data class Snapshot(val nodes:List<Item>,val count:Int,val packageName:String,val root:AccessibilityNodeInfo){
   fun has(value:String):Boolean=nodes.any {
    it.node.isVisibleToUser && (it.text.contains(value)||it.desc.contains(value))
   }
@@ -79,7 +79,7 @@ class AutoFlow(
   playRecoveryStep=0
   playRecoveryAt=0L
   playRecoveryAttempts=0
-  update("起動中：トリマの画面判定を開始")
+  update("起動中：画面判定を開始。登録済み${LearnedActions.count(service)}件の学習ルールも照合")
   h.postDelayed(poll,450)
   return "自動操作を開始しました。不明な画面では一切タップしません。"
  }
@@ -127,7 +127,7 @@ class AutoFlow(
     }
    }
    walk(root)
-   val snap=Snapshot(items,visited,root.packageName?.toString().orEmpty())
+   val snap=Snapshot(items,visited,root.packageName?.toString().orEmpty(),root)
    if(selected==null || snap.count>selected.count)selected=snap
   }
   return selected
@@ -246,7 +246,7 @@ class AutoFlow(
    return Decision("AD_CLOSE","広告の終了ボタン","AD_CLOSE:${close.first().desc.trim()}:${close.first().rect.toShortString()}",
     close.singleOrNull(),"閉じる候補=${close.size}")
   }
-  val memory=learned.match(service.rootInActiveWindow)
+  val memory=learned.match(snap.root)
   if(memory!=null){
    val item=Item(memory.node,memory.node.text?.toString().orEmpty(),
     memory.node.contentDescription?.toString().orEmpty(),memory.bounds)
