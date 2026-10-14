@@ -47,10 +47,12 @@ class LearnedActions(private val ctx:Context) {
  data class Proposal(
   val signature:String?,val label:String,val viewId:String,val clazz:String,
   val bounds:Rect,val x:Int,val y:Int,val message:String,val safe:Boolean,
-  val gestureOnly:Boolean=false
+  val gestureOnly:Boolean=false,
+  val visualIcon:Boolean=false
  )
  data class Match(val node:AccessibilityNodeInfo,val bounds:Rect,
-  val title:String,val gestureOnly:Boolean=false,val tapPoint:Point?=null)
+  val title:String,val gestureOnly:Boolean=false,val tapPoint:Point?=null,
+  val visualIcon:Boolean=false)
 
  private fun canon(input:String):String=input.trim().replace(Regex("\\s+")," ")
   .replace(Regex("\\d{2,}"),"#").take(90)
@@ -123,28 +125,46 @@ class LearnedActions(private val ctx:Context) {
     sdkProof,candidate.viewId,caption,candidate.bounds.contains(x,y)) &&
     !blocked(candidate)
   }.minByOrNull{it.bounds.width().toLong()*it.bounds.height()}
-  val pick=dismissParent?:clickable?:textProxy
-  val textOnly=dismissParent!=null || (clickable==null && textProxy!=null)
+  val adCreativeText=sample.items.flatMap{listOf(it.node.text?.toString().orEmpty(),
+   it.node.contentDescription?.toString().orEmpty())}
+  val verifiedImageAd=TeachRulePolicy.hasImageEndcardEvidence(adCreativeText)
+  val imageCandidates=sample.items.filter{item->
+   item.label.isBlank() && item.bounds.contains(x,y) &&
+    TeachRulePolicy.isCornerImageTarget(item.clazz,
+     item.bounds.left,item.bounds.top,item.bounds.right,item.bounds.bottom,
+     ctx.resources.displayMetrics.widthPixels,
+     maxOf(ctx.resources.displayMetrics.heightPixels,item.bounds.bottom)) &&
+    !blocked(item)
+  }
+  // Do not turn an arbitrary image into a button: require a single corner icon
+  // on a distinctly branded app-install endcard that the user demonstrated.
+  val imageClose=if(verifiedImageAd)imageCandidates.singleOrNull() else null
+  val pick=dismissParent?:imageClose?:clickable?:textProxy
+  val visualIcon=pick!=null && imageClose===pick
+  val textOnly=dismissParent!=null || visualIcon || (clickable==null && textProxy!=null)
+  val uniqueNamedTarget=pick!=null && sample.items.count{node->
+   (if(textOnly)node.node.isVisibleToUser else node.pressable) &&
+    node.clazz==pick.clazz &&
+    ((pick.viewId.isNotBlank() && node.viewId==pick.viewId) ||
+     (pick.viewId.isBlank() && pick.label.isNotBlank() && node.label==pick.label))
+  }==1
   val safe=sample.signature!=null && pick!=null &&
-    (pick.label.isNotBlank()||pick.viewId.isNotBlank()) &&
-    (!textOnly || sdkProof) &&
-    sample.items.count{node->
-     (if(textOnly)node.node.isVisibleToUser else node.pressable) && node.clazz==pick.clazz &&
-     ((pick.viewId.isNotBlank() && node.viewId==pick.viewId) ||
-      (pick.viewId.isBlank() && pick.label.isNotBlank() && node.label==pick.label))
-    }==1
+    (if(visualIcon)verifiedImageAd && imageCandidates.size==1
+     else (pick.label.isNotBlank()||pick.viewId.isNotBlank()) &&
+      (!textOnly || sdkProof) && uniqueNamedTarget)
   val reason=when{
    sample.rootCount<=2->"UIが${sample.rootCount}件。画面を識別できず、自動再現は無効。"
    pick==null->"押した位置に識別可能なボタンや閉じる表示がなく、自動再現は無効。"
    sample.signature==null->"画面を他の広告から区別する特徴が不足し、自動再現は無効。"
-   textOnly && !sdkProof->"閉じる文字は記録可能ですが、広告固有の情報が不足。自動実行は保留。"
+   textOnly && !sdkProof && !visualIcon->"閉じる文字は記録可能ですが、広告固有の情報が不足。自動実行は保留。"
    !safe->"操作対象の識別名が曖昧なため自動再現は無効。"
    dismissParent!=null->"広告画面・閉じる親領域・閉じる文字を確認。押した座標を登録可能。"
+   visualIcon->"広告専用画面と右上の画像ボタンを確認。教えた位置をこの画面限定で登録可能。"
    textOnly->"終了文字を確認。画面限定のジェスチャーを登録可能。"
    else->"画面と固有の操作ボタンを識別できた。保存すると次回から使用可能。"
   }
   return Proposal(sample.signature,pick?.label.orEmpty(),pick?.viewId.orEmpty(),
-   pick?.clazz.orEmpty(),pick?.bounds?:Rect(),x,y,reason,safe,textOnly)
+   pick?.clazz.orEmpty(),pick?.bounds?:Rect(),x,y,reason,safe,textOnly,visualIcon)
  }
  fun register(p:Proposal):String{
   val sig=p.signature
@@ -159,6 +179,7 @@ class LearnedActions(private val ctx:Context) {
   kept.put(JSONObject().apply{
    put("signature",sig);put("label",p.label);put("viewId",p.viewId);put("clazz",p.clazz)
    put("gestureOnly",p.gestureOnly)
+   put("visualIcon",p.visualIcon)
    put("left",p.bounds.left);put("top",p.bounds.top)
    put("right",p.bounds.right);put("bottom",p.bounds.bottom)
    put("tapX",p.x);put("tapY",p.y)
@@ -181,6 +202,7 @@ class LearnedActions(private val ctx:Context) {
    put("bounds",p.bounds.toShortString())
    put("screenChanged",screenChanged)
    put("autoExecutable",false)
+   put("visualIcon",p.visualIcon)
    put("reason",reason.take(170))
   })
   demonstrationFile(ctx).writeText(data.toString(),Charsets.UTF_8)
@@ -222,11 +244,20 @@ class LearnedActions(private val ctx:Context) {
    val id=rule.optString("viewId");val label=rule.optString("label")
    val clazz=rule.optString("clazz")
    val gestureOnly=rule.optBoolean("gestureOnly",false)
-   if(id.isBlank() && (label.isBlank()||label.length>60))continue
+   val visualIcon=rule.optBoolean("visualIcon",false)
+   if(visualIcon && (!exact || !TeachRulePolicy.hasImageEndcardEvidence(
+       sample.items.flatMap{listOf(it.node.text?.toString().orEmpty(),
+        it.node.contentDescription?.toString().orEmpty())})))continue
+   if(id.isBlank() && (label.isBlank()||label.length>60) && !visualIcon)continue
    val candidates=sample.items.filter{n->
     (if(gestureOnly)n.node.isVisibleToUser else n.pressable) &&
     !blocked(n) && n.clazz==clazz &&
-    (if(id.isNotBlank())n.viewId==id else n.label==label) &&
+    (if(visualIcon) n.label.isBlank() &&
+       TeachRulePolicy.isCornerImageTarget(n.clazz,
+        n.bounds.left,n.bounds.top,n.bounds.right,n.bounds.bottom,
+        ctx.resources.displayMetrics.widthPixels,
+        maxOf(ctx.resources.displayMetrics.heightPixels,n.bounds.bottom))
+     else if(id.isNotBlank())n.viewId==id else n.label==label) &&
     kotlin.math.abs(n.bounds.left-rule.optInt("left"))<40 &&
     kotlin.math.abs(n.bounds.top-rule.optInt("top"))<40 &&
     kotlin.math.abs(n.bounds.right-rule.optInt("right"))<40 &&
@@ -253,6 +284,7 @@ class LearnedActions(private val ctx:Context) {
   val ty=chosen.rule.optInt("tapY",Int.MIN_VALUE)
   val point=if(gestureOnly && chosen.target.bounds.contains(tx,ty))Point(tx,ty)
    else null
-  return Match(chosen.target.node,chosen.target.bounds,title,gestureOnly,point)
+  return Match(chosen.target.node,chosen.target.bounds,title,gestureOnly,point,
+   chosen.rule.optBoolean("visualIcon",false))
  }
 }
