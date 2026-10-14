@@ -33,18 +33,19 @@ object HomeTouchProfile {
   }
   return Point(defaultX,defaultY)
  }
- fun qualifies(ctx:Context,beforeSignature:String?,x:Int,y:Int):Boolean {
-  if(beforeSignature==null)return false
+ fun qualifies(ctx:Context,beforeSignature:String?,x:Int,y:Int,
+  separatorTop:Int):Boolean {
+  if(beforeSignature==null || separatorTop<=0)return false
   if(!beforeSignature.contains("move") ||
    !beforeSignature.contains("あと") ||
    !beforeSignature.contains("タンク"))return false
   val w=ctx.resources.displayMetrics.widthPixels
-  val h=ctx.resources.displayMetrics.heightPixels
-  if(w<=0 || h<=0)return false
-  // Must be an interior position of the upper reward-video button, never the
-  // lower "または" button, the tab bar or an install ad.
+  if(w<=0)return false
+  // Derive vertical eligibility from the real "または" divider's screen bounds,
+  // not displayMetrics.heightPixels, which may exclude system UI insets.
+  val allowedTop=separatorTop-maxOf(220,separatorTop*20/100)
   return x in (w*18/100)..(w*85/100) &&
-   y in (h*46/100)..(h*56/100)
+   y in allowedTop..(separatorTop-18)
  }
  fun register(ctx:Context,x:Int,y:Int):String {
   val w=ctx.resources.displayMetrics.widthPixels
