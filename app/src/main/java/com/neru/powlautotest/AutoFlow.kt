@@ -815,6 +815,28 @@ class AutoFlow(
   return false
  }
 
+ /**
+  * A HOME touch can open a video with zero useful accessibility nodes.
+  * Record the successful *navigation*, not reward completion, only once a
+  * recognisable screen beyond that video is actually observed.
+  */
+ private fun verifyDeferredHome(decision:Decision,snapshot:Snapshot,now:Long){
+  val trial=deferredHomeTrial?:return
+  if(now-deferredHomeSince>120_000L || decision.kind in listOf("HOME","HOME_WAIT")){
+   clearDeferredHome()
+   return
+  }
+  val recognisableReward=decision.target!=null &&
+   decision.kind in listOf("RETRY","SKIP_NO","W_CHANCE","SHARE_CLOSE")
+  val provenAd=decision.target!=null &&
+   decision.kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT","LEARNED_ICON") &&
+   trustedAdEvidence(snapshot)!=null
+  if(recognisableReward || provenAd){
+   HomeTouchProfile.markSuccessfulTrial(service,trial.id)
+   update("HOMEの${trial.durationMs}msタッチ後に${decision.kind}を確認。操作方法を次回優先（報酬回収は未確定）")
+   clearDeferredHome()
+  }
+ }
  private fun check(){
   if(!running)return
   try {
@@ -842,6 +864,7 @@ class AutoFlow(
    }
    if(monitorCollection(snapshot,now))return
    val decision=choose(snapshot)
+   verifyDeferredHome(decision,snapshot,now)
    collection.stage(decision.kind)
    // Bound repeated Play loops within a single ad, but do not penalize valid new reward cycles.
    if(decision.kind in listOf("HOME","SKIP_NO","RETRY","W_CHANCE",
@@ -850,7 +873,7 @@ class AutoFlow(
    }
    if(decision.kind!=lastKind){
     lastKind=decision.kind
-    if(decision.kind=="LEARNED_TEXT")learnedTextSeenAt=now
+    if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON"))learnedTextSeenAt=now
     if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE" ||
      decision.kind=="HOME_WAIT" || decision.kind=="SHARE")unknownSince=now else unknownSince=0L
    }
@@ -926,7 +949,7 @@ class AutoFlow(
       fallbackAttempted=true
       update("${decision.display}：命令後も同じ画面。確認済み箇所を1回だけタップ")
       gestureTap(decision.target.rect,decision.display,
-       point=if(decision.kind=="LEARNED_TEXT")decision.touch else null)
+       point=if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON"))decision.touch else null)
       next()
       return
      }
@@ -942,7 +965,7 @@ class AutoFlow(
     fallbackAttempted=false
     homeHoldAttempted=false
    }
-   if(decision.kind=="LEARNED_TEXT" && now-learnedTextSeenAt<4000L){
+   if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON") && now-learnedTextSeenAt<4000L){
     update("学習した『閉じる』表示を確認。操作可能になるまで4秒待機中")
     next()
     return
@@ -978,7 +1001,7 @@ class AutoFlow(
    if(decision.kind in listOf("W_CHANCE","CARDS","CARD_RESULT")){
     markGachaAction(decision.kind,now)
    }
-   if(decision.kind=="LEARNED_TEXT"){
+   if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON")){
     // A nonclickable close label / ad dismiss parent cannot be activated by
     // ACTION_CLICK. Use the exact user-confirmed coordinate, not the node center.
     update("${decision.display}：学習したタップ位置でジェスチャー実行")
@@ -991,7 +1014,7 @@ class AutoFlow(
    if(!clicked){
     fallbackAttempted=true
     gestureTap(decision.target.rect,decision.display,
-     point=if(decision.kind=="LEARNED_TEXT")decision.touch else null)
+     point=if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON"))decision.touch else null)
    }
    next()
   }catch(e:Exception){
