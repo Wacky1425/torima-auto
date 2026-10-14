@@ -58,6 +58,8 @@ class AutoFlow(
  private val recentActions=LinkedHashMap<String,Long>()
  private var lastInfo=""
  private var unknownSince=0L
+ private var visualUnknownSince=0L
+ private var visualLastCaptureAt=0L
  private var lastKind=""
  private var learnedTextSeenAt=0L
  // Gacha animations and ads may both display an X; keep their phases distinct.
@@ -122,6 +124,8 @@ class AutoFlow(
   clearDeferredHome()
   recentActions.clear()
   unknownSince=0L
+  visualUnknownSince=0L
+  visualLastCaptureAt=0L
   lastKind=""
   learnedTextSeenAt=0L
   gachaPhase=GachaSafety.Phase.NONE
@@ -929,6 +933,17 @@ class AutoFlow(
    }
    if(monitorCollection(snapshot,now))return
    val decision=choose(snapshot)
+   // Screenshots are only diagnostic, not permission to tap visual X buttons.
+   // Do not photograph continuously; save at most one difficult screen per 35s.
+   if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE"){
+    if(visualUnknownSince==0L)visualUnknownSince=now
+    if(now-visualUnknownSince>=6_000L &&
+      (visualLastCaptureAt==0L || now-visualLastCaptureAt>=35_000L)){
+     visualLastCaptureAt=now
+     service.saveVisualScreenshot("自動検出不能：${decision.kind}",
+      snapshot.count,false)
+    }
+   }else visualUnknownSince=0L
    verifyDeferredHome(decision,snapshot,now)
    collection.stage(decision.kind)
    if(protectPostAdTransition(decision,snapshot,now)){
