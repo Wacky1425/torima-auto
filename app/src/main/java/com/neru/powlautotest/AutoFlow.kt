@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.graphics.Rect
+import android.graphics.Point
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
@@ -289,10 +290,18 @@ class AutoFlow(
   return Decision("UNKNOWN","不明／広告再生中（${snap.count}ノード）","UNKNOWN",null,
    "識別できる終了・次へボタンなし")
  }
- private fun gestureTap(rect:Rect,info:String,holdMs:Long=120L) {
+ private fun gestureTap(rect:Rect,info:String,holdMs:Long=120L,point:Point?=null) {
   if(!running)return
-  val x=rect.exactCenterX()
-  val y=rect.exactCenterY()
+  if(service.rootInActiveWindow?.packageName?.toString()!=TARGET){
+   update("前面がトリマではないためジェスチャー中止")
+   return
+  }
+  val x=point?.x?:rect.exactCenterX()
+  val y=point?.y?:rect.exactCenterY()
+  if(!rect.contains(x,y)){
+   stopWithReason("タップ位置が対象ボタンの範囲外のため停止")
+   return
+  }
   val path=Path().apply{moveTo(x,y)}
   val gesture=GestureDescription.Builder()
    .addStroke(GestureDescription.StrokeDescription(path,0,holdMs)).build()
@@ -300,7 +309,7 @@ class AutoFlow(
   val accepted=service.dispatchGesture(gesture,object:AccessibilityService.GestureResultCallback(){
    override fun onCompleted(gestureDescription:GestureDescription?){
     if(id!=generation||!running)return
-    update("$info／中央タップ完了。遷移確認待ち")
+    update("$info／ジェスチャー完了 ($x,$y) ${holdMs}ms。画面遷移確認待ち")
    }
    override fun onCancelled(gestureDescription:GestureDescription?){
     if(id!=generation||!running)return
@@ -490,6 +499,23 @@ class AutoFlow(
    if(waitingKey!=null){
     if(waitingKey==decision.key){
      val seconds=(now-waitingSince)/1000
+     if(decision.kind=="HOME"){
+      if(!homeHoldAttempted && seconds>=5 && decision.target!=null){
+       homeHoldAttempted=true
+       val where=HomeTouchProfile.current(service,decision.target.rect)
+       update("HOMEの遷移なし。座標 (${where.x},${where.y}) を2400ms長押し")
+       gestureTap(decision.target.rect,"HOME長押し2.4秒",2400L,where)
+       next()
+       return
+      }
+      if(seconds>=16){
+       stopWithReason("HOMEを110msタップ＋2400ms長押ししても画面遷移なし")
+       return
+      }
+      update("HOME紫ボタン：遷移確認待ち ${seconds}秒")
+      next()
+      return
+     }
      if(!fallbackAttempted && seconds>=4 && decision.target!=null){
       fallbackAttempted=true
       update("${decision.display}：命令後も同じ画面。確認済み箇所を1回だけタップ")
@@ -497,15 +523,7 @@ class AutoFlow(
       next()
       return
      }
-     if(decision.kind=="HOME" && !homeHoldAttempted && seconds>=8 &&
-      decision.target!=null){
-      homeHoldAttempted=true
-      update("HOMEの画面遷移なし。紫ボタンを1400ms長押し（今回1回のみ）")
-      gestureTap(decision.target.rect,"HOME紫ボタン長押し",1400L)
-      next()
-      return
-     }
-     if(seconds>=if(decision.kind=="HOME")19 else 13){
+     if(seconds>=13){
       stopWithReason("$lastActionTitle の操作後も画面が変わらないため、安全停止")
       return
      }
@@ -549,6 +567,15 @@ class AutoFlow(
    lastActionTitle=decision.display
    fallbackAttempted=false
    homeHoldAttempted=false
+   if(decision.kind=="HOME"){
+    // User's guided 110ms touch at (624,1253) previously changed HOME to skip.
+    // Avoid ACTION_CLICK and the original center position on HOME.
+    val where=HomeTouchProfile.current(service,decision.target.rect)
+    update("HOME紫ボタン：実タップ (${where.x},${where.y}) 110ms／学習位置=${HomeTouchProfile.hasCalibration(service)}")
+    gestureTap(decision.target.rect,"HOME短タップ",110L,where)
+    next()
+    return
+   }
    val clicked=decision.target.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
    update("${decision.display}：ACTION_CLICK=$clicked。遷移確認待ち")
    if(!clicked){
