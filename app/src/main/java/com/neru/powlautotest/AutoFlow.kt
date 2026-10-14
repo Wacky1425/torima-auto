@@ -43,6 +43,11 @@ class AutoFlow(
  private var unknownSince=0L
  private var lastKind=""
  private var learnedTextSeenAt=0L
+ // Gacha animations and ads may both display an X; keep their phases distinct.
+ private enum class GachaPhase{NONE,AWAIT_CARDS,AWAIT_RESULT,AWAIT_REWARD}
+ private var gachaPhase=GachaPhase.NONE
+ private var gachaPhaseSince=0L
+ private var cardResultVisibleSince=0L
  private val poll=object:Runnable{override fun run(){check()}}
 
  private data class Item(val node:AccessibilityNodeInfo,val text:String,val desc:String,val rect:Rect) {
@@ -76,6 +81,9 @@ class AutoFlow(
   unknownSince=0L
   lastKind=""
   learnedTextSeenAt=0L
+  gachaPhase=GachaPhase.NONE
+  gachaPhaseSince=0L
+  cardResultVisibleSince=0L
   lastInfo=""
   playRecoveryStep=0
   playRecoveryAt=0L
@@ -90,6 +98,8 @@ class AutoFlow(
   generation++
   h.removeCallbacks(poll)
   playRecoveryStep=0
+  gachaPhase=GachaPhase.NONE
+  cardResultVisibleSince=0L
   if(wasRunning)update("停止中（ユーザー操作で停止）")
   else statusCallback("停止中")
   return "自動操作を停止しました。"
@@ -133,6 +143,93 @@ class AutoFlow(
   }
   return selected
  }
+ /**
+  * A generic "Close", "×" or "Skip" is not proof of an ad.
+  * Require independent ad SDK or advertiser metadata to enable learned X rules.
+  */
+ private fun trustedAdEvidence(snap:Snapshot):String?{
+  val visible=snap.nodes.filter{it.node.isVisibleToUser && it.rect.width()>0 &&
+   it.rect.height()>0}
+  val sdkIa=visible.any{it.desc=="IAInterstitialView"} &&
+   visible.any{it.desc=="ia_endcard_video_overlay" ||
+    it.node.viewIdResourceName?.endsWith(":id/ia_endcard_video_overlay")==true}
+  if(sdkIa)return "IA_INTERSTITIAL"
+  val ids=visible.map{it.node.viewIdResourceName.orEmpty()}
+  if(ids.any{it.endsWith("android-product-view-close-button") ||
+    it.endsWith("lcec-next-button") || it.endsWith("lcec-cta") ||
+    it.endsWith("image_0-fullscreen-overlay") || it.endsWith("fullscreen-overlay") ||
+    it.endsWith("app_name") || it.endsWith("app_icon")})return "AD_SDK_STRUCTURE"
+  val height=service.resources.displayMetrics.heightPixels
+  val cta=visible.any{
+   val label=it.text.trim().ifEmpty{it.desc.trim()}
+   label.equals("install",true) || label=="インストール" || label=="入手"
+  }
+  val mainInstall=visible.any{
+   val label=it.text.trim().ifEmpty{it.desc.trim()}
+   (label.equals("install",true) || label=="インストール" || label=="入手") &&
+    it.rect.width()>=120 && it.rect.centerY() in (height*20/100)..(height*91/100)
+  }
+  val adMetadata=visible.any{
+   val id=it.node.viewIdResourceName.orEmpty()
+   id.endsWith("install-button") || id.endsWith("app_pub_name") ||
+    id.endsWith("app_contains_ads") ||
+    it.text.trim() in listOf("Ratings","Reviews","Interested","Not interested",
+     "Contains Ads","More Info")
+  }
+  if(cta && adMetadata)return "AD_INSTALL_AND_METADATA"
+  val fullScreenLayout=visible.any{
+   it.node.className?.toString()?.endsWith("RelativeLayout")==true &&
+   it.rect.width()>=service.resources.displayMetrics.widthPixels*85/100 &&
+   it.rect.height()>=height*65/100
+  }
+  val namedAdClose=visible.any{
+   it.desc.equals("closeButton",true) || it.desc.equals("Close Ad",true) ||
+    it.desc.equals("Close button",true)
+  }
+  if(mainInstall && fullScreenLayout && namedAdClose)return "FULLSCREEN_AD_INSTALL"
+  return null
+ }
+
+ private fun gachaProtects(decision:Decision,now:Long):Boolean{
+  if(gachaPhase==GachaPhase.NONE)return false
+  val accepted=when(gachaPhase){
+   GachaPhase.NONE->true
+   GachaPhase.AWAIT_CARDS->decision.kind=="CARDS" ||
+    (decision.kind=="W_CHANCE" && waitingKey==decision.key)
+   GachaPhase.AWAIT_RESULT->decision.kind=="CARD_RESULT" ||
+    (decision.kind=="CARDS" && waitingKey==decision.key)
+   GachaPhase.AWAIT_REWARD->decision.kind in listOf("SHARE_CLOSE","HOME","SKIP_NO","RETRY") ||
+    (decision.kind=="CARD_RESULT" && waitingKey==decision.key)
+  }
+  val seconds=(now-gachaPhaseSince)/1000L
+  if(seconds>=90L){
+   stopWithReason("ガチャ中の次画面を90秒確認できなかったため停止（$gachaPhase）")
+   return true
+  }
+  if(!accepted){
+   update("ガチャ演出保護（$gachaPhase / ${seconds}秒）：広告の×・学習操作は押さず待機。候補=${decision.kind}")
+   return true
+  }
+  if(gachaPhase==GachaPhase.AWAIT_REWARD &&
+   decision.kind in listOf("SHARE_CLOSE","HOME","SKIP_NO","RETRY")){
+   update("ガチャ終了後の報酬／通常画面を確認：${decision.kind}")
+   gachaPhase=GachaPhase.NONE
+  }
+  return false
+ }
+
+ private fun markGachaAction(kind:String,now:Long){
+  gachaPhase=when(kind){
+   "W_CHANCE"->GachaPhase.AWAIT_CARDS
+   "CARDS"->GachaPhase.AWAIT_RESULT
+   "CARD_RESULT"->GachaPhase.AWAIT_REWARD
+   else->gachaPhase
+  }
+  gachaPhaseSince=now
+  cardResultVisibleSince=0L
+  update("ガチャ進行記録：${kind} → ${gachaPhase}。演出中の×を保護")
+ }
+
  private fun closeButton(snap:Snapshot):List<Item>{
   val w=service.resources.displayMetrics.widthPixels
   val hasIaEndCard=snap.nodes.any{
