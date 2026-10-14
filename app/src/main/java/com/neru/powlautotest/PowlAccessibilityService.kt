@@ -12,12 +12,26 @@ class PowlAccessibilityService:AccessibilityService(){
  companion object{@Volatile var instance:PowlAccessibilityService?=null}
  private val h=Handler(Looper.getMainLooper())
  private val screenCollector by lazy { ScreenCollector(this) }
+ private val learnedActions by lazy { LearnedActions(this) }
+ private val teachOverlay by lazy { TeachOverlay(this,learnedActions){msg->screenCollector.updateAutoStatus(msg)} }
  private val autoFlow by lazy { AutoFlow(this){ message -> screenCollector.updateAutoStatus(message) } }
  @Volatile var report="未実行"
  override fun onServiceConnected(){super.onServiceConnected();instance=this;report="サービス接続完了"}
  override fun onInterrupt(){}
- override fun onAccessibilityEvent(e:AccessibilityEvent?){}
- override fun onDestroy(){stopSequence();screenCollector.hide();if(instance===this)instance=null;super.onDestroy()}
+ override fun onAccessibilityEvent(e:AccessibilityEvent?){
+  if(e!=null && e.eventType==AccessibilityEvent.TYPE_VIEW_CLICKED &&
+   e.packageName?.toString()=="jp.co.incrementp.milemobile" &&
+   screenCollector.isVisible() && !autoFlow.isRunning()){
+   teachOverlay.observedClick(e)
+  }
+ }
+ override fun onDestroy(){
+  teachOverlay.cancelCapture("サービス終了")
+  stopSequence()
+  screenCollector.hide()
+  if(instance===this)instance=null
+  super.onDestroy()
+ }
 
 
 
@@ -36,6 +50,17 @@ class PowlAccessibilityService:AccessibilityService(){
  }
 
 
+ fun beginTeachTap():String {
+  stopAutomaticOperation()
+  val msg=teachOverlay.begin()
+  report=msg
+  return msg
+ }
+ fun saveTaughtTap():String {
+  val msg=teachOverlay.confirm()
+  report=msg
+  return msg
+ }
  fun startAutomaticOperation():String {
   stopSequence()
   val shown=screenCollector.show()
