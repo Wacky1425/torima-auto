@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v2.9" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.0" android:textSize="23sp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
@@ -24,6 +24,18 @@
 <Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="記録・自動操作バーを表示"/>
 <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
 <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:layout_marginTop="12dp" android:text="画像診断（×・閉じるの視覚認識）" android:textSize="18sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:text="トリマ画面の操作バーから「画像」を押すと、ノードのない広告も画像で記録できます。自動実行中に6秒以上不明だった画面も間隔を空けて撮影。画面内の×形状候補を端末内で検出し、画像と候補座標を保存します。候補は確定したボタンではないため、自動タップしません。保存画像は端末内のみ・最新10枚まで。内容を確認してからZIPを共有してください。"/>
+<TextView android:id="@+id/visualDiagnosticsCount" android:layout_width="match_parent"
+ android:layout_height="wrap_content" android:text="画像記録：0枚"/>
+<Button android:id="@+id/shareVisualDiagnostics" android:layout_width="match_parent"
+ android:layout_height="wrap_content" android:text="画像診断をZIPで共有（画像＋座標JSON）"/>
+<Button android:id="@+id/copyVisualDiagnostics" android:layout_width="match_parent"
+ android:layout_height="wrap_content" android:text="画像診断の検出結果だけコピー"/>
+<Button android:id="@+id/clearVisualDiagnostics" android:layout_width="match_parent"
+ android:layout_height="wrap_content" android:text="保存した画像診断を削除"/>
 <Button android:id="@+id/clearCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログを消去"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="学習操作・復帰ログ" android:textSize="18sp" android:layout_marginTop="12dp"/>
