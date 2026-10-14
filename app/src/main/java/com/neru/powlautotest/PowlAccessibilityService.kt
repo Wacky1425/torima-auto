@@ -3,6 +3,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.graphics.Rect
+import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -16,10 +17,34 @@ class PowlAccessibilityService:AccessibilityService(){
  private val teachOverlay by lazy { TeachOverlay(this,learnedActions){msg->screenCollector.updateAutoStatus(msg)} }
  private val autoFlow by lazy { AutoFlow(this){ message -> screenCollector.updateAutoStatus(message) } }
  @Volatile var report="未実行"
+ private var lastObservedTopPackage=""
+ private var confirmedPlayTransitionAt=0L
+ // Can be used when the user starts automation while an ad-opened Play window is already visible.
+ fun markPlayTransitionFromTorima(){
+  confirmedPlayTransitionAt=SystemClock.elapsedRealtime()
+ }
+ fun hasRecentPlayTransition():Boolean =
+  confirmedPlayTransitionAt>0L &&
+   SystemClock.elapsedRealtime()-confirmedPlayTransitionAt<300_000L
+ fun consumePlayTransitionProof(){
+  confirmedPlayTransitionAt=0L
+ }
  override fun onServiceConnected(){super.onServiceConnected();instance=this;report="サービス接続完了"}
  override fun onInterrupt(){}
  override fun onAccessibilityEvent(e:AccessibilityEvent?){
-  if(e!=null && e.eventType==AccessibilityEvent.TYPE_VIEW_CLICKED &&
+  if(e==null)return
+  if(e.eventType==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
+   val p=e.packageName?.toString().orEmpty()
+   if(p=="com.android.vending" && lastObservedTopPackage=="jp.co.incrementp.milemobile"){
+    markPlayTransitionFromTorima()
+   }
+   if(p=="jp.co.incrementp.milemobile" || p=="com.android.vending"){
+    lastObservedTopPackage=p
+   }else if(p.isNotBlank() && p!=packageName && p!="com.android.systemui"){
+    lastObservedTopPackage=p
+   }
+  }
+  if(e.eventType==AccessibilityEvent.TYPE_VIEW_CLICKED &&
    e.packageName?.toString()=="jp.co.incrementp.milemobile" &&
    screenCollector.isVisible() && !autoFlow.isRunning()){
    teachOverlay.observedClick(e)
