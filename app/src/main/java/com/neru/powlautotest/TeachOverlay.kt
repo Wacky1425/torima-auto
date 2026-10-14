@@ -48,6 +48,50 @@ class TeachOverlay(
     })
    }catch(_:Exception){}
   }
+  /**
+   * Preserve a small, structured snapshot when gacha is blocked on an UNKNOWN
+   * screen. Unlike repeating wait logs, this retains evidence for unattended
+   * debugging without replaying taps or requiring the user to watch the screen.
+   */
+  fun recordGachaDiagnostic(ctx:Context,root:AccessibilityNodeInfo?,phase:String){
+   if(root?.packageName?.toString()!=APP)return
+   try{
+    val samples=JSONArray()
+    var visited=0
+    fun scan(node:AccessibilityNodeInfo){
+     if(visited>=160 || samples.length()>=50)return
+     visited++
+     val r=android.graphics.Rect();node.getBoundsInScreen(r)
+     if(node.isVisibleToUser && r.width()>0 && r.height()>0){
+      val txt=node.text?.toString().orEmpty().take(100)
+      val desc=node.contentDescription?.toString().orEmpty().take(100)
+      val id=node.viewIdResourceName.orEmpty().take(100)
+      if(node.isClickable || txt.isNotBlank() || desc.isNotBlank() || id.isNotBlank()){
+       samples.put(JSONObject().apply{
+        put("class",node.className?.toString()?.substringAfterLast('.').orEmpty())
+        put("bounds",r.toShortString())
+        put("clickable",node.isClickable && node.isEnabled)
+        if(txt.isNotBlank())put("text",txt)
+        if(desc.isNotBlank())put("description",desc)
+        if(id.isNotBlank())put("viewId",id)
+       })
+      }
+     }
+     for(i in 0 until node.childCount){
+      if(visited>=160 || samples.length()>=50)break
+      node.getChild(i)?.let{scan(it)}
+     }
+    }
+    scan(root)
+    record(ctx,JSONObject().apply{
+     put("type","gacha_unknown_snapshot")
+     put("at",System.currentTimeMillis())
+     put("phase",phase)
+     put("scanned",visited)
+     put("nodes",samples)
+    })
+   }catch(_:Exception){}
+  }
   private fun record(ctx:Context,item:JSONObject){
    val current=read(ctx)
    if(current.length()>=MAX_LOG)current.remove(0)
