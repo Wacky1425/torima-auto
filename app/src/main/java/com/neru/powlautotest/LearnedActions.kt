@@ -135,7 +135,7 @@ class LearnedActions(private val ctx:Context) {
  private fun stableAnchors(signature:String):Set<String>{
   val ignored=setOf("image","app icon","contains ads","everyone","shopping",
    "more info","ratings","reviews","rating","closed","広告","閉じる","close",
-   "close button","install","インストール")
+   "install","インストール")
   return signature.split("|").map{canon(it)}.filter{token->
    val value=token.lowercase()
    if(value in ignored || token.length !in 4..70)return@filter false
