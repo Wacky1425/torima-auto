@@ -81,7 +81,8 @@ class AutoFlow(
   val display:String,
   val key:String,
   val target:Item?=null,
-  val detail:String=""
+  val detail:String="",
+  val touch:Point?=null
  )
 
  private fun resetHomeExperiment(){
@@ -205,6 +206,7 @@ class AutoFlow(
     it.node.viewIdResourceName?.endsWith(":id/ia_endcard_video_overlay")==true}
   if(sdkIa)return "IA_INTERSTITIAL"
   val ids=visible.map{it.node.viewIdResourceName.orEmpty()}
+  if(TeachRulePolicy.provenWebAdFrame(ids))return "AD_WEB_DISMISS"
   if(ids.any{it.endsWith("android-product-view-close-button") ||
     it.endsWith("lcec-next-button") || it.endsWith("lcec-cta") ||
     it.endsWith("image_0-fullscreen-overlay") || it.endsWith("fullscreen-overlay") ||
@@ -242,7 +244,11 @@ class AutoFlow(
 
  private fun gachaProtects(decision:Decision,now:Long,snapshot:Snapshot):Boolean{
   if(gachaPhase==GachaSafety.Phase.NONE)return false
-  val accepted=GachaSafety.allows(gachaPhase,decision.kind,waitingKey==decision.key)
+  val adProof=trustedAdEvidence(snapshot)
+  val actualAd=GachaSafety.canDismissProvenAdAfterResult(
+   gachaPhase,decision.kind,adProof!=null,now-gachaPhaseSince)
+  val accepted=GachaSafety.allows(gachaPhase,decision.kind,waitingKey==decision.key) ||
+   actualAd
   val seconds=(now-gachaPhaseSince)/1000L
   if(seconds>=150L){
    stopWithReason("ガチャ中の次画面を150秒確認できなかったため停止（$gachaPhase）")
@@ -436,7 +442,7 @@ class AutoFlow(
     memory.node.contentDescription?.toString().orEmpty(),memory.bounds)
    return Decision(if(memory.gestureOnly)"LEARNED_TEXT" else "LEARNED",memory.title,
     "LEARNED:${memory.bounds.toShortString()}:${memory.title}",item,
-    "ユーザーが明示的に登録した画面・ノードだけを操作")
+    "ユーザーが登録した画面と閉じる領域だけを操作",memory.tapPoint)
   }
   if(snap.count<=2){
    return Decision("OPAQUE","広告または不明画面（UIが${snap.count}件）","OPAQUE",null,
@@ -892,7 +898,8 @@ class AutoFlow(
      if(!fallbackAttempted && seconds>=4 && decision.target!=null){
       fallbackAttempted=true
       update("${decision.display}：命令後も同じ画面。確認済み箇所を1回だけタップ")
-      gestureTap(decision.target.rect,decision.display)
+      gestureTap(decision.target.rect,decision.display,
+       point=if(decision.kind=="LEARNED_TEXT")decision.touch else null)
       next()
       return
      }
@@ -948,7 +955,8 @@ class AutoFlow(
    update("${decision.display}：ACTION_CLICK=$clicked。遷移確認待ち")
    if(!clicked){
     fallbackAttempted=true
-    gestureTap(decision.target.rect,decision.display)
+    gestureTap(decision.target.rect,decision.display,
+     point=if(decision.kind=="LEARNED_TEXT")decision.touch else null)
    }
    next()
   }catch(e:Exception){
