@@ -35,6 +35,16 @@ class GachaSafetyTest {
   assertFalse(GachaSafety.requiresAdEvidence("CARD_RESULT"))
   assertFalse(GachaSafety.requiresAdEvidence("CARDS"))
  }
+ @Test fun postResultAllowsOnlyAProvenSettledAd(){
+  val p=GachaSafety.Phase.AWAIT_REWARD
+  assertTrue(GachaSafety.canDismissProvenAdAfterResult(p,"LEARNED_TEXT",true,3100L))
+  assertTrue(GachaSafety.canDismissProvenAdAfterResult(p,"AD_CLOSE",true,3100L))
+  assertFalse(GachaSafety.canDismissProvenAdAfterResult(p,"LEARNED_TEXT",false,6000L))
+  assertFalse(GachaSafety.canDismissProvenAdAfterResult(p,"LEARNED_TEXT",true,2000L))
+  assertFalse(GachaSafety.canDismissProvenAdAfterResult(GachaSafety.Phase.AWAIT_CARDS,"AD_CLOSE",true,9000L))
+  assertFalse(GachaSafety.canDismissProvenAdAfterResult(GachaSafety.Phase.AWAIT_RESULT,"AD_CLOSE",true,9000L))
+  assertFalse(GachaSafety.canDismissProvenAdAfterResult(p,"CARD_RESULT",true,5000L))
+ }
  @Test fun onlyActualGachaActionsStartNewPhases() {
   assertEquals(GachaSafety.Phase.AWAIT_CARDS,GachaSafety.newPhaseAfter("W_CHANCE"))
   assertEquals(GachaSafety.Phase.AWAIT_RESULT,GachaSafety.newPhaseAfter("CARDS"))
