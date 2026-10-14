@@ -556,7 +556,8 @@ class AutoFlow(
   resetHomeExperiment()
   return false
  }
- private fun gestureTap(rect:Rect,info:String,holdMs:Long=120L,point:Point?=null) {
+ private fun gestureTap(rect:Rect,info:String,holdMs:Long=120L,
+  point:Point?=null,tinyDriftPx:Int=0) {
   if(!running)return
   if(service.rootInActiveWindow?.packageName?.toString()!=TARGET){
    update("前面がトリマではないためジェスチャー中止")
@@ -564,21 +565,26 @@ class AutoFlow(
   }
   val x:Int=point?.x?:rect.centerX()
   val y:Int=point?.y?:rect.centerY()
-  if(!rect.contains(x,y)){
+  if(!rect.contains(x,y) || !rect.contains(x+tinyDriftPx,y)){
    stopWithReason("タップ位置が対象ボタンの範囲外のため停止")
    return
   }
-  val path=Path().apply{moveTo(x.toFloat(),y.toFloat())}
+  val path=Path().apply{
+   moveTo(x.toFloat(),y.toFloat())
+   if(tinyDriftPx!=0)lineTo((x+tinyDriftPx).toFloat(),y.toFloat())
+  }
   val gesture=GestureDescription.Builder()
    .addStroke(GestureDescription.StrokeDescription(path,0,holdMs)).build()
   val id=generation
   val accepted=service.dispatchGesture(gesture,object:AccessibilityService.GestureResultCallback(){
    override fun onCompleted(gestureDescription:GestureDescription?){
     if(id!=generation||!running)return
-    update("$info／ジェスチャー完了 ($x,$y) ${holdMs}ms。画面遷移確認待ち")
+    if(info.startsWith("HOME試行 "))homeTrialInFlight=false
+    update("$info／ジェスチャー完了 ($x,$y) ${holdMs}ms／移動${tinyDriftPx}px。画面遷移確認待ち")
    }
    override fun onCancelled(gestureDescription:GestureDescription?){
     if(id!=generation||!running)return
+    if(info.startsWith("HOME試行 "))homeTrialInFlight=false
     stopWithReason("ジェスチャーがキャンセルされたため停止")
    }
   },null)
