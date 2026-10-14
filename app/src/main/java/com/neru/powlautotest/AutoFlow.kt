@@ -445,6 +445,117 @@ class AutoFlow(
   return Decision("UNKNOWN","不明／広告再生中（${snap.count}ノード）","UNKNOWN",null,
    "識別できる終了・次へボタンなし")
  }
+ /**
+  * HOME only: try a few short, spaced real gestures. A pressed/faded button
+  * without navigation is a failed trial, not proof that anything was collected.
+  * Keep the experiment active across transient HOME_WAIT (button not clickable).
+  */
+ private fun tryHomePattern(decision:Decision,now:Long):Boolean{
+  val button=decision.target?:return true
+  val trial=homeTrialList.getOrNull(homeTrialIndex)?:return true
+  if(steps>=MAX_ACTIONS){
+   stopWithReason("操作回数の上限に達したためHOME試行を停止")
+   return true
+  }
+  val rect=button.rect
+  val point=when(trial.position){
+   HomeTouchTrials.Position.UPPER_BUTTON_RIGHT_CENTER->HomeTouchProfile.rightCenter(rect)
+   HomeTouchTrials.Position.LEARNED->HomeTouchProfile.current(service,rect)
+  }
+  val finalX=point.x+trial.tinyDriftPx
+  if(!rect.contains(point.x,point.y) || !rect.contains(finalX,point.y)){
+   stopWithReason("HOME試行位置が紫ボタンの内側ではないため安全停止")
+   return true
+  }
+  homeLastTrial=trial
+  homeLastTrialAt=now
+  homeTrialIndex++
+  homeTrialInFlight=true
+  steps++
+  update("HOME試行 ${homeTrialIndex}/${homeTrialList.size}：${trial.label}／" +
+   "${trial.durationMs}ms、座標(${point.x},${point.y})、微移動${trial.tinyDriftPx}px")
+  gestureTap(rect,"HOME試行 ${trial.id}",trial.durationMs,point,trial.tinyDriftPx)
+  return true
+ }
+ private fun handleHomeTrial(decision:Decision,now:Long):Boolean{
+  if(homeExperimentStartedAt==0L){
+   if(decision.kind!="HOME" || decision.target==null)return false
+   // No in-flight old action may be reused as a HOME click.
+   waitingKey=null
+   fallbackAttempted=false
+   homeHoldAttempted=false
+   homeExperimentStartedAt=now
+   homeExperimentStartingCount=CollectionTaskPolicy.remaining(decision.detail)
+   homeTrialList=HomeTouchTrials.ordered(HomeTouchProfile.bestTrialId(service))
+   homeTrialIndex=0
+   homeLastTrial=null
+   homeLastTrialAt=0L
+   homeTrialInFlight=false
+   homeNonHomeSince=0L
+   homeNonHomeKind=""
+   return tryHomePattern(decision,now)
+  }
+  if(HomeTouchTrials.isHomeKind(decision.kind)){
+   homeNonHomeSince=0L
+   homeNonHomeKind=""
+   // Sometimes a reward count drops without exposing an intermediate popup.
+   val previous=homeExperimentStartingCount
+   val current=CollectionTaskPolicy.remaining(decision.detail)
+   if(previous!=null && current!=null && current<previous){
+    homeLastTrial?.let{HomeTouchProfile.markSuccessfulTrial(service,it.id)}
+    update("HOME操作後に残回数が$previous→$currentへ減少。成功パターンを記録")
+    resetHomeExperiment()
+    return true
+   }
+   if(HomeTouchTrials.hasTimedOut(homeExperimentStartedAt,now)){
+    stopWithReason("HOME短タップ3パターンを試しても遷移なし（直近操作と画面を確認）")
+    return true
+   }
+   if(homeTrialInFlight){
+    update("HOME試行：タッチ終了待ち。まだ画面遷移は確認できていません")
+    return true
+   }
+   val waitSeconds=(now-homeLastTrialAt)/1000L
+   if(homeTrialIndex>0 &&
+    !HomeTouchTrials.canAttempt(homeTrialIndex,homeLastTrialAt,now)){
+    update("HOMEは押下反応のみ。${waitSeconds}秒経過、次の試行まで待機")
+    return true
+   }
+   if(homeTrialIndex>=homeTrialList.size){
+    stopWithReason("HOME紫ボタンを300ms／520ms／750msで試しても画面遷移なし")
+    return true
+   }
+   if(decision.kind=="HOME_WAIT" || decision.target==null){
+    update("HOME紫ボタンのクリック範囲が一時的に取得不可。座標試行せず再判定")
+    return true
+   }
+   return tryHomePattern(decision,now)
+  }
+  // The current screen no longer looks like HOME. Confirm a stable different
+  // state before treating the preceding gesture as a successful button press.
+  if(homeTrialInFlight){
+   update("HOME試行後に画面が変化。ジェスチャーの終了を確認中")
+   return true
+  }
+  if(homeNonHomeSince==0L || homeNonHomeKind!=decision.kind){
+   homeNonHomeSince=now
+   homeNonHomeKind=decision.kind
+   update("HOMEから画面変化：${decision.kind}。安定表示の確認中")
+   return true
+  }
+  if(now-homeNonHomeSince<HomeTouchTrials.NON_HOME_CONFIRM_MS)return true
+  if(HomeTouchTrials.plausibleTransition(decision.kind)){
+   val trial=homeLastTrial
+   if(trial!=null){
+    HomeTouchProfile.markSuccessfulTrial(service,trial.id)
+    update("HOMEの画面遷移を確認：${decision.kind}。成功した${trial.durationMs}msを次回優先")
+   }
+  }else{
+   update("HOMEから不明画面へ変化。押下成功とは断定せず通常の安全判定へ移行")
+  }
+  resetHomeExperiment()
+  return false
+ }
  private fun gestureTap(rect:Rect,info:String,holdMs:Long=120L,point:Point?=null) {
   if(!running)return
   if(service.rootInActiveWindow?.packageName?.toString()!=TARGET){
