@@ -951,6 +951,14 @@ class AutoFlow(
    if(decision.kind in listOf("W_CHANCE","CARDS","CARD_RESULT")){
     markGachaAction(decision.kind,now)
    }
+   if(decision.kind=="LEARNED_TEXT"){
+    // A nonclickable close label / ad dismiss parent cannot be activated by
+    // ACTION_CLICK. Use the exact user-confirmed coordinate, not the node center.
+    update("${decision.display}：学習したタップ位置でジェスチャー実行")
+    gestureTap(decision.target.rect,decision.display,120L,decision.touch)
+    next()
+    return
+   }
    val clicked=decision.target.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
    update("${decision.display}：ACTION_CLICK=$clicked。遷移確認待ち")
    if(!clicked){
