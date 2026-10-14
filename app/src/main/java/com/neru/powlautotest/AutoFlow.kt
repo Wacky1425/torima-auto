@@ -63,6 +63,7 @@ class AutoFlow(
   val detail:String=""
  )
 
+ fun isRunning():Boolean=running
  fun start():String{
   if(running)return "自動操作はすでに実行中です。"
   running=true
@@ -370,6 +371,12 @@ class AutoFlow(
    val now=SystemClock.elapsedRealtime()
    if(recoverPlay(now)){
     next(950)
+    return
+   }
+   val top=activePackage()
+   if(top!=TARGET){
+    update("他アプリ／画面遷移中：自動操作は待機（package="+top.take(60)+"）")
+    next()
     return
    }
    val snapshot=readCurrent()
