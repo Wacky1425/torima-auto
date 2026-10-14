@@ -296,13 +296,13 @@ class AutoFlow(
    update("前面がトリマではないためジェスチャー中止")
    return
   }
-  val x=point?.x?:rect.exactCenterX()
-  val y=point?.y?:rect.exactCenterY()
+  val x:Int=point?.x?:rect.centerX()
+  val y:Int=point?.y?:rect.centerY()
   if(!rect.contains(x,y)){
    stopWithReason("タップ位置が対象ボタンの範囲外のため停止")
    return
   }
-  val path=Path().apply{moveTo(x,y)}
+  val path=Path().apply{moveTo(x.toFloat(),y.toFloat())}
   val gesture=GestureDescription.Builder()
    .addStroke(GestureDescription.StrokeDescription(path,0,holdMs)).build()
   val id=generation
