@@ -44,8 +44,7 @@ class AutoFlow(
  private var lastKind=""
  private var learnedTextSeenAt=0L
  // Gacha animations and ads may both display an X; keep their phases distinct.
- private enum class GachaPhase{NONE,AWAIT_CARDS,AWAIT_RESULT,AWAIT_REWARD}
- private var gachaPhase=GachaPhase.NONE
+ private var gachaPhase=GachaSafety.Phase.NONE
  private var gachaPhaseSince=0L
  private var cardResultVisibleSince=0L
  private val poll=object:Runnable{override fun run(){check()}}
@@ -81,7 +80,7 @@ class AutoFlow(
   unknownSince=0L
   lastKind=""
   learnedTextSeenAt=0L
-  gachaPhase=GachaPhase.NONE
+  gachaPhase=GachaSafety.Phase.NONE
   gachaPhaseSince=0L
   cardResultVisibleSince=0L
   lastInfo=""
@@ -98,7 +97,7 @@ class AutoFlow(
   generation++
   h.removeCallbacks(poll)
   playRecoveryStep=0
-  gachaPhase=GachaPhase.NONE
+  gachaPhase=GachaSafety.Phase.NONE
   cardResultVisibleSince=0L
   if(wasRunning)update("停止中（ユーザー操作で停止）")
   else statusCallback("停止中")
@@ -191,16 +190,8 @@ class AutoFlow(
  }
 
  private fun gachaProtects(decision:Decision,now:Long):Boolean{
-  if(gachaPhase==GachaPhase.NONE)return false
-  val accepted=when(gachaPhase){
-   GachaPhase.NONE->true
-   GachaPhase.AWAIT_CARDS->decision.kind=="CARDS" ||
-    (decision.kind=="W_CHANCE" && waitingKey==decision.key)
-   GachaPhase.AWAIT_RESULT->decision.kind=="CARD_RESULT" ||
-    (decision.kind=="CARDS" && waitingKey==decision.key)
-   GachaPhase.AWAIT_REWARD->decision.kind in listOf("SHARE_CLOSE","HOME","SKIP_NO","RETRY") ||
-    (decision.kind=="CARD_RESULT" && waitingKey==decision.key)
-  }
+  if(gachaPhase==GachaSafety.Phase.NONE)return false
+  val accepted=GachaSafety.allows(gachaPhase,decision.kind,waitingKey==decision.key)
   val seconds=(now-gachaPhaseSince)/1000L
   if(seconds>=90L){
    stopWithReason("ガチャ中の次画面を90秒確認できなかったため停止（$gachaPhase）")
@@ -210,21 +201,17 @@ class AutoFlow(
    update("ガチャ演出保護（$gachaPhase / ${seconds}秒）：広告の×・学習操作は押さず待機。候補=${decision.kind}")
    return true
   }
-  if(gachaPhase==GachaPhase.AWAIT_REWARD &&
-   decision.kind in listOf("SHARE_CLOSE","HOME","SKIP_NO","RETRY")){
+  if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD &&
+   decision.kind in listOf("SHARE_CLOSE","HOME","SKIP_NO","RETRY") &&
+   (decision.kind=="HOME" || decision.target!=null)){
    update("ガチャ終了後の報酬／通常画面を確認：${decision.kind}")
-   gachaPhase=GachaPhase.NONE
+   gachaPhase=GachaSafety.Phase.NONE
   }
   return false
  }
 
  private fun markGachaAction(kind:String,now:Long){
-  gachaPhase=when(kind){
-   "W_CHANCE"->GachaPhase.AWAIT_CARDS
-   "CARDS"->GachaPhase.AWAIT_RESULT
-   "CARD_RESULT"->GachaPhase.AWAIT_REWARD
-   else->gachaPhase
-  }
+  gachaPhase=GachaSafety.newPhaseAfter(kind)?:gachaPhase
   gachaPhaseSince=now
   cardResultVisibleSince=0L
   update("ガチャ進行記録：${kind} → ${gachaPhase}。演出中の×を保護")
@@ -599,7 +586,7 @@ class AutoFlow(
     next()
     return
    }
-   if(decision.kind=="CARD_RESULT" && gachaPhase==GachaPhase.AWAIT_RESULT){
+   if(decision.kind=="CARD_RESULT" && gachaPhase==GachaSafety.Phase.AWAIT_RESULT){
     if(cardResultVisibleSince==0L)cardResultVisibleSince=now
     if(now-cardResultVisibleSince<2500L){
      update("ガチャ結果を確認中：閉じる前に2.5秒安定表示を待機")
@@ -610,7 +597,7 @@ class AutoFlow(
     cardResultVisibleSince=0L
    }
    // Button captions alone are unsafe: distinguish an ad SDK from a gacha.
-   if(decision.kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT")){
+   if(GachaSafety.requiresAdEvidence(decision.kind)){
     val proof=trustedAdEvidence(snapshot)
     if(proof==null){
      update("広告かガチャか判定不能：${decision.display} の×は押さず待機")
