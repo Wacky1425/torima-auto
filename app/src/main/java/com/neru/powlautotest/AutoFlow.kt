@@ -47,6 +47,8 @@ class AutoFlow(
  private var gachaPhase=GachaSafety.Phase.NONE
  private var gachaPhaseSince=0L
  private var cardResultVisibleSince=0L
+ private var verifiedAdKey=""
+ private var verifiedAdSince=0L
  private val poll=object:Runnable{override fun run(){check()}}
 
  private data class Item(val node:AccessibilityNodeInfo,val text:String,val desc:String,val rect:Rect) {
@@ -83,6 +85,8 @@ class AutoFlow(
   gachaPhase=GachaSafety.Phase.NONE
   gachaPhaseSince=0L
   cardResultVisibleSince=0L
+  verifiedAdKey=""
+  verifiedAdSince=0L
   lastInfo=""
   playRecoveryStep=0
   playRecoveryAt=0L
@@ -99,6 +103,8 @@ class AutoFlow(
   playRecoveryStep=0
   gachaPhase=GachaSafety.Phase.NONE
   cardResultVisibleSince=0L
+  verifiedAdKey=""
+  verifiedAdSince=0L
   if(wasRunning)update("停止中（ユーザー操作で停止）")
   else statusCallback("停止中")
   return "自動操作を停止しました。"
@@ -606,10 +612,27 @@ class AutoFlow(
    if(GachaSafety.requiresAdEvidence(decision.kind)){
     val proof=trustedAdEvidence(snapshot)
     if(proof==null){
+     verifiedAdKey=""
+     verifiedAdSince=0L
      update("広告かガチャか判定不能：${decision.display} の×は押さず待機")
      next()
      return
     }
+    // Gacha animation might momentarily expose an X. Require a stable, clearly
+    // identified ad *and target* over consecutive polls before acting.
+    val key="$proof|${decision.key}"
+    if(verifiedAdKey!=key){
+     verifiedAdKey=key
+     verifiedAdSince=now
+    }
+    if(now-verifiedAdSince<1700L){
+     update("広告判定の安定待ち：$proof。1.7秒継続してから×を許可")
+     next(850)
+     return
+    }
+   }else{
+    verifiedAdKey=""
+    verifiedAdSince=0L
    }
    if(waitingKey!=null){
     if(waitingKey==decision.key){
