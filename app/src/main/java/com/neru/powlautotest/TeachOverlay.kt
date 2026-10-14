@@ -213,8 +213,7 @@ class TeachOverlay(
   outcomeReady=false
   homeTeachSucceeded=false
   val selectedName=p.label.lowercase()
-  if(selectedName.contains("インストール")||selectedName.contains("install")||
-   selectedName.contains("友達にシェア")||selectedName.contains("購入")){
+  if(TeachRulePolicy.isForbidden(selectedName)){
    removeLayer()
    proposed=null
    status("購入・インストール・シェア対象は学習モードで押しません")
@@ -283,8 +282,8 @@ class TeachOverlay(
   outcomeReady=true
   val ok=(p.safe&&changed&&afterPkg==APP) || homeTeachSucceeded
   status(if(ok)
-   "操作を記録しました。正しい動きならバーの『登録』を押してください。"
-   else "操作例を記録しましたが、安全な自動再現は未対応です。${p.message}")
+   "操作の画面変化を確認。『登録』で次回から使える自動操作ルールを保存できます。"
+   else "操作例を取得しました。『登録』すると未完成の学習例として保存します。自動再現は画面識別後に対応：${p.message}")
  }
  fun confirm():String {
   val p=proposed?:return "保存できる操作がありません。先に『学習』してください。"
@@ -294,11 +293,19 @@ class TeachOverlay(
   val current=memory.scan(afterRoot)
   val changeConfirmed=changed || (current!=null &&
    (current.rootCount!=beforeCount || current.signature!=beforeSignature))
-  proposed=null
+  // The user's explicit "登録" must always save their demonstration.
+  // Only the well-identified target can become an auto-replay rule.
   val msg=if(homeTeachSucceeded && changeConfirmed && afterPkg==APP){
    HomeTouchProfile.register(service,p.x,p.y)
-  }else if(p.safe&&changeConfirmed&&afterPkg==APP)memory.register(p)
-   else "操作履歴は保存済み。ただしこの画面を誤認しない自動ルールは登録できません。"
+  }else if(p.safe&&changeConfirmed&&afterPkg==APP){
+   memory.register(p)
+  }else{
+   memory.saveDemonstration(p,changeConfirmed,
+    if(!changeConfirmed)"操作後の画面変化を確認できませんでした"
+    else if(afterPkg!=APP)"操作後の前面アプリがトリマではありません"
+    else p.message)
+  }
+  proposed=null
   status(msg)
   return msg
  }
