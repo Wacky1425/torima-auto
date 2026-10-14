@@ -429,25 +429,30 @@ class AutoFlow(
    it.node.isVisibleToUser && it.text.trim()=="または" &&
     it.rect.width()>0 && it.rect.height()>0
   }.distinctBy{it.rect.toShortString()}.singleOrNull()
-  val width=service.resources.displayMetrics.widthPixels
-  val height=service.resources.displayMetrics.heightPixels
+  val physical=Rect();snap.root.getBoundsInScreen(physical)
+  val width=maxOf(service.resources.displayMetrics.widthPixels,physical.width())
+  val height=maxOf(service.resources.displayMetrics.heightPixels,physical.bottom)
   val wideButtons=n.filter{
    val r=it.rect
    it.canPress && r.left>=0 && r.right<=width && r.top>=0 && r.bottom<=height &&
-    r.width()>=width*60/100 && r.width()<=width*95/100 &&
-    r.height()>=height*4/100 && r.height()<=height*12/100 &&
-    kotlin.math.abs(r.centerX()-width/2)<=width*12/100 &&
-    r.top>=height*30/100 && r.bottom<=height*82/100
+    r.width()>=width*68/100 && r.width()<=width*94/100 &&
+    r.height()>=height*4/100 && r.height()<=height*11/100 &&
+    kotlin.math.abs(r.centerX()-width/2)<=width*10/100 &&
+    r.top>=height*30/100 && r.bottom<=height*78/100
   }.distinctBy{it.rect.toShortString()}
+  // Two wide buttons flank the exact "または". Use their distance to this
+  // separator rather than displayMetrics height (which excludes system bars).
   val above=if(separator!=null)wideButtons.filter{
    val gap=separator.rect.top-it.rect.bottom
-   gap in 0..(height*15/100) && it.rect.centerY()<separator.rect.top
+   gap in 0..maxOf(100,height*5/100) &&
+    it.rect.centerY()<separator.rect.top
   }else wideButtons.filter{
    it.rect.centerY() in (height*42/100)..(height*59/100)
   }
   val below=if(separator!=null)wideButtons.filter{
    val gap=it.rect.top-separator.rect.bottom
-   gap in 0..(height*15/100) && it.rect.centerY()>separator.rect.bottom
+   gap in 0..maxOf(100,height*5/100) &&
+    it.rect.centerY()>separator.rect.bottom
   }else emptyList()
   val confirmedHome=move && remaining.isNotBlank() &&
    (tank || (separator!=null && above.size==1 && below.size==1))
@@ -546,7 +551,7 @@ class AutoFlow(
     return true
    }
    if(HomeTouchTrials.hasTimedOut(homeExperimentStartedAt,now)){
-    stopWithReason("HOMEタップの診断が34秒を超えても遷移なし（試行ログを確認）")
+    stopWithReason("HOMEタップ診断が48秒を超えても遷移なし（試行ログを確認）")
     return true
    }
    if(homeTrialInFlight){
@@ -560,7 +565,7 @@ class AutoFlow(
     return true
    }
    if(homeTrialIndex>=homeTrialList.size){
-    stopWithReason("HOME紫ボタンを300ms／520ms／750msで試しても画面遷移なし")
+    stopWithReason("HOME紫ボタンを学習位置110／240／520msと別位置300msで試しても遷移なし")
     return true
    }
    if(decision.kind=="HOME_WAIT" || decision.target==null){
