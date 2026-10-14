@@ -32,6 +32,9 @@ jobs:
 
       - name: Build debug APK
         run: bash ./gradlew :app:assembleDebug --no-daemon
+      - name: Check gacha-vs-ad safety regressions
+        run: bash ./gradlew :app:testDebugUnitTest --no-daemon
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
