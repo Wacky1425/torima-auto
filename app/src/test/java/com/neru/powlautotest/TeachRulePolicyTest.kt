@@ -23,6 +23,10 @@ class TeachRulePolicyTest {
   assertFalse(TeachRulePolicy.canLearnDismissByCoordinate(true,"dismiss-button",true,false))
   assertTrue(TeachRulePolicy.isForbidden("インストール"))
   assertTrue(TeachRulePolicy.isForbidden("友達にシェアする"))
+  assertTrue(TeachRulePolicy.isForbiddenTargetId("install-button"))
+  assertTrue(TeachRulePolicy.isForbiddenTargetId("lcec-cta"))
+  assertTrue(TeachRulePolicy.isForbiddenTargetId("share-button"))
+  assertFalse(TeachRulePolicy.isForbiddenTargetId("dismiss-button"))
  }
  @Test fun incompleteWebVideoIsNotEvidenceOfAnEndcard(){
   assertFalse(TeachRulePolicy.provenWebAdFrame(listOf("towerVideo","dismiss-button")))
