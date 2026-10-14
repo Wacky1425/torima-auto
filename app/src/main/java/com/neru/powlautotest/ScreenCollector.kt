@@ -114,6 +114,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    }
    controls.addView(control("◀"){index=(index+stages.size-1)%stages.size;refresh()})
    controls.addView(control("記録"){capture()})
+   controls.addView(control("画像"){saveImage()})
    controls.addView(control("▶"){index=(index+1)%stages.size;refresh()})
    controls.addView(control("上下"){top=!top;position()})
    controls.addView(control("終了"){hide()})
@@ -200,6 +201,32 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   }
   walk(root)
   return Capture(total,entries)
+ }
+ /**
+  * Capture the rendered Torima app, not only its accessibility nodes.
+  * Local screenshot and visual guesses are kept private until manual sharing.
+  */
+ private fun saveImage(){
+  val stage=stages[index].first
+  val root=service.rootInActiveWindow
+  if(root?.packageName?.toString()!=TARGET){
+   info?.text="画像保存はトリマが前面にあるときだけ可能です"
+   return
+  }
+  var count=0
+  fun walk(n:AccessibilityNodeInfo){
+   if(count>=450)return
+   count++
+   for(i in 0 until n.childCount){
+    if(count>=450)break
+    n.getChild(i)?.let{walk(it)}
+   }
+  }
+  walk(root)
+  info?.text="画像診断を取得中（$stage／nodes=$count）"
+  service.saveVisualScreenshot(stage,count,true){message->
+   info?.text=message
+  }
  }
  private fun capture(){
   val roots=ArrayList<AccessibilityNodeInfo>()
