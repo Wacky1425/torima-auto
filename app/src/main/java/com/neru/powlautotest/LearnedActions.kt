@@ -32,9 +32,10 @@ class LearnedActions(private val ctx:Context) {
  data class Sample(val items:List<Item>,val signature:String?,val rootCount:Int)
  data class Proposal(
   val signature:String?,val label:String,val viewId:String,val clazz:String,
-  val bounds:Rect,val x:Int,val y:Int,val message:String,val safe:Boolean
+  val bounds:Rect,val x:Int,val y:Int,val message:String,val safe:Boolean,
+  val gestureOnly:Boolean=false
  )
- data class Match(val node:AccessibilityNodeInfo,val bounds:Rect,val title:String)
+ data class Match(val node:AccessibilityNodeInfo,val bounds:Rect,val title:String,val gestureOnly:Boolean=false)
 
  private fun canon(input:String):String=input.trim().replace(Regex("\\s+")," ")
   .replace(Regex("\\d{2,}"),"#").take(90)
@@ -80,24 +81,34 @@ class LearnedActions(private val ctx:Context) {
  fun propose(root:AccessibilityNodeInfo?,x:Int,y:Int):Proposal{
   val sample=scan(root)
   if(sample==null)return Proposal(null,"","","",Rect(),x,y,"トリマの画面情報を取得できません。",false)
-  val pick=sample.items.filter{it.pressable && it.bounds.contains(x,y) && !blocked(it)}
+  val clickable=sample.items.filter{it.pressable && it.bounds.contains(x,y) && !blocked(it)}
    .minByOrNull{it.bounds.width().toLong()*it.bounds.height()}
+  // Video SDKs may expose "閉じる" as text only, not clickable. User-taught, uniquely identified only.
+  val textProxy=sample.items.filter{
+   it.node.isVisibleToUser && it.bounds.contains(x,y) && !blocked(it) &&
+   it.label in listOf("閉じる","×","✕","✖","Close","close") &&
+   it.bounds.width() < ctx.resources.displayMetrics.widthPixels*0.40 &&
+   it.bounds.height() in 20..180
+  }.minByOrNull{it.bounds.width().toLong()*it.bounds.height()}
+  val pick=clickable?:textProxy
+  val textOnly=clickable==null && textProxy!=null
   val safe=sample.signature!=null && pick!=null &&
     (pick.label.isNotBlank()||pick.viewId.isNotBlank()) &&
     sample.items.count{node->
-     node.pressable && node.clazz==pick.clazz &&
+     (if(textOnly)node.node.isVisibleToUser else node.pressable) && node.clazz==pick.clazz &&
      ((pick.viewId.isNotBlank() && node.viewId==pick.viewId) ||
       (pick.viewId.isBlank() && pick.label.isNotBlank() && node.label==pick.label))
     }==1
   val reason=when{
    sample.rootCount<=2->"UIが${sample.rootCount}件。画面を識別できず、自動再現は無効。"
-   pick==null->"押した位置に固有のクリック可能ノードがなく、自動再現は無効。"
+   pick==null->"押した位置に識別可能なボタンや閉じる表示がなく、自動再現は無効。"
    sample.signature==null->"画面を他の広告から区別する特徴が不足し、自動再現は無効。"
    !safe->"操作対象の識別名が曖昧なため自動再現は無効。"
+   textOnly->"終了文字を確認。実際に閉じられた場合、画面限定のジェスチャーを登録可能。"
    else->"画面と固有の操作ボタンを識別できた。保存すると次回から使用可能。"
   }
   return Proposal(sample.signature,pick?.label.orEmpty(),pick?.viewId.orEmpty(),
-   pick?.clazz.orEmpty(),pick?.bounds?:Rect(),x,y,reason,safe)
+   pick?.clazz.orEmpty(),pick?.bounds?:Rect(),x,y,reason,safe,textOnly)
  }
  fun register(p:Proposal):String{
   val sig=p.signature
@@ -111,6 +122,7 @@ class LearnedActions(private val ctx:Context) {
   if(kept.length()>=32)kept.remove(0)
   kept.put(JSONObject().apply{
    put("signature",sig);put("label",p.label);put("viewId",p.viewId);put("clazz",p.clazz)
+   put("gestureOnly",p.gestureOnly)
    put("left",p.bounds.left);put("top",p.bounds.top)
    put("right",p.bounds.right);put("bottom",p.bounds.bottom)
   })
@@ -127,13 +139,16 @@ class LearnedActions(private val ctx:Context) {
   val rule=matches.single()
   val id=rule.optString("viewId");val label=rule.optString("label")
   val clazz=rule.optString("clazz")
-  val found=sample.items.filter{n->n.pressable && !blocked(n) && n.clazz==clazz &&
+  val gestureOnly=rule.optBoolean("gestureOnly",false)
+  val found=sample.items.filter{n->
+   (if(gestureOnly)n.node.isVisibleToUser else n.pressable) &&
+   !blocked(n) && n.clazz==clazz &&
    (if(id.isNotBlank())n.viewId==id else label.isNotBlank() && n.label==label) &&
    kotlin.math.abs(n.bounds.left-rule.optInt("left"))<40 &&
    kotlin.math.abs(n.bounds.top-rule.optInt("top"))<40 &&
    kotlin.math.abs(n.bounds.right-rule.optInt("right"))<40 &&
    kotlin.math.abs(n.bounds.bottom-rule.optInt("bottom"))<40}
   val item=found.singleOrNull()?:return null
-  return Match(item.node,item.bounds,"学習済み: "+item.label.ifBlank{item.viewId}.take(30))
+  return Match(item.node,item.bounds,"学習済み: "+item.label.ifBlank{item.viewId}.take(30),gestureOnly)
  }
 }
