@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v2.8" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v2.9" android:textSize="23sp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
@@ -20,7 +20,7 @@
  android:layout_height="wrap_content" android:text="回収タスク・所要時間の履歴をコピー"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="トリマ画面上のバーから自動開始・停止。Google Playが前面に出たら自動でトリマに復帰します。HOME紫ボタンは専用診断で300ms・520ms・750msの短いタッチを最大3回試します。学習位置とボタン内の別位置を比較し、最後の1回は4pxだけ指を動かします。試行ごとに約6.5秒待機し、画面遷移を確認できた押し方を次回優先します。"/>
+ android:text="トリマ画面上のバーから自動開始・停止。Google Playが前面に出たら自動でトリマに復帰します。HOME紫ボタンは実画面の高さと「または」の位置から探し、学習位置110ms→240ms→520ms→別位置300msを最大4回試します。約6.5秒おきに画面遷移を確認し、成功した押し方を次回優先します。広告の×を押した直後は、通信待ちやガチャ読み込みで出る一時的な×を押しません。次の報酬・ガチャ・HOME画面が3秒以上安定してから再開し、90秒間確認できなければ停止します。"/>
 <Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="記録・自動操作バーを表示"/>
 <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
 <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
@@ -28,7 +28,7 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="学習操作・復帰ログ" android:textSize="18sp" android:layout_marginTop="12dp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="広告で止まったら『停止』→『学習』→閉じたい位置を指定→画面の変化を確認して『登録』。閉じる文字がクリック不可でも、広告固有の親ボタンと座標を学習できます。登録操作は必ず保存し、自動使用できる場合は『自動操作ルール』、画面の特徴が不足する場合は『学習例（保留）』として分けて表示します。学習例は原則として自動では押しません。ただし、以前ユーザーが登録した右上の無記名画像×について、広告の固有文字・位置・画面一致を十分確認できたものだけ自動ルールに昇格します。Google Oneの閉じるは広告SDKと表示領域を優先して照合します。ガチャ演出中の×は引き続き押さず、カード結果後の広告も識別できた場合のみ操作します。"/>
+ android:text="広告で止まったら『停止』→『学習』→閉じたい位置を指定→画面の変化を確認して『登録』。閉じる文字がクリック不可でも、広告固有の親ボタンと座標を学習できます。登録操作は必ず保存し、自動使用できる場合は『自動操作ルール』、画面の特徴が不足する場合は『学習例（保留）』として分けて表示します。学習例は原則として自動では押しません。同じ未識別の操作は1グループに集約して回数と画面の例を記録します。何度も同じ操作を教える必要はありません。ただし、以前ユーザーが登録した右上の無記名画像×について、広告の固有文字・位置・画面一致を十分確認できたものだけ自動ルールに昇格します。Google Oneの閉じるは広告SDKと表示領域を優先して照合します。ガチャ演出中の×は引き続き押さず、カード結果後の広告も識別できた場合のみ操作します。"/>
 <Button android:id="@+id/copyActionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作履歴をコピー"/>
 <Button android:id="@+id/copyLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習済み操作をコピー"/>
 <Button android:id="@+id/clearLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作をすべて削除"/>
