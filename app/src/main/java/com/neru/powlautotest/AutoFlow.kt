@@ -816,6 +816,12 @@ class AutoFlow(
     next()
     return
    }
+   // HOME experiments are independent from the generic click fallback.
+   // This must also run for HOME_WAIT, which occurs while the button fades.
+   if(handleHomeTrial(decision,now)){
+    next(900)
+    return
+   }
    if(decision.kind=="CARD_RESULT" && gachaPhase==GachaSafety.Phase.AWAIT_RESULT){
     if(cardResultVisibleSince==0L)cardResultVisibleSince=now
     if(now-cardResultVisibleSince<2500L){
@@ -857,12 +863,6 @@ class AutoFlow(
    }else{
     verifiedAdKey=""
     verifiedAdSince=0L
-   }
-   // HOME experiments are independent from the generic click fallback.
-   // This must also run for HOME_WAIT, which occurs while the button fades.
-   if(handleHomeTrial(decision,now)){
-    next(900)
-    return
    }
    if(waitingKey!=null){
     if(waitingKey==decision.key){
