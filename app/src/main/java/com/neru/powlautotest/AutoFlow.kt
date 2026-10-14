@@ -116,14 +116,17 @@ class AutoFlow(
   return "自動操作を停止しました。"
  }
  private fun update(value:String) {
-  if(value==lastInfo)return
+  if(value==lastInfo){
+   if(running)statusCallback("$value\n${collection.shortStatus()}")
+   return
+  }
   lastInfo=value
   TeachOverlay.recordAutomatic(service,value)
   val progress=if(collection.isActive())collection.shortStatus()
    else CollectionRunStore.summary(service)
   val msg="自動操作：$value\n$progress\n成功確認前の画面では繰り返し押しません。操作回数=$steps/$MAX_ACTIONS"
   service.report=msg
-  statusCallback("$value | $progress")
+  statusCallback("$value\n$progress")
  }
  private fun next(delay:Long=POLL_MS) {
   if(running)h.postDelayed(poll,delay)
