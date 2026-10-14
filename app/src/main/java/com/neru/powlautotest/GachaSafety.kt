@@ -34,5 +34,5 @@ internal object GachaSafety {
  }
 
  fun requiresAdEvidence(kind:String):Boolean=
-  kind=="AD_CLOSE" || kind=="LEARNED" || kind=="LEARNED_TEXT"
+  kind=="AD_CLOSE" || kind=="LEARNED" || kind=="LEARNED_TEXT" || kind=="LEARNED_ICON"
 }
