@@ -43,8 +43,8 @@ internal object TeachRulePolicy {
   val play=all.any{it.equals("Google Play",true)}
   val download=all.any{it=="ダウンロード"}
   val creative=all.filter{
-   it.length>=16 && !it.contains("Google Play",true) &&
-    !it.contains("ダウンロード") && !it.contains("インストール") &&
+   it.length>=16 && !it.equals("Google Play",true) &&
+    it!="ダウンロード" && !it.contains("インストール") &&
     !it.contains("友達にシェア") &&
     !it.contains("カードを1枚") &&
     !it.contains("ガチャ") &&
