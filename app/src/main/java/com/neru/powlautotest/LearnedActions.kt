@@ -129,26 +129,69 @@ class LearnedActions(private val ctx:Context) {
   file(ctx).writeText(kept.toString(),Charsets.UTF_8)
   return "学習した操作を保存（合計${kept.length()}件）"
  }
+ // Use stable ad-SDK and screen markers rather than volatile ad titles, image hashes,
+ // randomized URLs or base64 blobs. Both the saved and current screens still need
+ // >=2 shared distinctive visible markers AND exactly one matching button.
+ private fun stableAnchors(signature:String):Set<String>{
+  val ignored=setOf("image","app icon","contains ads","everyone","shopping",
+   "more info","ratings","reviews","rating","closed","広告","閉じる","close",
+   "close button","install","インストール")
+  return signature.split("|").map{canon(it)}.filter{token->
+   val value=token.lowercase()
+   if(value in ignored || token.length !in 4..70)return@filter false
+   if(listOf("base64","svg+xml","%0a","%#a","enifd","utm_","http",
+      "d%3fid","tracking").any{value.contains(it)})return@filter false
+   if(value.matches(Regex("[a-z0-9+/=%._-]{28,}")) &&
+    !value.startsWith("ia_"))return@filter false
+   true
+  }.toSet()
+ }
+ private data class Candidate(val rule:JSONObject,val score:Int,val target:Item)
  fun match(root:AccessibilityNodeInfo?):Match?{
   val sample=scan(root)?:return null
   val sig=sample.signature?:return null
+  val activeAnchors=stableAnchors(sig)
   val rows=read(ctx)
-  val matches=(0 until rows.length()).mapNotNull{rows.optJSONObject(it)}
-   .filter{it.optString("signature")==sig}
-  if(matches.size!=1)return null
-  val rule=matches.single()
-  val id=rule.optString("viewId");val label=rule.optString("label")
-  val clazz=rule.optString("clazz")
-  val gestureOnly=rule.optBoolean("gestureOnly",false)
-  val found=sample.items.filter{n->
-   (if(gestureOnly)n.node.isVisibleToUser else n.pressable) &&
-   !blocked(n) && n.clazz==clazz &&
-   (if(id.isNotBlank())n.viewId==id else label.isNotBlank() && n.label==label) &&
-   kotlin.math.abs(n.bounds.left-rule.optInt("left"))<40 &&
-   kotlin.math.abs(n.bounds.top-rule.optInt("top"))<40 &&
-   kotlin.math.abs(n.bounds.right-rule.optInt("right"))<40 &&
-   kotlin.math.abs(n.bounds.bottom-rule.optInt("bottom"))<40}
-  val item=found.singleOrNull()?:return null
-  return Match(item.node,item.bounds,"学習済み: "+item.label.ifBlank{item.viewId}.take(30),gestureOnly)
+  val found=ArrayList<Candidate>()
+  for(i in 0 until rows.length()){
+   val rule=rows.optJSONObject(i)?:continue
+   val stored=rule.optString("signature")
+   val exact=sig==stored
+   val savedAnchors=stableAnchors(stored)
+   val overlap=activeAnchors.intersect(savedAnchors).size
+   val required=maxOf(2,(savedAnchors.size*60+99)/100)
+   val contextual= savedAnchors.size>=2 && overlap>=required
+   if(!exact && !contextual)continue
+   val id=rule.optString("viewId");val label=rule.optString("label")
+   val clazz=rule.optString("clazz")
+   val gestureOnly=rule.optBoolean("gestureOnly",false)
+   if(id.isBlank() && (label.isBlank()||label.length>60))continue
+   val candidates=sample.items.filter{n->
+    (if(gestureOnly)n.node.isVisibleToUser else n.pressable) &&
+    !blocked(n) && n.clazz==clazz &&
+    (if(id.isNotBlank())n.viewId==id else n.label==label) &&
+    kotlin.math.abs(n.bounds.left-rule.optInt("left"))<40 &&
+    kotlin.math.abs(n.bounds.top-rule.optInt("top"))<40 &&
+    kotlin.math.abs(n.bounds.right-rule.optInt("right"))<40 &&
+    kotlin.math.abs(n.bounds.bottom-rule.optInt("bottom"))<40
+   }
+   val node=candidates.singleOrNull()?:continue
+   // Exact matches outrank approximate anchor matches; strong IDs outrank labels.
+   val score=(if(exact)1000 else 100+overlap*10)+(if(id.isNotBlank())5 else 0)
+   found.add(Candidate(rule,score,node))
+  }
+  val bestScore=found.maxOfOrNull{it.score}?:return null
+  val leaders=found.filter{it.score==bestScore}
+  // Multiple rules must not authorize distinct buttons on the same screen.
+  val positions=leaders.map{
+   it.target.viewId+"|"+it.target.label+"|"+it.target.bounds.toShortString()
+  }.distinct()
+  if(positions.size!=1)return null
+  val chosen=leaders.first()
+  val gestureOnly=chosen.rule.optBoolean("gestureOnly",false)
+  val kind=if(bestScore>=1000)"完全一致" else "共通特徴照合"
+  val title="学習済み($kind): "+
+   chosen.target.label.ifBlank{chosen.target.viewId}.take(36)
+  return Match(chosen.target.node,chosen.target.bounds,title,gestureOnly)
  }
 }
