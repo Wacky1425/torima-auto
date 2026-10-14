@@ -15,6 +15,17 @@ internal object GachaSafety {
    (kind=="CARD_RESULT" && waitingForSameScreen)
  }
 
+ /**
+  * The post-card-result phase can contain an actual full-screen video ad.
+  * That ad is not a gacha animation. Allow ONLY a proven ad close, never a
+  * generic X or a screen with merely "閉じる", after a short settle period.
+  */
+ fun canDismissProvenAdAfterResult(
+  phase:Phase,kind:String,adSdkProven:Boolean,elapsedMs:Long
+ ):Boolean =
+  phase==Phase.AWAIT_REWARD && requiresAdEvidence(kind) && adSdkProven &&
+   elapsedMs>=3_000L
+
  fun newPhaseAfter(kind:String):Phase?=when(kind){
   "W_CHANCE"->Phase.AWAIT_CARDS
   "CARDS"->Phase.AWAIT_RESULT
