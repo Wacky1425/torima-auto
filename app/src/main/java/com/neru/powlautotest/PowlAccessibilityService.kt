@@ -12,11 +12,12 @@ class PowlAccessibilityService:AccessibilityService(){
  companion object{@Volatile var instance:PowlAccessibilityService?=null}
  private val h=Handler(Looper.getMainLooper())
  private val screenCollector by lazy { ScreenCollector(this) }
+ private val autoFlow by lazy { AutoFlow(this){ message -> screenCollector.updateAutoStatus(message) } }
  @Volatile var report="未実行"
  override fun onServiceConnected(){super.onServiceConnected();instance=this;report="サービス接続完了"}
  override fun onInterrupt(){}
  override fun onAccessibilityEvent(e:AccessibilityEvent?){}
- override fun onDestroy(){screenCollector.hide();stopSequence();if(instance===this)instance=null;super.onDestroy()}
+ override fun onDestroy(){stopSequence();screenCollector.hide();if(instance===this)instance=null;super.onDestroy()}
 
 
 
@@ -27,8 +28,32 @@ class PowlAccessibilityService:AccessibilityService(){
   return message
  }
  fun hideScreenCollector():String {
+  stopSequence()
   screenCollector.hide()
   val message="画面記録バーを終了。アプリで『収集ログをまとめてコピー』を押してください。"
+  report=message
+  return message
+ }
+
+
+ fun startAutomaticOperation():String {
+  stopSequence()
+  val shown=screenCollector.show()
+  if(shown.startsWith("記録バーを表示できません")){
+   report=shown
+   return shown
+  }
+  val message=autoFlow.start()
+  report=message
+  return message
+ }
+ fun stopAutomaticOperation():String {
+  autoFlow.stop()
+  runId++
+  sequenceActive=false
+  h.removeCallbacks(adPoll)
+  h.removeCallbacks(adScanPoll)
+  val message="自動操作を停止しました。記録バーは表示したままです。"
   report=message
   return message
  }
@@ -54,6 +79,7 @@ class PowlAccessibilityService:AccessibilityService(){
  private fun homeLog():String=homeTrace.joinToString("\n")
 
  fun stopSequence(){
+  autoFlow.stop()
   runId++
   sequenceActive=false
   h.removeCallbacks(adPoll)
