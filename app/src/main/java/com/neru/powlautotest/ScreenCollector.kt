@@ -83,7 +83,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  fun isVisible():Boolean=bar!=null
  fun updateAutoStatus(text:String){
   autoStatus=text
-  info?.text="自動: $autoStatus\n画面記録 ${count(service)}件 / 学習済み ${LearnedActions.count(service)}件"
+  info?.text="自動: $autoStatus\n画面記録 ${count(service)}件 / 自動学習 ${LearnedActions.count(service)}件 / 学習例（保留） ${LearnedActions.demonstrationCount(service)}件"
  }
  private fun dp(n:Int)=(n*service.resources.displayMetrics.density+0.5f).toInt()
  private fun control(label:String,action:()->Unit)=TextView(service).apply{
