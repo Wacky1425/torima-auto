@@ -280,8 +280,32 @@ class AutoFlow(
  private fun activePackage():String{
   val active=service.rootInActiveWindow?.packageName?.toString().orEmpty()
   try{
-   val modal=service.windows?.firstOrNull{(it.isActive || it.isFocused) &&
-    it.root?.packageName?.toString()=="com.android.vending"}
+   val modal=service.windows?.firstOrNull{window->
+    if(!window.isActive && !window.isFocused)return@firstOrNull false
+    val root=window.root?:return@firstOrNull false
+    val pkg=root.packageName?.toString().orEmpty()
+    if(pkg=="com.android.vending")return@firstOrNull true
+    // Some install pop-ups are rendered by Google Play services.
+    // Require Play branding AND an install call to action, not merely a GMS process.
+    if(pkg=="com.google.android.gms"){
+     val labels=ArrayList<String>()
+     var count=0
+     fun walk(node:AccessibilityNodeInfo){
+      if(count>=90)return
+      count++
+      labels.add(node.text?.toString().orEmpty())
+      labels.add(node.contentDescription?.toString().orEmpty())
+      for(i in 0 until node.childCount){
+       if(count>=90)break
+       node.getChild(i)?.let{walk(it)}
+      }
+     }
+     walk(root)
+     return@firstOrNull labels.any{it.contains("Google Play",true) || it.contains("Play ストア",true)} &&
+      labels.any{it.contains("インストール") || it.contains("Install",true)}
+    }
+    false
+   }
    if(modal!=null)return "com.android.vending"
   }catch(_:Exception){}
   return active
