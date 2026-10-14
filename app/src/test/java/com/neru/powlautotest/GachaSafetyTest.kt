@@ -7,7 +7,7 @@ class GachaSafetyTest {
  @Test fun afterWChanceOnlyCardSelectionOrPendingSameActionIsAllowed() {
   assertTrue(GachaSafety.allows(GachaSafety.Phase.AWAIT_CARDS,"CARDS",false))
   assertTrue(GachaSafety.allows(GachaSafety.Phase.AWAIT_CARDS,"W_CHANCE",true))
-  for(kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT","CARD_RESULT",
+  for(kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT","LEARNED_ICON","CARD_RESULT",
    "SHARE_CLOSE","HOME","UNKNOWN","OPAQUE","RETRY")) {
    assertFalse("Should block $kind during W chance animation",
     GachaSafety.allows(GachaSafety.Phase.AWAIT_CARDS,kind,false))
@@ -16,7 +16,7 @@ class GachaSafetyTest {
  @Test fun afterCardSelectionOnlyFinalResultIsAllowed() {
   assertTrue(GachaSafety.allows(GachaSafety.Phase.AWAIT_RESULT,"CARD_RESULT",false))
   assertTrue(GachaSafety.allows(GachaSafety.Phase.AWAIT_RESULT,"CARDS",true))
-  for(kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT","SHARE_CLOSE",
+  for(kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT","LEARNED_ICON","SHARE_CLOSE",
    "HOME","UNKNOWN","OPAQUE","W_CHANCE","SKIP_NO")) {
    assertFalse("Should block $kind during card animation",
     GachaSafety.allows(GachaSafety.Phase.AWAIT_RESULT,kind,false))
@@ -29,7 +29,7 @@ class GachaSafetyTest {
   assertFalse(GachaSafety.allows(GachaSafety.Phase.AWAIT_REWARD,"LEARNED",false))
  }
  @Test fun adCloseMustAlwaysHaveSeparateEvidence() {
-  for(kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT")){
+  for(kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT","LEARNED_ICON")){
    assertTrue(GachaSafety.requiresAdEvidence(kind))
   }
   assertFalse(GachaSafety.requiresAdEvidence("CARD_RESULT"))
@@ -38,6 +38,8 @@ class GachaSafetyTest {
  @Test fun postResultAllowsOnlyAProvenSettledAd(){
   val p=GachaSafety.Phase.AWAIT_REWARD
   assertTrue(GachaSafety.canDismissProvenAdAfterResult(p,"LEARNED_TEXT",true,3100L))
+  assertTrue(GachaSafety.canDismissProvenAdAfterResult(p,"LEARNED_ICON",true,3100L))
+  assertFalse(GachaSafety.canDismissProvenAdAfterResult(p,"LEARNED_ICON",false,5000L))
   assertTrue(GachaSafety.canDismissProvenAdAfterResult(p,"AD_CLOSE",true,3100L))
   assertFalse(GachaSafety.canDismissProvenAdAfterResult(p,"LEARNED_TEXT",false,6000L))
   assertFalse(GachaSafety.canDismissProvenAdAfterResult(p,"LEARNED_TEXT",true,2000L))
