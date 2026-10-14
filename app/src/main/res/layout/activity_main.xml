@@ -13,6 +13,14 @@
 <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
 <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
 <Button android:id="@+id/clearCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログを消去"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:text="学習操作・復帰ログ" android:textSize="18sp" android:layout_marginTop="12dp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:text="トリマ上のバーで『学習』→押したい場所を指定→操作が正しければ『登録』。識別不能な広告は操作履歴のみ保存され、自動再現しません。"/>
+<Button android:id="@+id/copyActionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作履歴をコピー"/>
+<Button android:id="@+id/copyLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習済み操作をコピー"/>
+<Button android:id="@+id/clearLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作をすべて削除"/>
+
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp"
  android:text="個別のHOME・広告テスト（従来版）" android:textSize="18sp"/>
 <Button android:id="@+id/checkHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME判定（タップなし）"/>
