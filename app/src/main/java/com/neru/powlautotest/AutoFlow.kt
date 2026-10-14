@@ -26,13 +26,11 @@ class AutoFlow(
  }
  private val h=Handler(Looper.getMainLooper())
  private val learned by lazy{LearnedActions(service)}
- private var adContextUntil=0L
- private var lastTargetObservedAt=0L
  private var playRecoveryStep=0
  private var playRecoveryAt=0L
- private var lastPlayDetectedAt=0L
- private var playReturned=false
- private var outsidePackage=""
+ private var sawTorimaInSession=false
+ private var previousForeground=""
+ private var playRecoveryAttempts=0
  private var running=false
  private var generation=0
  private var steps=0
@@ -78,13 +76,11 @@ class AutoFlow(
   lastKind=""
   learnedTextSeenAt=0L
   lastInfo=""
-  adContextUntil=0L
-  lastTargetObservedAt=0L
   playRecoveryStep=0
   playRecoveryAt=0L
-  lastPlayDetectedAt=0L
-  playReturned=false
-  outsidePackage=""
+  sawTorimaInSession=false
+  previousForeground=""
+  playRecoveryAttempts=0
   update("起動中：トリマの画面判定を開始")
   h.postDelayed(poll,450)
   return "自動操作を開始しました。不明な画面では一切タップしません。"
@@ -140,9 +136,22 @@ class AutoFlow(
  }
  private fun closeButton(snap:Snapshot):List<Item>{
   val w=service.resources.displayMetrics.widthPixels
+  val hasIaEndCard=snap.nodes.any{
+   it.desc=="IAInterstitialView"
+  } && snap.nodes.any{
+   it.desc=="ia_endcard_video_overlay" ||
+    it.node.viewIdResourceName?.endsWith(":id/ia_endcard_video_overlay")==true
+  }
   return snap.nodes.filter {n->
    if(!n.canPress)return@filter false
-   val name=n.desc.trim()
+   val id=n.node.viewIdResourceName.orEmpty()
+   // Reuse the common, successfully taught IA endcard close ID across advertisers.
+   if(hasIaEndCard && id=="jp.co.incrementp.milemobile:id/ia_clickable_close_button"){
+    return@filter n.node.className?.toString()?.substringAfterLast('.')=="FrameLayout" &&
+     n.rect.width() in 25..140 && n.rect.height() in 25..140 &&
+     n.rect.left>=w*80/100 && n.rect.right<=w && n.rect.top in 0..370
+   }
+   val name=n.desc.trim().ifEmpty{n.text.trim()}
    if(name.equals("Close Ad",ignoreCase=true)){
     return@filter n.rect.width() in 20..260 && n.rect.height() in 20..220 &&
      n.rect.left>=w*65/100 && n.rect.right<=w && n.rect.top in 0..450
@@ -325,72 +334,87 @@ class AutoFlow(
   }catch(_:Exception){false}
  }
  /**
-  * Never interact with Google Play unless the recent running target screen was an ad.
-  * Sequence: Back, wait, Back, wait, launch Torima, verify. No store install clicks.
+  * A verified Torima -> Play transition authorizes automatic return.
+  * Long ads are not limited by a fragile 9-second / 45-second timer.
+  * Unrelated Play opened before starting automation is not touched.
   */
  private fun recoverPlay(now:Long):Boolean{
   val pkg=activePackage()
   if(pkg==TARGET){
-   lastTargetObservedAt=now
+   sawTorimaInSession=true
+   previousForeground=TARGET
    if(playRecoveryStep!=0){
-    update("Google Playからトリマへの復帰を確認")
+    update("Google Playからトリマへの復帰を確認。現在画面を再判定")
     waitingKey=null
     fallbackAttempted=false
     playRecoveryStep=0
-    playReturned=true
     recentActions.clear()
+    lastKind=""
    }
    return false
   }
   if(pkg=="com.android.vending"){
-   if(playRecoveryStep==0 && (now>adContextUntil || now-lastTargetObservedAt>9000L)){
-    update("Google Playを検出。直前9秒以内のトリマ広告からの遷移ではないため操作しません")
-    return true
-   }
-   lastPlayDetectedAt=now
    if(playRecoveryStep==0){
+    val eventProof=service.hasRecentPlayTransition()
+    val sessionProof=sawTorimaInSession && previousForeground==TARGET
+    if(!eventProof && !sessionProof){
+     update("Google Play検出。トリマからの遷移が未確認なので操作しません")
+     return true
+    }
+    if(playRecoveryAttempts>=4){
+     stopWithReason("Google Playの復帰試行が4回に達したため停止")
+     return true
+    }
+    playRecoveryAttempts++
+    service.consumePlayTransitionProof()
     playRecoveryStep=1
     playRecoveryAt=now
+    waitingKey=null
+    fallbackAttempted=false
     val accepted=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-    update("広告由来のGoogle Playを検出。Android戻る1回: $accepted")
-    if(!accepted)stopWithReason("Androidの戻るが拒否されました")
+    update("トリマ→Google Play遷移を確認。戻る1回目=$accepted（$playRecoveryAttempts/4）")
+    if(!accepted)stopWithReason("Android戻るが拒否されました")
     return true
    }
-   if(now-playRecoveryAt>=2600 && playRecoveryStep==1){
-    playRecoveryStep=2;playRecoveryAt=now
+   val elapsed=now-playRecoveryAt
+   if(playRecoveryStep==1 && elapsed>=2200L){
+    playRecoveryStep=2
+    playRecoveryAt=now
     val accepted=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-    update("まだGoogle Play。Android戻る2回目: $accepted")
-    if(!accepted)stopWithReason("Androidの戻る2回目が拒否されました")
+    update("Playが残っているため戻る2回目=$accepted")
+    if(!accepted)stopWithReason("Android戻る2回目が拒否されました")
     return true
    }
-   if(now-playRecoveryAt>=2600 && playRecoveryStep==2){
-    playRecoveryStep=3;playRecoveryAt=now
+   if(playRecoveryStep==2 && elapsed>=2500L){
+    playRecoveryStep=3
+    playRecoveryAt=now
     val started=returnToTorima()
-    update("Google Playからトリマを前面復帰: $started")
-    if(!started)stopWithReason("トリマを起動できませんでした")
+    update("Google Playが残存。トリマを前面へ復帰=$started")
+    if(!started)stopWithReason("トリマを前面に戻せませんでした")
     return true
    }
-   if(playRecoveryStep==3 && now-playRecoveryAt>6500){
-    stopWithReason("Google Playからトリマへ戻れなかったため停止")
+   if(playRecoveryStep==3 && elapsed>=7000L){
+    stopWithReason("トリマへの復帰が確認できず停止")
    }
    return true
   }
   if(playRecoveryStep in 1..3){
-   if(pkg.isBlank() && now-playRecoveryAt<6000){
-    update("Google Playを閉じた後の画面遷移を確認中")
-    return true
-   }
-   if(now-playRecoveryAt>3200){
-    if(playRecoveryStep!=3){
-     playRecoveryStep=3;playRecoveryAt=now
-     val started=returnToTorima()
-     update("Playから離れたのでトリマを復帰: $started")
-     if(!started)stopWithReason("トリマへの復帰ができませんでした")
-    }else if(now-playRecoveryAt>6500){
-     stopWithReason("トリマの再表示を確認できないため停止")
-    }
+   val elapsed=now-playRecoveryAt
+   if(playRecoveryStep<3 && elapsed>=2800L){
+    playRecoveryStep=3
+    playRecoveryAt=now
+    val launched=returnToTorima()
+    update("Playを離れたがトリマ未確認。前面復帰=$launched")
+    if(!launched)stopWithReason("トリマへの復帰に失敗")
+   }else if(playRecoveryStep==3 && elapsed>=7000L){
+    stopWithReason("復帰先がトリマではないため停止")
+   }else{
+    update("Playからの画面切り替えを確認中: "+pkg.take(55))
    }
    return true
+  }
+  if(pkg.isNotBlank() && pkg!="com.android.systemui"){
+   previousForeground="OTHER"
   }
   return false
  }
@@ -417,13 +441,6 @@ class AutoFlow(
     return
    }
    val decision=choose(snapshot)
-   if(steps>0 && (decision.kind=="AD_CLOSE" || decision.kind=="OPAQUE" ||
-    (decision.kind=="UNKNOWN" && snapshot.nodes.any {
-     it.text.contains("インストール")||it.desc.contains("Install",true)||
-      it.desc.contains("More",true)
-    }))){
-    adContextUntil=now+45000L
-   }
    if(decision.kind!=lastKind){
     lastKind=decision.kind
     if(decision.kind=="LEARNED_TEXT")learnedTextSeenAt=now
