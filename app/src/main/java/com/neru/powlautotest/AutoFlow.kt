@@ -137,7 +137,7 @@ class AutoFlow(
  private fun choose(snap:Snapshot):Decision{
   val n=snap.nodes
   if(snap.has("友達にシェアする")){
-   return Decision("SHARE","報酬・シェア画面（閉じるボタン未確認）","SHARE","".let{null},
+   return Decision("SHARE","報酬・シェア画面（閉じるボタン未確認）","SHARE",null,
     "友達にシェアするは押さない")
   }
   if(snap.has("スキップ券")){
@@ -286,7 +286,7 @@ class AutoFlow(
     return
    }
    if(steps>=MAX_ACTIONS){
-    stopWithReason("一度の起動で$MAX_ACTIONS操作に達したため停止")
+    stopWithReason("一度の起動で${MAX_ACTIONS}操作に達したため停止")
     return
    }
    recentActions[decision.key]=now
