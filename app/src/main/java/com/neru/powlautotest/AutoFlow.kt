@@ -614,10 +614,16 @@ class AutoFlow(
     if(proof==null){
      verifiedAdKey=""
      verifiedAdSince=0L
+     if(unknownSince==0L)unknownSince=now
+     if(now-unknownSince>=120000L){
+      stopWithReason("広告とガチャを2分間区別できなかったため停止")
+      return
+     }
      update("広告かガチャか判定不能：${decision.display} の×は押さず待機")
      next()
      return
     }
+    unknownSince=0L
     // Gacha animation might momentarily expose an X. Require a stable, clearly
     // identified ad *and target* over consecutive polls before acting.
     val key="$proof|${decision.key}"
