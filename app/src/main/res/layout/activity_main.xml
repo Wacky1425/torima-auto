@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v2.0" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v2.1" android:textSize="23sp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
 
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="トリマ画面上のバーから自動開始・停止。Google Playが前面に出たら自動でトリマに復帰します。HOME紫ボタンは遷移しないときだけ短めの長押しを1回試します。"/>
+ android:text="トリマ画面上のバーから自動開始・停止。Google Playが前面に出たら自動でトリマに復帰します。HOME紫ボタンは『または』の上にある幅広ボタンを判定し、遷移しないときだけ最長1.4秒の長押しを1回試します。"/>
 <Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="記録・自動操作バーを表示"/>
 <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
 <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
