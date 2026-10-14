@@ -44,6 +44,7 @@ class AutoFlow(
  private var lastInfo=""
  private var unknownSince=0L
  private var lastKind=""
+ private var learnedTextSeenAt=0L
  private val poll=object:Runnable{override fun run(){check()}}
 
  private data class Item(val node:AccessibilityNodeInfo,val text:String,val desc:String,val rect:Rect) {
@@ -75,6 +76,7 @@ class AutoFlow(
   recentActions.clear()
   unknownSince=0L
   lastKind=""
+  learnedTextSeenAt=0L
   lastInfo=""
   adContextUntil=0L
   lastTargetObservedAt=0L
@@ -240,7 +242,7 @@ class AutoFlow(
   if(memory!=null){
    val item=Item(memory.node,memory.node.text?.toString().orEmpty(),
     memory.node.contentDescription?.toString().orEmpty(),memory.bounds)
-   return Decision("LEARNED",memory.title,
+   return Decision(if(memory.gestureOnly)"LEARNED_TEXT" else "LEARNED",memory.title,
     "LEARNED:${memory.bounds.toShortString()}:${memory.title}",item,
     "ユーザーが明示的に登録した画面・ノードだけを操作")
   }
@@ -423,6 +425,7 @@ class AutoFlow(
    }
    if(decision.kind!=lastKind){
     lastKind=decision.kind
+    if(decision.kind=="LEARNED_TEXT")learnedTextSeenAt=now
     if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE" ||
      decision.kind=="SHARE")unknownSince=now else unknownSince=0L
    }
@@ -446,6 +449,11 @@ class AutoFlow(
     }
     waitingKey=null
     fallbackAttempted=false
+   }
+   if(decision.kind=="LEARNED_TEXT" && now-learnedTextSeenAt<4000L){
+    update("学習した『閉じる』表示を確認。操作可能になるまで4秒待機中")
+    next()
+    return
    }
    if(decision.target==null){
     update("${decision.display}：操作なし。${decision.detail}")
