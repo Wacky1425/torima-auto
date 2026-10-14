@@ -593,9 +593,44 @@ class AutoFlow(
     if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE" ||
      decision.kind=="HOME_WAIT" || decision.kind=="SHARE")unknownSince=now else unknownSince=0L
    }
+   // An ongoing gacha cycle has absolute priority over all ad-close and
+   // learned rules. Never dismiss an animation just because a clickable X exists.
+   if(gachaProtects(decision,now)){
+    next()
+    return
+   }
+   if(decision.kind=="CARD_RESULT" && gachaPhase==GachaPhase.AWAIT_RESULT){
+    if(cardResultVisibleSince==0L)cardResultVisibleSince=now
+    if(now-cardResultVisibleSince<2500L){
+     update("ガチャ結果を確認中：閉じる前に2.5秒安定表示を待機")
+     next(850)
+     return
+    }
+   }else if(decision.kind!="CARD_RESULT"){
+    cardResultVisibleSince=0L
+   }
+   // Button captions alone are unsafe: distinguish an ad SDK from a gacha.
+   if(decision.kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT")){
+    val proof=trustedAdEvidence(snapshot)
+    if(proof==null){
+     update("広告かガチャか判定不能：${decision.display} の×は押さず待機")
+     next()
+     return
+    }
+   }
    if(waitingKey!=null){
     if(waitingKey==decision.key){
      val seconds=(now-waitingSince)/1000
+     if(decision.kind in listOf("W_CHANCE","CARDS","CARD_RESULT")){
+      // A second click during animation can skip the gacha. Never retry here.
+      if(seconds>=25){
+       stopWithReason("ガチャ操作後の画面が25秒変わらないため停止")
+       return
+      }
+      update("ガチャ操作後の遷移待機 ${seconds}秒：重複タップ禁止")
+      next()
+      return
+     }
      if(decision.kind=="HOME"){
       if(!homeHoldAttempted && seconds>=5 && decision.target!=null){
        homeHoldAttempted=true
@@ -672,6 +707,9 @@ class AutoFlow(
     gestureTap(decision.target.rect,"HOME短タップ",110L,where)
     next()
     return
+   }
+   if(decision.kind in listOf("W_CHANCE","CARDS","CARD_RESULT")){
+    markGachaAction(decision.kind,now)
    }
    val clicked=decision.target.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
    update("${decision.display}：ACTION_CLICK=$clicked。遷移確認待ち")
