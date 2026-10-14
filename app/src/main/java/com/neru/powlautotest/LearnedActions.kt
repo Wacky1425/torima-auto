@@ -19,6 +19,7 @@ class LearnedActions(private val ctx:Context) {
    JSONArray(file(ctx).takeIf{it.exists()}?.readText(Charsets.UTF_8)?:"[]")
   }catch(_:Exception){JSONArray()}
   fun count(ctx:Context):Int=read(ctx).length()
+  fun clear(ctx:Context){file(ctx).writeText("[]",Charsets.UTF_8)}
   fun export(ctx:Context):String{
    val list=read(ctx)
    return if(list.length()==0)"学習済みの操作はありません。" else
