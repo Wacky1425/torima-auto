@@ -63,6 +63,7 @@ class TeachOverlay(
  private var beforeSignature:String?=null
  private var outcomeReady=false
  private var homeTeachSucceeded=false
+ private var homeSeparatorTop=0
  private var proposed:LearnedActions.Proposal?=null
  private var changed=false
  private var teachId=0
@@ -77,6 +78,9 @@ class TeachOverlay(
   val initial=memory.scan(root)
   beforeCount=initial?.rootCount?:0
   beforeSignature=initial?.signature
+  homeSeparatorTop=initial?.items?.filter{
+   it.node.text?.toString()?.trim()=="または" && it.bounds.width()>0
+  }?.map{it.bounds.top}?.distinct()?.singleOrNull()?:0
   proposed=null
   changed=false
   outcomeReady=false
@@ -216,7 +220,7 @@ class TeachOverlay(
    it.contains("move") && it.contains("あと") && it.contains("タンク")
   }==true
   homeTeachSucceeded=changed && afterPkg==APP && !afterStillHome &&
-   HomeTouchProfile.qualifies(service,beforeSignature,p.x,p.y)
+   HomeTouchProfile.qualifies(service,beforeSignature,p.x,p.y,homeSeparatorTop)
   try{
    record(service,JSONObject().apply{
     put("type","teaching_tap")
