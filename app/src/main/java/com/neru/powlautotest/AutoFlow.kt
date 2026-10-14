@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.graphics.Rect
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -24,6 +25,13 @@ class AutoFlow(
   private const val MAX_ACTIONS=30
  }
  private val h=Handler(Looper.getMainLooper())
+ private val learned by lazy{LearnedActions(service)}
+ private var adContextUntil=0L
+ private var playRecoveryStep=0
+ private var playRecoveryAt=0L
+ private var lastPlayDetectedAt=0L
+ private var playReturned=false
+ private var outsidePackage=""
  private var running=false
  private var generation=0
  private var steps=0
@@ -66,6 +74,12 @@ class AutoFlow(
   unknownSince=0L
   lastKind=""
   lastInfo=""
+  adContextUntil=0L
+  playRecoveryStep=0
+  playRecoveryAt=0L
+  lastPlayDetectedAt=0L
+  playReturned=false
+  outsidePackage=""
   update("起動中：トリマの画面判定を開始")
   h.postDelayed(poll,450)
   return "自動操作を開始しました。不明な画面では一切タップしません。"
@@ -75,6 +89,7 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  playRecoveryStep=0
   if(wasRunning)update("停止中（ユーザー操作で停止）")
   else statusCallback("停止中")
   return "自動操作を停止しました。"
@@ -131,17 +146,36 @@ class AutoFlow(
      n.rect.width() in 24..180 && n.rect.height() in 24..180 &&
      n.rect.left>=w*70/100 && n.rect.right<=w && n.rect.top in 0..400
    }
+   // Newly observed: ImageView desc=closeButton [975,60][1050,135].
+   if(name.equals("closeButton",ignoreCase=true) ||
+      name.equals("close_btn",ignoreCase=true) ||
+      name in listOf("×","✕","✖")){
+    return@filter n.rect.width() in 20..160 && n.rect.height() in 20..160 &&
+     n.rect.left>=w*70/100 && n.rect.right<=w && n.rect.top in 0..430
+   }
    false
   }.distinctBy{"${it.node.windowId}/${it.rect.toShortString()}"}
  }
  private fun choose(snap:Snapshot):Decision{
   val n=snap.nodes
   if(snap.has("友達にシェアする")){
-   return Decision("SHARE","報酬・シェア画面（閉じるボタン未確認）","SHARE",null,
-    "友達にシェアするは押さない")
+   // The reward pane has a stable private-use close glyph at top right in three samples.
+   // Never touch the large button labelled "友達にシェアする".
+   val safeClose=n.filter{
+    it.canPress && it.desc=="" &&
+    it.rect.left in 850..950 && it.rect.right in 950..1040 &&
+    it.rect.top in 420..520 && it.rect.bottom in 540..640 &&
+    it.rect.width() in 90..150 && it.rect.height() in 95..150
+   }
+   return Decision("SHARE_CLOSE","報酬画面右上の閉じる","SHARE_CLOSE",
+    safeClose.singleOrNull(),"共有ボタンは押さない／閉じる候補=${safeClose.size}")
   }
-  if(snap.has("スキップ券")){
-   return Decision("SKIP","スキップ券画面（未対応）","SKIP",null,"使わない")
+  if(snap.has("動画スキップ") && snap.has("持っている枚数")){
+   val skip=n.filter{it.canPress && it.desc.trim()=="使わない" &&
+     it.rect.left in 70..160 && it.rect.right in 940..1010 &&
+     it.rect.top in 1500..1650}
+   return Decision("SKIP_NO","スキップ券を使わない","SKIP_NO",
+    skip.singleOrNull(),"『使わない』だけを押す／候補=${skip.size}")
   }
   if(snap.has("ガチャWチャンスに挑戦")){
    val hits=snap.exactClickable("ガチャWチャンスに挑戦")
@@ -199,6 +233,14 @@ class AutoFlow(
    return Decision("AD_CLOSE","広告の終了ボタン","AD_CLOSE:${close.first().desc.trim()}:${close.first().rect.toShortString()}",
     close.singleOrNull(),"閉じる候補=${close.size}")
   }
+  val memory=learned.match(service.rootInActiveWindow)
+  if(memory!=null){
+   val item=Item(memory.node,memory.node.text?.toString().orEmpty(),
+    memory.node.contentDescription?.toString().orEmpty(),memory.bounds)
+   return Decision("LEARNED",memory.title,
+    "LEARNED:${memory.bounds.toShortString()}:${memory.title}",item,
+    "ユーザーが明示的に登録した画面・ノードだけを操作")
+  }
   if(snap.count<=2){
    return Decision("OPAQUE","広告または不明画面（UIが${snap.count}件）","OPAQUE",null,
     "アクセシビリティで×を取得できない")
@@ -232,9 +274,104 @@ class AutoFlow(
   h.removeCallbacks(poll)
   update("停止：$reason")
  }
+
+ // Play Store may appear as another app or as an accessible modal window.
+ private fun activePackage():String{
+  val active=service.rootInActiveWindow?.packageName?.toString().orEmpty()
+  try{
+   val modal=service.windows?.firstOrNull{(it.isActive || it.isFocused) &&
+    it.root?.packageName?.toString()=="com.android.vending"}
+   if(modal!=null)return "com.android.vending"
+  }catch(_:Exception){}
+  return active
+ }
+ private fun returnToTorima():Boolean{
+  return try{
+   val intent=service.packageManager.getLaunchIntentForPackage(TARGET)?:return false
+   intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+    Intent.FLAG_ACTIVITY_SINGLE_TOP)
+   service.startActivity(intent)
+   true
+  }catch(_:Exception){false}
+ }
+ /**
+  * Never interact with Google Play unless the recent running target screen was an ad.
+  * Sequence: Back, wait, Back, wait, launch Torima, verify. No store install clicks.
+  */
+ private fun recoverPlay(now:Long):Boolean{
+  val pkg=activePackage()
+  if(pkg==TARGET){
+   if(playRecoveryStep!=0){
+    update("Google Playからトリマへの復帰を確認")
+    waitingKey=null
+    fallbackAttempted=false
+    playRecoveryStep=0
+    playReturned=true
+    recentActions.clear()
+   }
+   return false
+  }
+  if(pkg=="com.android.vending"){
+   if(now>adContextUntil && playRecoveryStep==0){
+    update("Google Playを検出。ただし広告由来と確認できないため操作しません")
+    return true
+   }
+   lastPlayDetectedAt=now
+   if(playRecoveryStep==0){
+    playRecoveryStep=1
+    playRecoveryAt=now
+    val accepted=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+    update("広告由来のGoogle Playを検出。Android戻る1回: $accepted")
+    if(!accepted)stopWithReason("Androidの戻るが拒否されました")
+    return true
+   }
+   if(now-playRecoveryAt>=2600 && playRecoveryStep==1){
+    playRecoveryStep=2;playRecoveryAt=now
+    val accepted=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+    update("まだGoogle Play。Android戻る2回目: $accepted")
+    if(!accepted)stopWithReason("Androidの戻る2回目が拒否されました")
+    return true
+   }
+   if(now-playRecoveryAt>=2600 && playRecoveryStep==2){
+    playRecoveryStep=3;playRecoveryAt=now
+    val started=returnToTorima()
+    update("Google Playからトリマを前面復帰: $started")
+    if(!started)stopWithReason("トリマを起動できませんでした")
+    return true
+   }
+   if(playRecoveryStep==3 && now-playRecoveryAt>6500){
+    stopWithReason("Google Playからトリマへ戻れなかったため停止")
+   }
+   return true
+  }
+  if(playRecoveryStep in 1..3){
+   if(pkg.isBlank() && now-playRecoveryAt<6000){
+    update("Google Playを閉じた後の画面遷移を確認中")
+    return true
+   }
+   if(now-playRecoveryAt>3200){
+    if(playRecoveryStep!=3){
+     playRecoveryStep=3;playRecoveryAt=now
+     val started=returnToTorima()
+     update("Playから離れたのでトリマを復帰: $started")
+     if(!started)stopWithReason("トリマへの復帰ができませんでした")
+    }else if(now-playRecoveryAt>6500){
+     stopWithReason("トリマの再表示を確認できないため停止")
+    }
+   }
+   return true
+  }
+  return false
+ }
+
  private fun check(){
   if(!running)return
   try {
+   val now=SystemClock.elapsedRealtime()
+   if(recoverPlay(now)){
+    next(950)
+    return
+   }
    val snapshot=readCurrent()
    if(snapshot==null){
     waitingKey=null
@@ -243,10 +380,16 @@ class AutoFlow(
     return
    }
    val decision=choose(snapshot)
-   val now=SystemClock.elapsedRealtime()
+   if(steps>0 && (decision.kind=="AD_CLOSE" || decision.kind=="OPAQUE" ||
+    (decision.kind=="UNKNOWN" && snapshot.nodes.any {
+     it.text.contains("インストール")||it.desc.contains("Install",true)||
+      it.desc.contains("More",true)
+    }))){
+    adContextUntil=now+45000L
+   }
    if(decision.kind!=lastKind){
     lastKind=decision.kind
-    if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE" || decision.kind=="SKIP" ||
+    if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE" ||
      decision.kind=="SHARE")unknownSince=now else unknownSince=0L
    }
    if(waitingKey!=null){
