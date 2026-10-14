@@ -23,7 +23,7 @@ class AutoFlow(
  companion object {
   private const val TARGET="jp.co.incrementp.milemobile"
   private const val POLL_MS=1800L
-  private const val MAX_ACTIONS=30
+  private const val MAX_ACTIONS=350
  }
  private val h=Handler(Looper.getMainLooper())
  private val learned by lazy{LearnedActions(service)}
@@ -441,6 +441,9 @@ class AutoFlow(
   * prove that a task is complete.
   */
  private fun monitorCollection(snap:Snapshot,now:Long):Boolean{
+  // Wait for the entire W-chance/card animation and result flow to finish
+  // before accepting HOME observations as a completion certificate.
+  if(gachaPhase!=GachaSafety.Phase.NONE)return false
   val home=snap.nodes.any{it.node.isVisibleToUser && it.node.isSelected && it.desc=="move"} &&
    snap.nodes.any{it.node.isVisibleToUser && it.text.trim()=="または"}
   if(!home || snap.has("友達にシェアする") ||
