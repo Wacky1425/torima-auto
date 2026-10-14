@@ -39,9 +39,9 @@ internal object HomeTouchTrials {
  fun isHomeKind(kind:String):Boolean=kind=="HOME" || kind=="HOME_WAIT"
 
  // Only a real change of screen, not a dispatched tap or a faded button,
- // is evidence that a HOME tap worked. A transient empty node tree is not enough.
+ // is evidence that a HOME tap worked. An opaque ad-like screen is not proof.
  fun plausibleTransition(kind:String):Boolean = kind in setOf(
   "SKIP_NO","RETRY","W_CHANCE","SHARE_CLOSE","CARD_RESULT",
-  "AD_CLOSE","LEARNED","LEARNED_TEXT","OPAQUE"
+  "AD_CLOSE","LEARNED","LEARNED_TEXT"
  )
 }
