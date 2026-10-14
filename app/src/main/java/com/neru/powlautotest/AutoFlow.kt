@@ -27,6 +27,7 @@ class AutoFlow(
  private val h=Handler(Looper.getMainLooper())
  private val learned by lazy{LearnedActions(service)}
  private var adContextUntil=0L
+ private var lastTargetObservedAt=0L
  private var playRecoveryStep=0
  private var playRecoveryAt=0L
  private var lastPlayDetectedAt=0L
@@ -76,6 +77,7 @@ class AutoFlow(
   lastKind=""
   lastInfo=""
   adContextUntil=0L
+  lastTargetObservedAt=0L
   playRecoveryStep=0
   playRecoveryAt=0L
   lastPlayDetectedAt=0L
@@ -326,6 +328,7 @@ class AutoFlow(
  private fun recoverPlay(now:Long):Boolean{
   val pkg=activePackage()
   if(pkg==TARGET){
+   lastTargetObservedAt=now
    if(playRecoveryStep!=0){
     update("Google Playからトリマへの復帰を確認")
     waitingKey=null
@@ -337,8 +340,8 @@ class AutoFlow(
    return false
   }
   if(pkg=="com.android.vending"){
-   if(now>adContextUntil && playRecoveryStep==0){
-    update("Google Playを検出。ただし広告由来と確認できないため操作しません")
+   if(playRecoveryStep==0 && (now>adContextUntil || now-lastTargetObservedAt>9000L)){
+    update("Google Playを検出。直前9秒以内のトリマ広告からの遷移ではないため操作しません")
     return true
    }
    lastPlayDetectedAt=now
