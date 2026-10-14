@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v1.6" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v1.7" android:textSize="23sp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
 
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面を一括収集（学習用）" android:textSize="18sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="画面上に小さな記録バーを表示。画面名を選び、各画面で『記録』を押して進んでください。操作は自動実行しません。"/>
-<Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを表示"/>
+ android:text="画面上に小さなバーを表示。『▶ 開始』『■ 停止』で自動操作を管理。画面ラベルの収集も引き続き可能。未判定の画面は操作しません。"/>
+<Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="記録・自動操作バーを表示"/>
 <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
 <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
 <Button android:id="@+id/clearCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログを消去"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp"
- android:text="従来のHOME・広告テスト" android:textSize="18sp"/>
+ android:text="個別のHOME・広告テスト（従来版）" android:textSize="18sp"/>
 <Button android:id="@+id/checkHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME判定（タップなし）"/>
 <Button android:id="@+id/tapHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME判定＋1回だけタップ"/>
 <Button android:id="@+id/runSequence" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME→広告の×を閉じる（1回）"/>
