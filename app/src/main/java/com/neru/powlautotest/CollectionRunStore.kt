@@ -1,6 +1,7 @@
 package com.neru.powlautotest
 
 import android.content.Context
+import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -59,6 +60,7 @@ internal class CollectionRunStore(private val ctx:Context){
  private var current:JSONObject?=null
  private var firstZeroAt=0L
  private var zeroReads=0
+ private var startedElapsed=0L
  fun isActive():Boolean=current?.optString("status")=="RUNNING"
  fun begin(){
   val previous=json(pref(ctx).getString(ACTIVE,null))
@@ -86,6 +88,7 @@ internal class CollectionRunStore(private val ctx:Context){
   }
   firstZeroAt=0L
   zeroReads=0
+  startedElapsed=SystemClock.elapsedRealtime()
   persist()
  }
  private fun persist(){
@@ -94,7 +97,8 @@ internal class CollectionRunStore(private val ctx:Context){
  }
  fun budgetExceeded():Boolean{
   val run=current?:return false
-  return System.currentTimeMillis()-run.optLong("startedAt")>=CollectionTaskPolicy.BUDGET_MS
+  return isActive() && startedElapsed>0L &&
+   SystemClock.elapsedRealtime()-startedElapsed>=CollectionTaskPolicy.BUDGET_MS
  }
  fun observeHome(remaining:Int,now:Long):Boolean{
   val run=current?:return false
