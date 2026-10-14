@@ -201,6 +201,10 @@ class TeachOverlay(
  private fun recordOutcome(p:LearnedActions.Proposal){
   val afterRoot=service.rootInActiveWindow
   val afterPkg=afterRoot?.packageName?.toString().orEmpty()
+  if(afterPkg=="com.android.vending"){
+   // Proven: this teach operation started on a Torima window and ended in Play.
+   service.markPlayTransitionFromTorima()
+  }
   val after=memory.scan(afterRoot)
   changed=afterPkg!=APP ||
    (after!=null && (after.rootCount!=beforeCount ||
