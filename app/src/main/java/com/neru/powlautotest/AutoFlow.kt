@@ -305,9 +305,15 @@ class AutoFlow(
     it.rect.right in 850..1020 && it.rect.top in 1670..2000 &&
     it.rect.height() in 110..230
   }
-  if(cardResult.isNotEmpty()){
+  // Require the full lower result control plus its visible "閉じる" caption.
+  // An animation's floating X cannot satisfy this result-screen structure.
+  val resultCaption=cardResult.any{button->
+   n.any{node->node.node.isVisibleToUser && node.text.trim()=="閉じる" &&
+    button.rect.contains(node.rect.centerX(),node.rect.centerY())}
+  }
+  if(cardResult.isNotEmpty() && resultCaption){
    return Decision("CARD_RESULT","カード結果","CARD_RESULT",cardResult.singleOrNull(),
-    "『閉じる』候補=${cardResult.size}")
+    "結果ボタン＋閉じる文字を確認／候補=${cardResult.size}")
   }
   // Identify the top reward-video button from its position above the "または"
   // separator, not fixed vertical pixels. The two large buttons must be distinct.
