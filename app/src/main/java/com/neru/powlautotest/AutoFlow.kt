@@ -224,22 +224,45 @@ class AutoFlow(
    return Decision("CARD_RESULT","カード結果","CARD_RESULT",cardResult.singleOrNull(),
     "『閉じる』候補=${cardResult.size}")
   }
-  val move=n.any{it.canPress && it.desc=="move"}
+  // Identify the top reward-video button from its position above the "または"
+  // separator, not fixed vertical pixels. The two large buttons must be distinct.
+  val move=n.any{it.canPress && it.desc=="move" && it.node.isSelected}
   val tank=snap.has("タンクが満タン")
   val remaining=n.firstOrNull{
    it.node.isVisibleToUser && Regex("あと\\s*[0-9０-９]+\\s*回獲得できます")
     .containsMatchIn(it.text)
   }?.text?.trim().orEmpty()
-  if(move && tank && remaining.isNotBlank()){
-   val candidates=n.filter{
-    it.canPress && it.rect.left>=0 && it.rect.right<=1080 &&
-    it.rect.top in 1100..1300 &&
-    it.rect.width()>=600 && it.rect.height() in 90..230
-   }
-   val button=candidates.singleOrNull()
-   val key="HOME:$remaining"
-   return Decision("HOME","HOME／紫ボタン",key,button,
-    "紫ボタン候補=${candidates.size}、$remaining")
+  val separator=n.filter{
+   it.node.isVisibleToUser && it.text.trim()=="または" &&
+    it.rect.width()>0 && it.rect.height()>0
+  }.distinctBy{it.rect.toShortString()}.singleOrNull()
+  val width=service.resources.displayMetrics.widthPixels
+  val height=service.resources.displayMetrics.heightPixels
+  val wideButtons=n.filter{
+   val r=it.rect
+   it.canPress && r.left>=0 && r.right<=width && r.top>=0 && r.bottom<=height &&
+    r.width()>=width*60/100 && r.width()<=width*95/100 &&
+    r.height()>=height*4/100 && r.height()<=height*12/100 &&
+    kotlin.math.abs(r.centerX()-width/2)<=width*12/100 &&
+    r.top>=height*30/100 && r.bottom<=height*82/100
+  }.distinctBy{it.rect.toShortString()}
+  val above=if(separator!=null)wideButtons.filter{
+   val gap=separator.rect.top-it.rect.bottom
+   gap in 0..(height*15/100) && it.rect.centerY()<separator.rect.top
+  }else wideButtons.filter{
+   it.rect.centerY() in (height*42/100)..(height*59/100)
+  }
+  val below=if(separator!=null)wideButtons.filter{
+   val gap=it.rect.top-separator.rect.bottom
+   gap in 0..(height*15/100) && it.rect.centerY()>separator.rect.bottom
+  }else emptyList()
+  val confirmedHome=move && remaining.isNotBlank() &&
+   (tank || (separator!=null && above.size==1 && below.size==1))
+  if(confirmedHome){
+   val button=above.singleOrNull()
+   return Decision("HOME","HOME／紫ボタン","HOME:$remaining",button,
+    "動画ボタン候補=${above.size} / 下のボタン=${below.size} / " +
+     "または=${separator!=null} / タンク=$tank / $remaining")
   }
   val close=closeButton(snap)
   if(close.isNotEmpty()){
@@ -472,12 +495,12 @@ class AutoFlow(
      if(decision.kind=="HOME" && !homeHoldAttempted && seconds>=8 &&
       decision.target!=null){
       homeHoldAttempted=true
-      update("HOMEの画面遷移なし。紫ボタンを600ms長押し（今回1回のみ）")
-      gestureTap(decision.target.rect,"HOME紫ボタン短めの長押し",600L)
+      update("HOMEの画面遷移なし。紫ボタンを1400ms長押し（今回1回のみ）")
+      gestureTap(decision.target.rect,"HOME紫ボタン長押し",1400L)
       next()
       return
      }
-     if(seconds>=if(decision.kind=="HOME")17 else 13){
+     if(seconds>=if(decision.kind=="HOME")19 else 13){
       stopWithReason("$lastActionTitle の操作後も画面が変わらないため、安全停止")
       return
      }
