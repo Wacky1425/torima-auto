@@ -5,6 +5,7 @@ import android.provider.Settings
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.FileProvider
 class MainActivity:AppCompatActivity(){
  private val h=Handler(Looper.getMainLooper())
  private lateinit var results:TextView
@@ -16,10 +17,12 @@ class MainActivity:AppCompatActivity(){
   val s=PowlAccessibilityService.instance
   state.text=if(s==null)"Service: 未接続" else "Service: 接続済み"
   collectionOverview.text=CollectionRunStore.summary(this@MainActivity)
+  findViewById<TextView>(R.id.visualDiagnosticsCount).text=
+   "保存画像：${ScreenshotDiagnostics.count(this@MainActivity)}枚（最大10枚）"
   val preferred=HomeTouchProfile.bestTrialId(this@MainActivity)
   val style=HomeTouchTrials.variants.firstOrNull{it.id==preferred}
   homeExperimentInfo.text=if(style==null)
-   "HOME押し方：成功した方式はまだ未確定（300／520／750msを比較）"
+   "HOME押し方：成功した方式はまだ未確定（110／240／520／300msを比較）"
    else "HOME押し方：前回の画面遷移を確認した方式：${style.durationMs}ms／${style.label}"
   val text=s?.report.orEmpty()
   if(text.isNotBlank() && text!=lastShown){lastShown=text;results.text=text}
@@ -49,6 +52,51 @@ class MainActivity:AppCompatActivity(){
    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
     .setPrimaryClip(ClipData.newPlainText("Torima screen samples",data))
    Toast.makeText(this,"${ScreenCollector.count(this)}画面分のログをコピーしました（${data.length}文字）",Toast.LENGTH_LONG).show()
+  }
+  findViewById<Button>(R.id.shareVisualDiagnostics).setOnClickListener{
+   if(ScreenshotDiagnostics.count(this)==0){
+    Toast.makeText(this,"画像記録がありません。トリマの操作バーで「画像」を押してください",Toast.LENGTH_LONG).show()
+   }else{
+    Toast.makeText(this,"画像のZIPを準備中…",Toast.LENGTH_SHORT).show()
+    Thread{
+     try{
+      val zip=ScreenshotDiagnostics.createShareZip(this)
+      runOnUiThread{
+       if(zip==null){
+        Toast.makeText(this,"画像記録がありません",Toast.LENGTH_LONG).show()
+       }else{
+        val uri=FileProvider.getUriForFile(this,"$packageName.fileprovider",zip)
+        val intent=Intent(Intent.ACTION_SEND).apply{
+         type="application/zip"
+         putExtra(Intent.EXTRA_STREAM,uri)
+         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent,"Torima画像診断を共有"))
+       }
+      }
+     }catch(e:Exception){
+      runOnUiThread{Toast.makeText(this,
+       "ZIP共有に失敗：${e.javaClass.simpleName}",Toast.LENGTH_LONG).show()}
+     }
+    }.start()
+   }
+  }
+  findViewById<Button>(R.id.copyVisualDiagnostics).setOnClickListener{
+   val data=ScreenshotDiagnostics.exportInfo(this)
+   (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+    .setPrimaryClip(ClipData.newPlainText("Torima 画像診断の候補",data))
+   Toast.makeText(this,"候補座標をコピーしました（画像本体はZIP共有）",Toast.LENGTH_LONG).show()
+  }
+  findViewById<Button>(R.id.clearVisualDiagnostics).setOnClickListener{
+   AlertDialog.Builder(this)
+    .setTitle("画像診断を削除しますか？")
+    .setMessage("保存した画像と候補座標の記録が消えます。共有済みのZIPは削除されません。")
+    .setNegativeButton("キャンセル",null)
+    .setPositiveButton("削除"){_,_->
+     ScreenshotDiagnostics.clear(this)
+     findViewById<TextView>(R.id.visualDiagnosticsCount).text="保存画像：0枚"
+     Toast.makeText(this,"画像診断を削除しました",Toast.LENGTH_SHORT).show()
+    }.show()
   }
   findViewById<Button>(R.id.clearCollector).setOnClickListener{
    AlertDialog.Builder(this)
