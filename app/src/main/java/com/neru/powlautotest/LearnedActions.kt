@@ -67,7 +67,7 @@ class LearnedActions(private val ctx:Context) {
   val old=demonstrationList(ctx)
   if(old.length()==0)return
   val kept=JSONArray()
-  val boundsPattern=Regex("""\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]""")
+  val boundsPattern=Regex("""\[(\d+),(\d+)\]\[(\d+),(\d+)\]""")
   val rootWidth=ctx.resources.displayMetrics.widthPixels
   val rootHeight=maxOf(ctx.resources.displayMetrics.heightPixels,
    ctx.resources.displayMetrics.heightPixels+200)
