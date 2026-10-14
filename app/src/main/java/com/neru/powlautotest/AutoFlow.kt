@@ -503,7 +503,7 @@ class AutoFlow(
    val current=CollectionTaskPolicy.remaining(decision.detail)
    if(previous!=null && current!=null && current<previous){
     homeLastTrial?.let{HomeTouchProfile.markSuccessfulTrial(service,it.id)}
-    update("HOME操作後に残回数が$previous→$currentへ減少。成功パターンを記録")
+    update("HOME操作後に残回数が${previous}→${current}へ減少。成功パターンを記録")
     resetHomeExperiment()
     return true
    }
