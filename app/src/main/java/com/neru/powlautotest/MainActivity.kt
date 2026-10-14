@@ -10,11 +10,17 @@ class MainActivity:AppCompatActivity(){
  private lateinit var results:TextView
  private lateinit var state:TextView
  private lateinit var collectionOverview:TextView
+ private lateinit var homeExperimentInfo:TextView
  private var lastShown=""
  private val refresh=object:Runnable{override fun run(){
   val s=PowlAccessibilityService.instance
   state.text=if(s==null)"Service: 未接続" else "Service: 接続済み"
   collectionOverview.text=CollectionRunStore.summary(this@MainActivity)
+  val preferred=HomeTouchProfile.bestTrialId(this@MainActivity)
+  val style=HomeTouchTrials.variants.firstOrNull{it.id==preferred}
+  homeExperimentInfo.text=if(style==null)
+   "HOME押し方：成功した方式はまだ未確定（300／520／750msを比較）"
+   else "HOME押し方：前回の画面遷移を確認した方式：${style.durationMs}ms／${style.label}"
   val text=s?.report.orEmpty()
   if(text.isNotBlank() && text!=lastShown){lastShown=text;results.text=text}
   h.postDelayed(this,500)
@@ -22,6 +28,7 @@ class MainActivity:AppCompatActivity(){
  override fun onCreate(b:Bundle?){super.onCreate(b);setContentView(R.layout.activity_main)
   results=findViewById(R.id.results);state=findViewById(R.id.debugStatus)
   collectionOverview=findViewById(R.id.collectionOverview)
+  homeExperimentInfo=findViewById(R.id.homeExperimentInfo)
   collectionOverview.text=CollectionRunStore.summary(this)
   findViewById<Button>(R.id.checkUpdate).setOnClickListener{ TorimaUpdater(this,findViewById(R.id.updateStatus)).check() }
   findViewById<Button>(R.id.openSettings).setOnClickListener{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}
