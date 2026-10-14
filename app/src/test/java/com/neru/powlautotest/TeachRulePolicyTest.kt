@@ -28,6 +28,19 @@ class TeachRulePolicyTest {
   assertTrue(TeachRulePolicy.isForbiddenTargetId("share-button"))
   assertFalse(TeachRulePolicy.isForbiddenTargetId("dismiss-button"))
  }
+ @Test fun unlabeledCornerImageRequiresMatchingAdCreativeAndSafeBounds(){
+  val creative="Google Play|ダウンロード|数多の戦略で、敵城を落とそう。"
+  assertTrue(TeachRulePolicy.isTaughtAdCornerImage("ImageView",972,107,1080,215,
+    1080,2412,creative))
+  assertFalse(TeachRulePolicy.isTaughtAdCornerImage("ImageView",972,107,1080,215,
+    1080,2412,null))
+  assertFalse(TeachRulePolicy.isTaughtAdCornerImage("ImageView",972,107,1080,215,
+    1080,2412,"カードを1枚選んでください|閉じる|ゲーム"))
+  assertFalse(TeachRulePolicy.isTaughtAdCornerImage("ImageView",400,107,510,215,
+    1080,2412,creative))
+  assertFalse(TeachRulePolicy.isTaughtAdCornerImage("Button",972,107,1080,215,
+    1080,2412,creative))
+ }
  @Test fun incompleteWebVideoIsNotEvidenceOfAnEndcard(){
   assertFalse(TeachRulePolicy.provenWebAdFrame(listOf("towerVideo","dismiss-button")))
   assertFalse(TeachRulePolicy.provenWebAdFrame(listOf("app-interstitial-slot","dismiss-button")))
