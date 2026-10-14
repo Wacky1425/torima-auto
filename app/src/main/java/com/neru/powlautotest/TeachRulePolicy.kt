@@ -52,6 +52,14 @@ internal object TeachRulePolicy {
   }
   return play && download && creative.size>=2
  }
+ fun canPromoteRecordedIcon(signature:String,clazz:String,
+  x:Int,y:Int,left:Int,top:Int,right:Int,bottom:Int,
+  width:Int,height:Int,screenChanged:Boolean):Boolean{
+  return screenChanged &&
+   hasImageEndcardEvidence(signature.split("|")) &&
+   isCornerImageTarget(clazz,left,top,right,bottom,width,height) &&
+   x in left until right && y in top until bottom
+ }
  fun isCornerImageTarget(clazz:String,left:Int,top:Int,right:Int,bottom:Int,
    width:Int,height:Int):Boolean {
   val w=right-left;val h=bottom-top
