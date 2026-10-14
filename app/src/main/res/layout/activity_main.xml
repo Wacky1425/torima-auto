@@ -6,6 +6,15 @@
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
 
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:layout_marginTop="16dp" android:text="回収タスク・実行記録" android:textSize="18sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:text="今回の基盤で管理する対象は『トリマのタンク動画』のみ。HOMEの残り回数を記録し、0回を2度確認した場合だけ完了として停止します。未対応の回収対象は完了扱いしません。実行は最大3時間で安全停止。"/>
+<TextView android:id="@+id/collectionOverview" android:layout_width="match_parent"
+ android:layout_height="wrap_content" android:padding="10dp"
+ android:text="回収タスク：実行記録なし" android:textIsSelectable="true"/>
+<Button android:id="@+id/copyCollectionHistory" android:layout_width="match_parent"
+ android:layout_height="wrap_content" android:text="回収タスク・所要時間の履歴をコピー"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="トリマ画面上のバーから自動開始・停止。Google Playが前面に出たら自動でトリマに復帰します。HOME紫ボタンは成功した学習位置を使い、まず110msの実タップ、遷移しないときは同じ位置を2.4秒だけ長押しします。"/>
