@@ -508,7 +508,7 @@ class AutoFlow(
     return true
    }
    if(HomeTouchTrials.hasTimedOut(homeExperimentStartedAt,now)){
-    stopWithReason("HOME短タップ3パターンを試しても遷移なし（直近操作と画面を確認）")
+    stopWithReason("HOMEタップの診断が34秒を超えても遷移なし（試行ログを確認）")
     return true
    }
    if(homeTrialInFlight){
@@ -518,7 +518,7 @@ class AutoFlow(
    val waitSeconds=(now-homeLastTrialAt)/1000L
    if(homeTrialIndex>0 &&
     now-homeLastTrialAt<HomeTouchTrials.DELAY_BETWEEN_TRIALS_MS){
-    update("HOMEは押下反応のみ。${waitSeconds}秒経過、次の試行まで待機")
+    update("HOMEの画面遷移なし。${waitSeconds}秒経過、次の押し方まで待機")
     return true
    }
    if(homeTrialIndex>=homeTrialList.size){
@@ -698,6 +698,7 @@ class AutoFlow(
   val pkg=activePackage()
   if(pkg==TARGET){
    if(playRecoveryStep!=0){
+    resetHomeExperiment()
     collection.playReturned()
     update("Google Playからトリマへの復帰を確認。現在画面を再判定")
     waitingKey=null
@@ -711,6 +712,7 @@ class AutoFlow(
   }
   if(pkg=="com.android.vending"){
    if(playRecoveryStep==0){
+    resetHomeExperiment()
     if(playRecoveryAttempts>=4){
      stopWithReason("Google Playへの復帰が連続4回発生したため停止")
      return true
