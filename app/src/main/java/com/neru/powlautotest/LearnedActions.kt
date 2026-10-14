@@ -94,6 +94,7 @@ class LearnedActions(private val ctx:Context) {
   val w=ctx.resources.displayMetrics.widthPixels
   val h=maxOf(ctx.resources.displayMetrics.heightPixels,item.bounds.bottom)
   return forbidden.containsMatchIn(item.label) ||
+   TeachRulePolicy.isForbiddenTargetId(item.viewId) ||
    item.bounds.width()>w*0.65 || item.bounds.height()>h*0.30
  }
  fun propose(root:AccessibilityNodeInfo?,x:Int,y:Int):Proposal{
