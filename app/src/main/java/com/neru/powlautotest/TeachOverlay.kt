@@ -201,7 +201,7 @@ class TeachOverlay(
  private fun recordOutcome(p:LearnedActions.Proposal){
   val afterRoot=service.rootInActiveWindow
   val afterPkg=afterRoot?.packageName?.toString().orEmpty()
-  if(afterPkg=="com.android.vending"){
+  if(afterPkg=="com.android.vending" || service.isPlayBrandedInstallPopup(afterRoot)){
    // Proven: this teach operation started on a Torima window and ended in Play.
    service.markPlayTransitionFromTorima()
   }
