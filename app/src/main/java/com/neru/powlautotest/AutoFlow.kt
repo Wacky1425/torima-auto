@@ -28,8 +28,6 @@ class AutoFlow(
  private val learned by lazy{LearnedActions(service)}
  private var playRecoveryStep=0
  private var playRecoveryAt=0L
- private var sawTorimaInSession=false
- private var previousForeground=""
  private var playRecoveryAttempts=0
  private var running=false
  private var generation=0
@@ -38,6 +36,7 @@ class AutoFlow(
  private var waitingSince=0L
  private var lastActionTitle=""
  private var fallbackAttempted=false
+ private var homeHoldAttempted=false
  private val recentActions=LinkedHashMap<String,Long>()
  private var lastInfo=""
  private var unknownSince=0L
@@ -71,6 +70,7 @@ class AutoFlow(
   steps=0
   waitingKey=null
   fallbackAttempted=false
+  homeHoldAttempted=false
   recentActions.clear()
   unknownSince=0L
   lastKind=""
@@ -78,8 +78,6 @@ class AutoFlow(
   lastInfo=""
   playRecoveryStep=0
   playRecoveryAt=0L
-  sawTorimaInSession=false
-  previousForeground=""
   playRecoveryAttempts=0
   update("起動中：トリマの画面判定を開始")
   h.postDelayed(poll,450)
@@ -263,13 +261,13 @@ class AutoFlow(
   return Decision("UNKNOWN","不明／広告再生中（${snap.count}ノード）","UNKNOWN",null,
    "識別できる終了・次へボタンなし")
  }
- private fun gestureTap(rect:Rect,info:String) {
+ private fun gestureTap(rect:Rect,info:String,holdMs:Long=120L) {
   if(!running)return
   val x=rect.exactCenterX()
   val y=rect.exactCenterY()
   val path=Path().apply{moveTo(x,y)}
   val gesture=GestureDescription.Builder()
-   .addStroke(GestureDescription.StrokeDescription(path,0,120)).build()
+   .addStroke(GestureDescription.StrokeDescription(path,0,holdMs)).build()
   val id=generation
   val accepted=service.dispatchGesture(gesture,object:AccessibilityService.GestureResultCallback(){
    override fun onCompleted(gestureDescription:GestureDescription?){
@@ -334,19 +332,19 @@ class AutoFlow(
   }catch(_:Exception){false}
  }
  /**
-  * A verified Torima -> Play transition authorizes automatic return.
-  * Long ads are not limited by a fragile 9-second / 45-second timer.
-  * Unrelated Play opened before starting automation is not touched.
+  * Explicit user opt-in: while automation is running, ALWAYS return from a verified
+  * Google Play app or branded install popup, even if the originating app is unknown.
+  * Never tap an install, purchase, or permission button.
+  * Try Back, then foreground Torima; stop if repeated attempts cannot restore it.
   */
  private fun recoverPlay(now:Long):Boolean{
   val pkg=activePackage()
   if(pkg==TARGET){
-   sawTorimaInSession=true
-   previousForeground=TARGET
    if(playRecoveryStep!=0){
     update("Google Playからトリマへの復帰を確認。現在画面を再判定")
     waitingKey=null
     fallbackAttempted=false
+    homeHoldAttempted=false
     playRecoveryStep=0
     recentActions.clear()
     lastKind=""
@@ -355,14 +353,8 @@ class AutoFlow(
   }
   if(pkg=="com.android.vending"){
    if(playRecoveryStep==0){
-    val eventProof=service.hasRecentPlayTransition()
-    val sessionProof=sawTorimaInSession && previousForeground==TARGET
-    if(!eventProof && !sessionProof){
-     update("Google Play検出。トリマからの遷移が未確認なので操作しません")
-     return true
-    }
     if(playRecoveryAttempts>=4){
-     stopWithReason("Google Playの復帰試行が4回に達したため停止")
+     stopWithReason("Google Playへの復帰が連続4回発生したため停止")
      return true
     }
     playRecoveryAttempts++
@@ -371,50 +363,61 @@ class AutoFlow(
     playRecoveryAt=now
     waitingKey=null
     fallbackAttempted=false
+    homeHoldAttempted=false
     val accepted=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-    update("トリマ→Google Play遷移を確認。戻る1回目=$accepted（$playRecoveryAttempts/4）")
-    if(!accepted)stopWithReason("Android戻るが拒否されました")
+    update("Google Playを検出。遷移元に関係なく戻る1回目=$accepted（復帰$playRecoveryAttempts/4）")
+    if(!accepted){
+     playRecoveryStep=2
+     playRecoveryAt=now-2200L
+    }
     return true
    }
    val elapsed=now-playRecoveryAt
-   if(playRecoveryStep==1 && elapsed>=2200L){
+   if(playRecoveryStep==1 && elapsed>=1800L){
     playRecoveryStep=2
     playRecoveryAt=now
-    val accepted=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-    update("Playが残っているため戻る2回目=$accepted")
-    if(!accepted)stopWithReason("Android戻る2回目が拒否されました")
+    val launched=returnToTorima()
+    update("Google Playが残存。トリマを前面に起動=$launched")
+    if(!launched){
+     playRecoveryStep=3
+     playRecoveryAt=now-2400L
+    }
     return true
    }
-   if(playRecoveryStep==2 && elapsed>=2500L){
+   if(playRecoveryStep==2 && elapsed>=2400L){
     playRecoveryStep=3
     playRecoveryAt=now
-    val started=returnToTorima()
-    update("Google Playが残存。トリマを前面へ復帰=$started")
-    if(!started)stopWithReason("トリマを前面に戻せませんでした")
+    val accepted=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+    update("まだGoogle Play。最後のAndroid戻る=$accepted")
     return true
    }
-   if(playRecoveryStep==3 && elapsed>=7000L){
-    stopWithReason("トリマへの復帰が確認できず停止")
+   if(playRecoveryStep==3 && elapsed>=2300L){
+    playRecoveryStep=4
+    playRecoveryAt=now
+    val launched=returnToTorima()
+    update("トリマを再度前面へ戻す=$launched")
+    if(!launched)stopWithReason("トリマを起動できませんでした")
+    return true
+   }
+   if(playRecoveryStep==4 && elapsed>=7000L){
+    stopWithReason("Google Playから戻れなかったため停止")
    }
    return true
   }
-  if(playRecoveryStep in 1..3){
+  if(playRecoveryStep in 1..4){
    val elapsed=now-playRecoveryAt
-   if(playRecoveryStep<3 && elapsed>=2800L){
-    playRecoveryStep=3
+   if(playRecoveryStep<4 && elapsed>=2600L){
+    playRecoveryStep=4
     playRecoveryAt=now
     val launched=returnToTorima()
-    update("Playを離れたがトリマ未確認。前面復帰=$launched")
+    update("Playを閉じたがトリマ未確認。前面復帰=$launched")
     if(!launched)stopWithReason("トリマへの復帰に失敗")
-   }else if(playRecoveryStep==3 && elapsed>=7000L){
+   }else if(playRecoveryStep==4 && elapsed>=7000L){
     stopWithReason("復帰先がトリマではないため停止")
    }else{
     update("Playからの画面切り替えを確認中: "+pkg.take(55))
    }
    return true
-  }
-  if(pkg.isNotBlank() && pkg!="com.android.systemui"){
-   previousForeground="OTHER"
   }
   return false
  }
@@ -462,7 +465,15 @@ class AutoFlow(
       next()
       return
      }
-     if(seconds>=13){
+     if(decision.kind=="HOME" && !homeHoldAttempted && seconds>=8 &&
+      decision.target!=null){
+      homeHoldAttempted=true
+      update("HOMEの画面遷移なし。紫ボタンを短めに420ms長押し（今回1回のみ）")
+      gestureTap(decision.target.rect,"HOME紫ボタン短押し保持",420L)
+      next()
+      return
+     }
+     if(seconds>=if(decision.kind=="HOME")17 else 13){
       stopWithReason("$lastActionTitle の操作後も画面が変わらないため、安全停止")
       return
      }
@@ -472,6 +483,7 @@ class AutoFlow(
     }
     waitingKey=null
     fallbackAttempted=false
+    homeHoldAttempted=false
    }
    if(decision.kind=="LEARNED_TEXT" && now-learnedTextSeenAt<4000L){
     update("学習した『閉じる』表示を確認。操作可能になるまで4秒待機中")
@@ -504,6 +516,7 @@ class AutoFlow(
    waitingSince=now
    lastActionTitle=decision.display
    fallbackAttempted=false
+   homeHoldAttempted=false
    val clicked=decision.target.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
    update("${decision.display}：ACTION_CLICK=$clicked。遷移確認待ち")
    if(!clicked){
