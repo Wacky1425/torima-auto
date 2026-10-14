@@ -54,6 +54,50 @@ class LearnedActions(private val ctx:Context) {
   val title:String,val gestureOnly:Boolean=false,val tapPoint:Point?=null,
   val visualIcon:Boolean=false)
 
+ /**
+  * Users already explicitly pressed 登録 on these examples. Upgrade only the
+  * strongly identified branded image endcards; keep all other examples pending.
+  * Replaying still requires the SAME signature, matching unique corner icon,
+  * and independent live ad evidence.
+  */
+ init{
+  try{promoteConfirmedImageExamples()}catch(_:Exception){}
+ }
+ private fun promoteConfirmedImageExamples(){
+  val old=demonstrationList(ctx)
+  if(old.length()==0)return
+  val kept=JSONArray()
+  val boundsPattern=Regex("""\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]""")
+  val rootWidth=ctx.resources.displayMetrics.widthPixels
+  val rootHeight=maxOf(ctx.resources.displayMetrics.heightPixels,
+   ctx.resources.displayMetrics.heightPixels+200)
+  var changed=false
+  for(i in 0 until old.length()){
+   val entry=old.optJSONObject(i)?:continue
+   val signature=entry.optString("signature")
+   val match=boundsPattern.matchEntire(entry.optString("bounds"))
+   if(match==null){
+    kept.put(entry)
+    continue
+   }
+   val coords=match.groupValues.drop(1).map{it.toInt()}
+   val r=Rect(coords[0],coords[1],coords[2],coords[3])
+   val valid=TeachRulePolicy.canPromoteRecordedIcon(
+    signature,entry.optString("class"),
+    entry.optInt("x"),entry.optInt("y"),
+    r.left,r.top,r.right,r.bottom,
+    rootWidth,maxOf(rootHeight,r.bottom),entry.optBoolean("screenChanged"))
+   if(valid && read(ctx).length()<32){
+    val proposal=Proposal(signature,"","","ImageView",r,
+     entry.optInt("x"),entry.optInt("y"),
+     "以前に登録した画像広告の閉じる位置",true,
+     gestureOnly=true,visualIcon=true)
+    register(proposal)
+    changed=true
+   }else kept.put(entry)
+  }
+  if(changed)demonstrationFile(ctx).writeText(kept.toString(),Charsets.UTF_8)
+ }
  private fun canon(input:String):String=input.trim().replace(Regex("\\s+")," ")
   .replace(Regex("\\d{2,}"),"#").take(90)
  fun scan(root:AccessibilityNodeInfo?):Sample?{
