@@ -127,6 +127,7 @@ class LearnedActions(private val ctx:Context) {
   val textOnly=dismissParent!=null || (clickable==null && textProxy!=null)
   val safe=sample.signature!=null && pick!=null &&
     (pick.label.isNotBlank()||pick.viewId.isNotBlank()) &&
+    (!textOnly || sdkProof) &&
     sample.items.count{node->
      (if(textOnly)node.node.isVisibleToUser else node.pressable) && node.clazz==pick.clazz &&
      ((pick.viewId.isNotBlank() && node.viewId==pick.viewId) ||
@@ -136,6 +137,7 @@ class LearnedActions(private val ctx:Context) {
    sample.rootCount<=2->"UIが${sample.rootCount}件。画面を識別できず、自動再現は無効。"
    pick==null->"押した位置に識別可能なボタンや閉じる表示がなく、自動再現は無効。"
    sample.signature==null->"画面を他の広告から区別する特徴が不足し、自動再現は無効。"
+   textOnly && !sdkProof->"閉じる文字は記録可能ですが、広告固有の情報が不足。自動実行は保留。"
    !safe->"操作対象の識別名が曖昧なため自動再現は無効。"
    dismissParent!=null->"広告画面・閉じる親領域・閉じる文字を確認。押した座標を登録可能。"
    textOnly->"終了文字を確認。画面限定のジェスチャーを登録可能。"
