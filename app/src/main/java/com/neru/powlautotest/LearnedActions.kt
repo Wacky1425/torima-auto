@@ -2,6 +2,7 @@ package com.neru.powlautotest
 
 import android.content.Context
 import android.graphics.Rect
+import android.graphics.Point
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
@@ -12,18 +13,31 @@ class LearnedActions(private val ctx:Context) {
  companion object {
   private const val APP="jp.co.incrementp.milemobile"
   private const val FILE="torima_learned_actions.json"
+  private const val DEMONSTRATIONS="torima_teaching_demonstrations.json"
   private val forbidden=Regex("(?i)インストール|install|友達にシェア|share|more|購入|課金|許可|同意")
   private val generic=Regex("(?i)^(\\d[\\d,.]*|[0-9.,]+%?|install|インストール|more|閉じる|マイル|広告)$")
   private fun file(ctx:Context)=File(ctx.filesDir,FILE)
+  private fun demonstrationFile(ctx:Context)=File(ctx.filesDir,DEMONSTRATIONS)
+  private fun demonstrationList(ctx:Context):JSONArray=try{
+   JSONArray(demonstrationFile(ctx).takeIf{it.exists()}?.readText(Charsets.UTF_8)?:"[]")
+  }catch(_:Exception){JSONArray()}
   private fun read(ctx:Context):JSONArray=try {
    JSONArray(file(ctx).takeIf{it.exists()}?.readText(Charsets.UTF_8)?:"[]")
   }catch(_:Exception){JSONArray()}
   fun count(ctx:Context):Int=read(ctx).length()
-  fun clear(ctx:Context){file(ctx).writeText("[]",Charsets.UTF_8)}
+  fun demonstrationCount(ctx:Context):Int=demonstrationList(ctx).length()
+  fun clear(ctx:Context){
+   file(ctx).writeText("[]",Charsets.UTF_8)
+   demonstrationFile(ctx).writeText("[]",Charsets.UTF_8)
+  }
   fun export(ctx:Context):String{
    val list=read(ctx)
-   return if(list.length()==0)"学習済みの操作はありません。" else
-    JSONObject().put("count",list.length()).put("rules",list).toString(2)
+   val pending=demonstrationList(ctx)
+   return JSONObject()
+    .put("count",list.length())
+    .put("rules",list)
+    .put("pendingCount",pending.length())
+    .put("pendingDemonstrations",pending).toString(2)
   }
  }
  data class Item(val node:AccessibilityNodeInfo,val bounds:Rect,val label:String,val viewId:String,val clazz:String){
@@ -35,7 +49,8 @@ class LearnedActions(private val ctx:Context) {
   val bounds:Rect,val x:Int,val y:Int,val message:String,val safe:Boolean,
   val gestureOnly:Boolean=false
  )
- data class Match(val node:AccessibilityNodeInfo,val bounds:Rect,val title:String,val gestureOnly:Boolean=false)
+ data class Match(val node:AccessibilityNodeInfo,val bounds:Rect,
+  val title:String,val gestureOnly:Boolean=false,val tapPoint:Point?=null)
 
  private fun canon(input:String):String=input.trim().replace(Regex("\\s+")," ")
   .replace(Regex("\\d{2,}"),"#").take(90)
@@ -44,7 +59,10 @@ class LearnedActions(private val ctx:Context) {
   val items=ArrayList<Item>()
   var count=0
   val width=ctx.resources.displayMetrics.widthPixels
-  val height=ctx.resources.displayMetrics.heightPixels
+  // Accessibility coordinates may include system bars excluded by displayMetrics.
+  // The Google One dismiss control is near the physical bottom of the screen.
+  val rootBounds=Rect();root.getBoundsInScreen(rootBounds)
+  val height=maxOf(ctx.resources.displayMetrics.heightPixels,rootBounds.bottom)
   fun visit(n:AccessibilityNodeInfo){
    if(count>=450)return
    count++
@@ -74,7 +92,7 @@ class LearnedActions(private val ctx:Context) {
  }
  private fun blocked(item:Item):Boolean{
   val w=ctx.resources.displayMetrics.widthPixels
-  val h=ctx.resources.displayMetrics.heightPixels
+  val h=maxOf(ctx.resources.displayMetrics.heightPixels,item.bounds.bottom)
   return forbidden.containsMatchIn(item.label) ||
    item.bounds.width()>w*0.65 || item.bounds.height()>h*0.30
  }
@@ -90,8 +108,22 @@ class LearnedActions(private val ctx:Context) {
    it.bounds.width() < ctx.resources.displayMetrics.widthPixels*0.40 &&
    it.bounds.height() in 20..180
   }.minByOrNull{it.bounds.width().toLong()*it.bounds.height()}
-  val pick=clickable?:textProxy
-  val textOnly=clickable==null && textProxy!=null
+  // Some ad SDKs use a nonclickable dismiss parent containing a close caption.
+  // The user's touch may be just outside the smaller caption, but still within
+  // the actual dismiss area. This is intentionally restricted to verified SDKs.
+  val sdkProof=TeachRulePolicy.provenWebAdFrame(sample.items.map{it.viewId})
+  val dismissParent=sample.items.filter{candidate->
+   val caption=sample.items.any{child->
+    child.node.isVisibleToUser &&
+     TeachRulePolicy.isDismissLabel(child.label) &&
+     candidate.bounds.contains(child.bounds.centerX(),child.bounds.centerY())
+   }
+   TeachRulePolicy.canLearnDismissByCoordinate(
+    sdkProof,candidate.viewId,caption,candidate.bounds.contains(x,y)) &&
+    !blocked(candidate)
+  }.minByOrNull{it.bounds.width().toLong()*it.bounds.height()}
+  val pick=dismissParent?:clickable?:textProxy
+  val textOnly=dismissParent!=null || (clickable==null && textProxy!=null)
   val safe=sample.signature!=null && pick!=null &&
     (pick.label.isNotBlank()||pick.viewId.isNotBlank()) &&
     sample.items.count{node->
@@ -104,7 +136,8 @@ class LearnedActions(private val ctx:Context) {
    pick==null->"押した位置に識別可能なボタンや閉じる表示がなく、自動再現は無効。"
    sample.signature==null->"画面を他の広告から区別する特徴が不足し、自動再現は無効。"
    !safe->"操作対象の識別名が曖昧なため自動再現は無効。"
-   textOnly->"終了文字を確認。実際に閉じられた場合、画面限定のジェスチャーを登録可能。"
+   dismissParent!=null->"広告画面・閉じる親領域・閉じる文字を確認。押した座標を登録可能。"
+   textOnly->"終了文字を確認。画面限定のジェスチャーを登録可能。"
    else->"画面と固有の操作ボタンを識別できた。保存すると次回から使用可能。"
   }
   return Proposal(sample.signature,pick?.label.orEmpty(),pick?.viewId.orEmpty(),
@@ -125,9 +158,30 @@ class LearnedActions(private val ctx:Context) {
    put("gestureOnly",p.gestureOnly)
    put("left",p.bounds.left);put("top",p.bounds.top)
    put("right",p.bounds.right);put("bottom",p.bounds.bottom)
+   put("tapX",p.x);put("tapY",p.y)
   })
   file(ctx).writeText(kept.toString(),Charsets.UTF_8)
-  return "学習した操作を保存（合計${kept.length()}件）"
+  return "自動操作ルールに登録しました（合計${kept.length()}件）"
+ }
+ /**
+  * Keep user demonstrations even when Android exposes only an opaque video.
+  * These are evidence for future learning, NOT automatically executable rules.
+  */
+ fun saveDemonstration(p:Proposal,screenChanged:Boolean,reason:String):String{
+  val data=demonstrationList(ctx)
+  if(data.length()>=24)data.remove(0)
+  data.put(JSONObject().apply{
+   put("at",System.currentTimeMillis())
+   put("signature",p.signature?:JSONObject.NULL)
+   put("label",p.label);put("viewId",p.viewId);put("class",p.clazz)
+   put("x",p.x);put("y",p.y)
+   put("bounds",p.bounds.toShortString())
+   put("screenChanged",screenChanged)
+   put("autoExecutable",false)
+   put("reason",reason.take(170))
+  })
+  demonstrationFile(ctx).writeText(data.toString(),Charsets.UTF_8)
+  return "操作例を保存しました（記録合計${data.length()}件）。画面識別が不足するため自動実行は保留"
  }
  // Use stable ad-SDK and screen markers rather than volatile ad titles, image hashes,
  // randomized URLs or base64 blobs. Both the saved and current screens still need
@@ -192,6 +246,10 @@ class LearnedActions(private val ctx:Context) {
   val kind=if(bestScore>=1000)"完全一致" else "共通特徴照合"
   val title="学習済み($kind): "+
    chosen.target.label.ifBlank{chosen.target.viewId}.take(36)
-  return Match(chosen.target.node,chosen.target.bounds,title,gestureOnly)
+  val tx=chosen.rule.optInt("tapX",Int.MIN_VALUE)
+  val ty=chosen.rule.optInt("tapY",Int.MIN_VALUE)
+  val point=if(gestureOnly && chosen.target.bounds.contains(tx,ty))Point(tx,ty)
+   else null
+  return Match(chosen.target.node,chosen.target.bounds,title,gestureOnly,point)
  }
 }
