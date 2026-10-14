@@ -62,6 +62,7 @@ class TeachOverlay(
  private var beforeCount=0
  private var beforeSignature:String?=null
  private var outcomeReady=false
+ private var homeTeachSucceeded=false
  private var proposed:LearnedActions.Proposal?=null
  private var changed=false
  private var teachId=0
@@ -79,6 +80,7 @@ class TeachOverlay(
   proposed=null
   changed=false
   outcomeReady=false
+  homeTeachSucceeded=false
   teachId++
   val id=teachId
   return try{
@@ -161,6 +163,7 @@ class TeachOverlay(
   proposed=p
   changed=false
   outcomeReady=false
+  homeTeachSucceeded=false
   val selectedName=p.label.lowercase()
   if(selectedName.contains("インストール")||selectedName.contains("install")||
    selectedName.contains("友達にシェア")||selectedName.contains("購入")){
@@ -209,6 +212,11 @@ class TeachOverlay(
   changed=afterPkg!=APP ||
    (after!=null && (after.rootCount!=beforeCount ||
      after.signature!=beforeSignature))
+  val afterStillHome=after?.signature?.let{
+   it.contains("move") && it.contains("あと") && it.contains("タンク")
+  }==true
+  homeTeachSucceeded=changed && afterPkg==APP && !afterStillHome &&
+   HomeTouchProfile.qualifies(service,beforeSignature,p.x,p.y)
   try{
    record(service,JSONObject().apply{
     put("type","teaching_tap")
@@ -220,11 +228,12 @@ class TeachOverlay(
     put("afterPackage",afterPkg)
     put("afterNodes",after?.rootCount?:0)
     put("screenChanged",changed)
-    put("eligibleForRule",p.safe && changed && afterPkg==APP)
+    put("eligibleForRule",(p.safe && changed && afterPkg==APP) || homeTeachSucceeded)
+    put("homeTouchCalibration",homeTeachSucceeded)
    })
   }catch(_:Exception){}
   outcomeReady=true
-  val ok=p.safe&&changed&&afterPkg==APP
+  val ok=(p.safe&&changed&&afterPkg==APP) || homeTeachSucceeded
   status(if(ok)
    "操作を記録しました。正しい動きならバーの『登録』を押してください。"
    else "操作例を記録しましたが、安全な自動再現は未対応です。${p.message}")
@@ -238,7 +247,9 @@ class TeachOverlay(
   val changeConfirmed=changed || (current!=null &&
    (current.rootCount!=beforeCount || current.signature!=beforeSignature))
   proposed=null
-  val msg=if(p.safe&&changeConfirmed&&afterPkg==APP)memory.register(p)
+  val msg=if(homeTeachSucceeded && changeConfirmed && afterPkg==APP){
+   HomeTouchProfile.register(service,p.x,p.y)
+  }else if(p.safe&&changeConfirmed&&afterPkg==APP)memory.register(p)
    else "操作履歴は保存済み。ただしこの画面を誤認しない自動ルールは登録できません。"
   status(msg)
   return msg
