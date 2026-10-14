@@ -80,6 +80,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  private var title:TextView?=null
  private var info:TextView?=null
  private var autoStatus="停止中"
+ fun isVisible():Boolean=bar!=null
  fun updateAutoStatus(text:String){
   autoStatus=text
   info?.text="自動: $autoStatus\n保存 ${count(service)} 件"
@@ -123,6 +124,8 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    }
    autoControls.addView(control("▶ 開始"){updateAutoStatus(service.startAutomaticOperation())})
    autoControls.addView(control("■ 停止"){updateAutoStatus(service.stopAutomaticOperation())})
+   autoControls.addView(control("学習"){updateAutoStatus(service.beginTeachTap())})
+   autoControls.addView(control("登録"){updateAutoStatus(service.saveTaughtTap())})
    panel.addView(autoControls)
    val status=TextView(service).apply{
     textSize=11f;setTextColor(Color.rgb(210,225,240));maxLines=2
