@@ -49,6 +49,30 @@ class MainActivity:AppCompatActivity(){
      Toast.makeText(this,"収集ログを削除しました",Toast.LENGTH_SHORT).show()
     }.show()
   }
+
+  findViewById<Button>(R.id.copyActionHistory).setOnClickListener{
+   val data=TeachOverlay.export(this)
+   (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+    .setPrimaryClip(ClipData.newPlainText("Torima 操作履歴",data))
+   Toast.makeText(this,"操作履歴をコピーしました（${data.length}文字）",Toast.LENGTH_LONG).show()
+  }
+  findViewById<Button>(R.id.copyLearnedRules).setOnClickListener{
+   val data=LearnedActions.export(this)
+   (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+    .setPrimaryClip(ClipData.newPlainText("Torima 学習済み操作",data))
+   Toast.makeText(this,"学習済み操作をコピーしました（${LearnedActions.count(this)}件）",Toast.LENGTH_LONG).show()
+  }
+  findViewById<Button>(R.id.clearLearnedRules).setOnClickListener{
+   AlertDialog.Builder(this)
+    .setTitle("学習した自動操作をすべて削除？")
+    .setMessage("学習した操作だけを削除します。通常の画面収集ログはそのまま残ります。")
+    .setNegativeButton("キャンセル",null)
+    .setPositiveButton("削除"){_,_->
+     PowlAccessibilityService.instance?.stopAutomaticOperation()
+     LearnedActions.clear(this)
+     Toast.makeText(this,"学習した操作ルールを削除しました",Toast.LENGTH_SHORT).show()
+    }.show()
+  }
   findViewById<Button>(R.id.scanAd).setOnClickListener{runAdScan(false)}
   findViewById<Button>(R.id.scanAdTap).setOnClickListener{runAdScan(true)}
   findViewById<Button>(R.id.runSequence).setOnClickListener{
