@@ -517,7 +517,7 @@ class AutoFlow(
    }
    val waitSeconds=(now-homeLastTrialAt)/1000L
    if(homeTrialIndex>0 &&
-    !HomeTouchTrials.canAttempt(homeTrialIndex,homeLastTrialAt,now)){
+    now-homeLastTrialAt<HomeTouchTrials.DELAY_BETWEEN_TRIALS_MS){
     update("HOMEは押下反応のみ。${waitSeconds}秒経過、次の試行まで待機")
     return true
    }
@@ -858,6 +858,12 @@ class AutoFlow(
     verifiedAdKey=""
     verifiedAdSince=0L
    }
+   // HOME experiments are independent from the generic click fallback.
+   // This must also run for HOME_WAIT, which occurs while the button fades.
+   if(handleHomeTrial(decision,now)){
+    next(900)
+    return
+   }
    if(waitingKey!=null){
     if(waitingKey==decision.key){
      val seconds=(now-waitingSince)/1000
@@ -871,23 +877,7 @@ class AutoFlow(
       next()
       return
      }
-     if(decision.kind=="HOME"){
-      if(!homeHoldAttempted && seconds>=5 && decision.target!=null){
-       homeHoldAttempted=true
-       val where=HomeTouchProfile.current(service,decision.target.rect)
-       update("HOMEの遷移なし。座標 (${where.x},${where.y}) を2400ms長押し")
-       gestureTap(decision.target.rect,"HOME長押し2.4秒",2400L,where)
-       next()
-       return
-      }
-      if(seconds>=16){
-       stopWithReason("HOMEを110msタップ＋2400ms長押ししても画面遷移なし")
-       return
-      }
-      update("HOME紫ボタン：遷移確認待ち ${seconds}秒")
-      next()
-      return
-     }
+
      if(!fallbackAttempted && seconds>=4 && decision.target!=null){
       fallbackAttempted=true
       update("${decision.display}：命令後も同じ画面。確認済み箇所を1回だけタップ")
@@ -939,15 +929,7 @@ class AutoFlow(
    lastActionTitle=decision.display
    fallbackAttempted=false
    homeHoldAttempted=false
-   if(decision.kind=="HOME"){
-    // User's guided 110ms touch at (624,1253) previously changed HOME to skip.
-    // Avoid ACTION_CLICK and the original center position on HOME.
-    val where=HomeTouchProfile.current(service,decision.target.rect)
-    update("HOME紫ボタン：実タップ (${where.x},${where.y}) 110ms／学習位置=${HomeTouchProfile.hasCalibration(service)}")
-    gestureTap(decision.target.rect,"HOME短タップ",110L,where)
-    next()
-    return
-   }
+
    if(decision.kind in listOf("W_CHANCE","CARDS","CARD_RESULT")){
     markGachaAction(decision.kind,now)
    }
