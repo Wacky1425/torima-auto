@@ -50,6 +50,9 @@ class TeachOverlay(
  private var wm:WindowManager?=null
  private var touchLayer:View?=null
  private var before:AccessibilityNodeInfo?=null
+ private var beforeCount=0
+ private var beforeSignature:String?=null
+ private var outcomeReady=false
  private var proposed:LearnedActions.Proposal?=null
  private var changed=false
  private var teachId=0
@@ -61,8 +64,12 @@ class TeachOverlay(
   val root=service.rootInActiveWindow
   if(root?.packageName?.toString()!=APP)return "トリマの画面を前面に出してから『学習』を押してください。"
   before=root
+  val initial=memory.scan(root)
+  beforeCount=initial?.rootCount?:0
+  beforeSignature=initial?.signature
   proposed=null
   changed=false
+  outcomeReady=false
   teachId++
   val id=teachId
   return try{
@@ -85,7 +92,7 @@ class TeachOverlay(
     setPadding(dp(12),dp(9),dp(12),dp(9))
    }
    layer.addView(label,FrameLayout.LayoutParams(
-    WindowManager.LayoutParams.MATCH_PARENT,dp(80),Gravity.TOP))
+    dp(250),dp(80),Gravity.TOP or Gravity.LEFT))
    val cancel=TextView(service).apply{
     text="中止"
     textSize=17f
@@ -96,7 +103,9 @@ class TeachOverlay(
    }
    layer.addView(cancel,FrameLayout.LayoutParams(
     WindowManager.LayoutParams.WRAP_CONTENT,
-    WindowManager.LayoutParams.WRAP_CONTENT,Gravity.TOP or Gravity.RIGHT))
+    WindowManager.LayoutParams.WRAP_CONTENT,Gravity.BOTTOM or Gravity.RIGHT).apply{
+     bottomMargin=dp(75)
+    })
    val params=WindowManager.LayoutParams(
     WindowManager.LayoutParams.MATCH_PARENT,
     WindowManager.LayoutParams.MATCH_PARENT,
@@ -142,6 +151,7 @@ class TeachOverlay(
   val p=memory.propose(root,x,y)
   proposed=p
   changed=false
+  outcomeReady=false
   val selectedName=p.label.lowercase()
   if(selectedName.contains("インストール")||selectedName.contains("install")||
    selectedName.contains("友達にシェア")||selectedName.contains("購入")){
@@ -179,8 +189,8 @@ class TeachOverlay(
   val afterPkg=afterRoot?.packageName?.toString().orEmpty()
   val after=memory.scan(afterRoot)
   changed=afterPkg!=APP ||
-   (after!=null && (after.rootCount!=memory.scan(before)?.rootCount ||
-     after.signature!=p.signature))
+   (after!=null && (after.rootCount!=beforeCount ||
+     after.signature!=beforeSignature))
   try{
    record(service,JSONObject().apply{
     put("type","teaching_tap")
@@ -195,6 +205,7 @@ class TeachOverlay(
     put("eligibleForRule",p.safe && changed && afterPkg==APP)
    })
   }catch(_:Exception){}
+  outcomeReady=true
   val ok=p.safe&&changed&&afterPkg==APP
   status(if(ok)
    "操作を記録しました。正しい動きならバーの『登録』を押してください。"
@@ -202,9 +213,14 @@ class TeachOverlay(
  }
  fun confirm():String {
   val p=proposed?:return "保存できる操作がありません。先に『学習』してください。"
+  if(!outcomeReady)return "まだタップ後の画面判定中です。2秒ほど待って『登録』を押してください。"
+  val afterRoot=service.rootInActiveWindow
+  val afterPkg=afterRoot?.packageName?.toString().orEmpty()
+  val current=memory.scan(afterRoot)
+  val changeConfirmed=changed || (current!=null &&
+   (current.rootCount!=beforeCount || current.signature!=beforeSignature))
   proposed=null
-  val afterPkg=service.rootInActiveWindow?.packageName?.toString().orEmpty()
-  val msg=if(p.safe&&changed&&afterPkg==APP)memory.register(p)
+  val msg=if(p.safe&&changeConfirmed&&afterPkg==APP)memory.register(p)
    else "操作履歴は保存済み。ただしこの画面を誤認しない自動ルールは登録できません。"
   status(msg)
   return msg
