@@ -66,6 +66,11 @@ class AutoFlow(
  private var cardResultVisibleSince=0L
  private var verifiedAdKey=""
  private var verifiedAdSince=0L
+ // Block any new ad/learned close while the previously closed ad transitions
+ // into a gacha or reward screen (including slow-network loading overlays).
+ private var postAdClosedAt=0L
+ private var postAdNextKind=""
+ private var postAdNextSince=0L
  private var lastGachaBucket=-1L
  private var lastGachaCandidate=""
  private val poll=object:Runnable{override fun run(){check()}}
@@ -124,6 +129,9 @@ class AutoFlow(
   cardResultVisibleSince=0L
   verifiedAdKey=""
   verifiedAdSince=0L
+  postAdClosedAt=0L
+  postAdNextKind=""
+  postAdNextSince=0L
   lastGachaBucket=-1L
   lastGachaCandidate=""
   lastInfo=""
@@ -146,6 +154,9 @@ class AutoFlow(
   cardResultVisibleSince=0L
   verifiedAdKey=""
   verifiedAdSince=0L
+  postAdClosedAt=0L
+  postAdNextKind=""
+  postAdNextSince=0L
   if(wasRunning){
    collection.finish("STOPPED","ユーザーが自動操作を停止")
    update("停止中（ユーザー操作で停止）")
@@ -637,6 +648,9 @@ class AutoFlow(
   h.removeCallbacks(poll)
   resetHomeExperiment()
   clearDeferredHome()
+  postAdClosedAt=0L
+  postAdNextKind=""
+  postAdNextSince=0L
   collection.finish("FAILED",reason)
   update("停止：$reason")
  }
@@ -837,6 +851,52 @@ class AutoFlow(
    clearDeferredHome()
   }
  }
+ /**
+  * After any rewarded ad-close, Android can expose a bottom dismiss X while
+  * switching to the gacha. That is a transition artifact, not another ad.
+  * Wait until a positive non-ad screen is stable, or stop safely.
+  */
+ private fun protectPostAdTransition(decision:Decision,snapshot:Snapshot,now:Long):Boolean{
+  if(postAdClosedAt==0L)return false
+  val waited=now-postAdClosedAt
+  if(PostAdTransitionPolicy.timedOut(waited)){
+   stopWithReason("広告終了後のガチャ／報酬画面を90秒識別できず、安全停止")
+   return true
+  }
+  val current=decision.kind
+  val hasTarget=decision.target!=null
+  // Residual WebView/SDK data may still be present in the loading hierarchy.
+  val adVisible=trustedAdEvidence(snapshot)!=null
+  val cleanNext=current in PostAdTransitionPolicy.nextScreens &&
+   hasTarget && !adVisible
+  if(!cleanNext){
+   postAdNextKind=""
+   postAdNextSince=0L
+   update("広告終了後の読み込み保護：${waited/1000L}秒。画面=${current}。×は押さず待機")
+   return true
+  }
+  if(postAdNextKind!=current){
+   postAdNextKind=current
+   postAdNextSince=now
+   update("広告の次画面${current}を確認中。3秒安定するまで全タップを保留")
+   return true
+  }
+  if(!PostAdTransitionPolicy.canLeaveTransition(
+    current,hasTarget,adVisible,now-postAdNextSince)){
+   update("広告後の${current}表示を確認中。ガチャ読み込み中の×を保護")
+   return true
+  }
+  postAdClosedAt=0L
+  postAdNextKind=""
+  postAdNextSince=0L
+  // The previous completed ad click must not be retried on the new UI.
+  waitingKey=null
+  fallbackAttempted=false
+  verifiedAdKey=""
+  verifiedAdSince=0L
+  update("広告後の${current}画面を安定確認。通常処理を再開")
+  return false
+ }
  private fun check(){
   if(!running)return
   try {
@@ -866,6 +926,10 @@ class AutoFlow(
    val decision=choose(snapshot)
    verifyDeferredHome(decision,snapshot,now)
    collection.stage(decision.kind)
+   if(protectPostAdTransition(decision,snapshot,now)){
+    next(900)
+    return
+   }
    // Bound repeated Play loops within a single ad, but do not penalize valid new reward cycles.
    if(decision.kind in listOf("HOME","SKIP_NO","RETRY","W_CHANCE",
      "CARDS","CARD_RESULT","SHARE_CLOSE")){
@@ -1000,6 +1064,12 @@ class AutoFlow(
 
    if(decision.kind in listOf("W_CHANCE","CARDS","CARD_RESULT")){
     markGachaAction(decision.kind,now)
+   }
+   if(GachaSafety.requiresAdEvidence(decision.kind)){
+    postAdClosedAt=now
+    postAdNextKind=""
+    postAdNextSince=0L
+    update("広告の終了操作を実行：次の画面へ切り替わるまで追加の×を禁止")
    }
    if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON")){
     // A nonclickable close label / ad dismiss parent cannot be activated by
