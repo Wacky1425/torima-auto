@@ -139,7 +139,15 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   finally{buffer.close()}
  }
  private fun store(image:Bitmap,stage:String,nodeCount:Int,manual:Boolean):String{
-  val results=CloseVision.detect(image.width,image.height){x,y->image.getPixel(x,y)}
+  // Sample one downscaled frame once. Analyze fixed corner/lower zones
+  // without repeatedly calling Bitmap.getPixel on the full-resolution image.
+  val scanWidth=360
+  val scanHeight=(image.height.toLong()*scanWidth/image.width).toInt()
+  val sampled=Bitmap.createScaledBitmap(image,scanWidth,scanHeight,true)
+  val pixels=IntArray(scanWidth*scanHeight)
+  sampled.getPixels(pixels,0,scanWidth,0,0,scanWidth,scanHeight)
+  if(sampled!==image)sampled.recycle()
+  val results=VisualCloseDetector.detect(pixels,scanWidth,scanHeight)
   val dir=folder(service)
   val now=System.currentTimeMillis()
   val filename="screen_${now}.jpg"
@@ -163,8 +171,10 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
    put("xCandidatesAreNotConfirmedButtons",true)
    put("candidates",JSONArray().also{arr->
     for(c in results)arr.put(JSONObject().apply{
-     put("x",c.x);put("y",c.y);put("radius",c.radius)
-     put("score",String.format(java.util.Locale.US,"%.2f",c.confidence))
+     put("x",c.x*image.width/scanWidth)
+     put("y",c.y*image.height/scanHeight)
+     put("radius",c.radius*image.width/scanWidth)
+     put("shapeScore",c.score)
      put("region",c.region)
     })
    })
