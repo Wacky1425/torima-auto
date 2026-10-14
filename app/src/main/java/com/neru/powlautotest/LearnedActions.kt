@@ -272,23 +272,28 @@ class LearnedActions(private val ctx:Context) {
  private data class Candidate(val rule:JSONObject,val score:Int,val target:Item)
  fun match(root:AccessibilityNodeInfo?):Match?{
   val sample=scan(root)?:return null
-  val sig=sample.signature?:return null
-  val activeAnchors=stableAnchors(sig)
+  val sig=sample.signature
+  val activeAnchors=if(sig==null)emptySet() else stableAnchors(sig)
+  val verifiedWebAd=TeachRulePolicy.provenWebAdFrame(sample.items.map{it.viewId})
   val rows=read(ctx)
   val found=ArrayList<Candidate>()
   for(i in 0 until rows.length()){
    val rule=rows.optJSONObject(i)?:continue
    val stored=rule.optString("signature")
-   val exact=sig==stored
+   val exact=sig!=null && sig==stored
    val savedAnchors=stableAnchors(stored)
    val overlap=activeAnchors.intersect(savedAnchors).size
    val required=maxOf(2,(savedAnchors.size*60+99)/100)
-   val contextual= savedAnchors.size>=2 && overlap>=required
-   if(!exact && !contextual)continue
+   val contextual=sig!=null && savedAnchors.size>=2 && overlap>=required
    val id=rule.optString("viewId");val label=rule.optString("label")
    val clazz=rule.optString("clazz")
    val gestureOnly=rule.optBoolean("gestureOnly",false)
    val visualIcon=rule.optBoolean("visualIcon",false)
+   val sdkDismiss=gestureOnly && TeachRulePolicy.isWebAdDismissId(id) &&
+    verifiedWebAd && sample.items.any{
+     it.node.isVisibleToUser && TeachRulePolicy.isDismissLabel(it.label)
+    }
+   if(!exact && !contextual && !sdkDismiss)continue
    if(visualIcon && (!exact || !TeachRulePolicy.hasImageEndcardEvidence(
        sample.items.flatMap{listOf(it.node.text?.toString().orEmpty(),
         it.node.contentDescription?.toString().orEmpty())})))continue
@@ -296,6 +301,10 @@ class LearnedActions(private val ctx:Context) {
    val candidates=sample.items.filter{n->
     (if(gestureOnly)n.node.isVisibleToUser else n.pressable) &&
     !blocked(n) && n.clazz==clazz &&
+    (!sdkDismiss || sample.items.any{
+     it.node.isVisibleToUser && TeachRulePolicy.isDismissLabel(it.label) &&
+      n.bounds.contains(it.bounds.centerX(),it.bounds.centerY())
+    }) &&
     (if(visualIcon) n.label.isBlank() &&
        TeachRulePolicy.isCornerImageTarget(n.clazz,
         n.bounds.left,n.bounds.top,n.bounds.right,n.bounds.bottom,
@@ -309,7 +318,8 @@ class LearnedActions(private val ctx:Context) {
    }
    val node=candidates.singleOrNull()?:continue
    // Exact matches outrank approximate anchor matches; strong IDs outrank labels.
-   val score=(if(exact)1000 else 100+overlap*10)+(if(id.isNotBlank())5 else 0)
+   val score=(if(exact)1000 else if(sdkDismiss)500 else 100+overlap*10)+
+    (if(id.isNotBlank())5 else 0)
    found.add(Candidate(rule,score,node))
   }
   val bestScore=found.maxOfOrNull{it.score}?:return null
