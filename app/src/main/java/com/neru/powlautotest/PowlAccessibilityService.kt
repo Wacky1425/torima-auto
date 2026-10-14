@@ -29,16 +29,37 @@ class PowlAccessibilityService:AccessibilityService(){
  fun consumePlayTransitionProof(){
   confirmedPlayTransitionAt=0L
  }
+ fun isPlayBrandedInstallPopup(root:AccessibilityNodeInfo?):Boolean{
+  if(root?.packageName?.toString()!="com.google.android.gms")return false
+  var checked=0
+  val labels=ArrayList<String>()
+  fun inspect(node:AccessibilityNodeInfo){
+   if(checked>=95)return
+   checked++
+   labels.add(node.text?.toString().orEmpty())
+   labels.add(node.contentDescription?.toString().orEmpty())
+   for(i in 0 until node.childCount){
+    if(checked>=95)break
+    node.getChild(i)?.let{inspect(it)}
+   }
+  }
+  inspect(root)
+  return labels.any{it.contains("Google Play",ignoreCase=true)||
+   it.contains("Play ストア",ignoreCase=true)} &&
+   labels.any{it.contains("インストール")||it.contains("Install",ignoreCase=true)}
+ }
  override fun onServiceConnected(){super.onServiceConnected();instance=this;report="サービス接続完了"}
  override fun onInterrupt(){}
  override fun onAccessibilityEvent(e:AccessibilityEvent?){
   if(e==null)return
   if(e.eventType==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
    val p=e.packageName?.toString().orEmpty()
-   if(p=="com.android.vending" && lastObservedTopPackage=="jp.co.incrementp.milemobile"){
+   val playPopup=p=="com.google.android.gms" && isPlayBrandedInstallPopup(rootInActiveWindow)
+   if((p=="com.android.vending" || playPopup) &&
+    lastObservedTopPackage=="jp.co.incrementp.milemobile"){
     markPlayTransitionFromTorima()
    }
-   if(p=="jp.co.incrementp.milemobile" || p=="com.android.vending"){
+   if(p=="jp.co.incrementp.milemobile" || p=="com.android.vending" || playPopup){
     lastObservedTopPackage=p
    }else if(p.isNotBlank() && p!=packageName && p!="com.android.systemui"){
     lastObservedTopPackage=p
