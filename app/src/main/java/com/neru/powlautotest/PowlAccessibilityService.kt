@@ -128,6 +128,7 @@ class PowlAccessibilityService:AccessibilityService(){
   report=msg
   return msg
  }
+ fun isAutomaticOperationRunning():Boolean=autoFlow.isRunning()
  fun startAutomaticOperation():String {
   stopSequence()
   val shown=screenCollector.show()
