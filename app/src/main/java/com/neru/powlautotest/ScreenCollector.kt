@@ -120,6 +120,11 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   homeRestore=restoration
   homeHandler.postDelayed(restoration,restoreMs)
  }
+ /** Allow verified Settings controls to receive taps even under our overlay. */
+ fun prepareRecoveryOverlay(onReady:(Boolean,String)->Unit){
+  val d=service.resources.displayMetrics
+  prepareHomeTouch(d.widthPixels/2,d.heightPixels/2,onReady,45_000L)
+ }
  /** Disable the bar's touch interception for the whole passive finger test. */
  fun prepareManualHomeObservation(onReady:(Boolean,String)->Unit){
   val display=service.resources.displayMetrics
