@@ -397,7 +397,7 @@ class AutoFlow(
    }
    val name=n.desc.trim().ifEmpty{n.text.trim()}
    if(name.equals("Close Ad",ignoreCase=true)){
-    return@filter n.rect.width() in 20..260 && n.rect.height() in 20..220 &&
+    return@filter n.rect.width() in 20..380 && n.rect.height() in 20..220 &&
      n.rect.left>=w*65/100 && n.rect.right<=w && n.rect.top in 0..450
    }
    if(name.equals("Close button",ignoreCase=true)){
@@ -527,10 +527,31 @@ class AutoFlow(
      "下のボタン=${below.size} / または=${separator!=null} / タンク=$tank")
   }
   val close=closeButton(snap)
+  val adCounter=n.any{it.node.isVisibleToUser &&
+   Regex("""Ad\\s+[0-9]+\\s+of\\s+[0-9]+""",RegexOption.IGNORE_CASE)
+    .containsMatchIn(it.text)}
+  val skipOnClose=close.singleOrNull()?.let{button->
+   adCounter && n.any{it.node.isVisibleToUser && it.text.trim().equals("Skip",true) &&
+    button.rect.contains(it.rect.centerX(),it.rect.centerY())}
+  }?:false
+  if(skipOnClose){
+   return Decision("AD_SKIP","動画広告のSkip","AD_SKIP",
+    close.single(),"広告に表示されたSkip。スキップ券は押さない")
+  }
+  val widthPixels=service.resources.displayMetrics.widthPixels
+  val topPlay=n.filter{it.canPress &&
+   (it.text.contains("Google Play",true)||it.desc.contains("Google Play",true)) &&
+   it.rect.left>=widthPixels*70/100 && it.rect.top in 0..400 &&
+   it.rect.width() in 40..350}
+  if(topPlay.size==1 && trustedAdEvidence(snap)!=null){
+   return Decision("AD_GOOGLE_PLAY","広告上部のGoogle Playへ進む",
+    "AD_GOOGLE_PLAY",topPlay.single(),"上部ナビゲーションのみ")
+  }
   if(close.isNotEmpty()){
    return Decision("AD_CLOSE","広告の終了ボタン","AD_CLOSE:${close.first().desc.trim()}:${close.first().rect.toShortString()}",
     close.singleOrNull(),"閉じる候補=${close.size}")
   }
+  visualOverlayDecision(snap)?.let{return it}
   val memory=learned.match(snap.root)
   if(memory!=null){
    val item=Item(memory.node,memory.node.text?.toString().orEmpty(),
