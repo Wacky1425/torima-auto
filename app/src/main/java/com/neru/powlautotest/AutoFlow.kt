@@ -773,6 +773,51 @@ class AutoFlow(
   }
   return true
  }
+ /**
+  * HOME failure recovery is triggered only while the CURRENT screen is HOME.
+  * Settings UI is verified before any Force stop is pressed; a blocked OEM
+  * settings screen produces a logged soft relaunch rather than blind taps.
+  */
+ private fun recoverStalledHome(now:Long):Boolean{
+  if(homeRecoveryActive)return true
+  if(homeRecoveryAttempts>=HomeRecoveryPolicy.MAX_RECOVERIES_PER_RUN)return false
+  val last=homeLastTrial?.id ?: "NONE"
+  homeTrace("restart_requested",last,
+   "trials=$homeTrialIndex homeForMs=${now-homeLastTrialAt} currentHome=true")
+  homeLastTrial?.let{HomeTrialJournal.outcome(service,it.id,
+   HomeOutcomePolicy.NO_NAVIGATION,"HOMEが変わらないため再起動復旧へ切替")}
+  homeRecoveryAttempts++
+  homeRecoveryActive=true
+  val epoch=generation
+  update("HOMEの入力${homeTrialIndex}方式で進まないため、トリマを一度だけ再起動")
+  val accepted=service.runHomeRecovery {reopened,stopUi,reason->
+   if(!running || generation!=epoch)return@runHomeRecovery
+   homeRecoveryActive=false
+   homeTrace("restart_result",last,
+    "reopened=$reopened forceStopUi=$stopUi reason=$reason")
+   if(!reopened){
+    stopWithReason("HOME復旧でトリマを再起動できず：$reason")
+   }else{
+    resetHomeExperiment()
+    clearDeferredHome()
+    waitingKey=null
+    fallbackAttempted=false
+    gachaPhase=GachaSafety.Phase.NONE
+    gachaPhaseSince=0L
+    postAdClosedAt=0L
+    postAdNextKind=""
+    postAdNextSince=0L
+    recentActions.clear()
+    update("HOME復旧：${if(stopUi)"設定画面で強制停止操作後に再起動" else "通常の開き直し"}。HOMEを再確認")
+    next(1200L)
+   }
+  }
+  if(!accepted){
+   homeRecoveryActive=false
+   stopWithReason("HOME復旧の開始を拒否されたため停止")
+  }
+  return true
+ }
  private fun handleHomeTrial(decision:Decision,snapshot:Snapshot,now:Long):Boolean{
   if(homeExperimentStartedAt==0L){
    if(decision.kind!="HOME" || decision.target==null)return false
