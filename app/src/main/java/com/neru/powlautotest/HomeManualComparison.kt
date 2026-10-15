@@ -82,6 +82,7 @@ internal class HomeManualComparison(
  private var begin=0L
  private var firstChanged=-1L
  private var firstAd=-1L
+ private var firstNext=-1L
  private var latest="HOME"
  private var lastKey=""
  private var afterCaptureScheduled=false
@@ -111,7 +112,8 @@ internal class HomeManualComparison(
   val remaining=words.firstOrNull{
    Regex("""あと\s*[0-9０-９]+\s*回獲得できます""").containsMatchIn(it)
   }.orEmpty()
-  val move=visible.any{it.isSelected && it.contentDescription?.toString()=="move"}
+  val move=visible.any{it.contentDescription?.toString()=="move"}
+  val moveSelected=visible.any{it.isSelected && it.contentDescription?.toString()=="move"}
   val separator=words.any{it.trim()=="または"}
   val tank=words.any{it.contains("タンクが満タン")}
   val home=pkg==APP && remaining.isNotBlank() && move && (separator||tank)
@@ -137,7 +139,7 @@ internal class HomeManualComparison(
   }
   out.put("state",state).put("nodes",nodes.size)
    .put("visibleNodes",visible.size).put("remaining",remaining)
-   .put("moveSelected",move).put("separator",separator)
+   .put("movePresent",move).put("moveSelected",moveSelected).put("separator",separator)
    .put("tank",tank).put("adEvidence",ad)
   val buttons=JSONArray()
   for(n in visible.filter{it.isClickable&&it.isEnabled}.take(45)){
@@ -167,7 +169,7 @@ internal class HomeManualComparison(
    return "指タップ比較はトリマのHOME紫ボタン画面で開始してね（現在：${before.optString("state")}）"
   active=true;epoch++
   val token=epoch
-  begin=0L;firstChanged=-1L;firstAd=-1L;latest="HOME"
+  begin=0L;firstChanged=-1L;firstAd=-1L;firstNext=-1L;latest="HOME"
   lastKey="";afterCaptureScheduled=false
   traces=JSONArray();clicks=JSONArray()
   result=JSONObject().put("version","3.6").put("status","ARMING")
@@ -186,8 +188,11 @@ internal class HomeManualComparison(
    begin=SystemClock.elapsedRealtime()
    result.put("status","RECORDING").put("overlayInfo",info)
    record("baseline",snapshot())
-   service.saveVisualScreenshot("手動指タップ・直前",0,false)
-   status("指タップ比較18秒間：HOME紫ボタンを指で1回押して、ほかは触らず待ってね")
+   status("指タップ比較：HOMEの画像を取得中。完了したら紫ボタンを押してね")
+   service.saveVisualScreenshot("手動指タップ・直前",0,false){
+    if(active&&token==epoch)
+     status("指タップ比較18秒間：HOME紫ボタンを指で1回押して、ほかは触らず待ってね")
+   }
    poll(token)
   }
   return "指タップ比較を開始。紫ボタンを指で1回押して、18秒待ってね"
@@ -234,6 +239,11 @@ internal class HomeManualComparison(
     },2_600L)
    }
   }
+  if(state=="NEXT"&&firstNext<0){
+   firstNext=elapsed
+   result.put("nextScreenMs",elapsed)
+   record("next_ui",s)
+  }
   if(state=="AD"&&firstAd<0){
    firstAd=elapsed
    result.put("adConfirmedMs",elapsed)
@@ -246,12 +256,7 @@ internal class HomeManualComparison(
   }
   latest=state
   if(elapsed>=18_000L){
-   finish(when{
-    firstAd>=0->"AD_CONFIRMED"
-    state=="NEXT"->"NEXT_CONFIRMED"
-    state=="HOME"->"HOME_REMAINED"
-    else->"UNKNOWN"
-   })
+   finish(HomeManualOutcomePolicy.classify(firstAd>=0,firstNext>=0,state))
   }else handler.postDelayed({poll(token)},400L)
  }
  fun finish(outcome:String="UNKNOWN"){
