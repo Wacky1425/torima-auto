@@ -36,6 +36,27 @@ internal object GachaSafety {
   exact && !gachaUiVisible &&
    kind in listOf("LEARNED","LEARNED_TEXT","LEARNED_ICON")
 
+ /**
+  * AWAIT_REWARD can include one or more actual video ads after a card result.
+  * Give the gacha loading animation a brief grace period, then allow a
+  * genuinely observed ad control; never click an UNKNOWN screen on a timer.
+  * The caller must have freshly observed the control on THIS screen.
+  */
+ const val REWARD_AD_GRACE_MS=6_000L
+ fun mayUseVisibleAdControlAfterGrace(
+  phase:Phase,kind:String,elapsedMs:Long,gachaUiVisible:Boolean,
+  nativeAdControl:Boolean,stableVisualMarker:Boolean,exactLearned:Boolean
+ ):Boolean{
+  if(phase!=Phase.AWAIT_REWARD || elapsedMs<REWARD_AD_GRACE_MS ||
+   gachaUiVisible)return false
+  return when(kind){
+   "AD_SKIP","AD_CLOSE"->nativeAdControl
+   "AD_VISUAL_X","AD_VISUAL_NEXT"->stableVisualMarker
+   "LEARNED","LEARNED_TEXT","LEARNED_ICON"->exactLearned
+   else->false
+  }
+ }
+
  fun newPhaseAfter(kind:String):Phase?=when(kind){
   "W_CHANCE"->Phase.AWAIT_CARDS
   "CARDS"->Phase.AWAIT_RESULT
