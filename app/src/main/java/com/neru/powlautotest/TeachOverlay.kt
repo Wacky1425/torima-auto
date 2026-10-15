@@ -48,6 +48,18 @@ class TeachOverlay(
     })
    }catch(_:Exception){}
   }
+  /** Structured HOME-only evidence alongside the existing action history. */
+  fun recordHomeExperiment(ctx:Context,stage:String,trial:String,detail:String){
+   try{
+    record(ctx,JSONObject().apply{
+     put("type","home_experiment")
+     put("at",System.currentTimeMillis())
+     put("stage",stage.take(40))
+     put("trial",trial.take(45))
+     put("detail",detail.take(550))
+    })
+   }catch(_:Exception){}
+  }
   /**
    * Preserve a small, structured snapshot when gacha is blocked on an UNKNOWN
    * screen. Unlike repeating wait logs, this retains evidence for unattended
