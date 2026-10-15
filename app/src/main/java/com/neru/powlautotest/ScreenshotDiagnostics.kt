@@ -22,13 +22,35 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  companion object{
   private const val TARGET="jp.co.incrementp.milemobile"
   private const val FOLDER="visual_diagnostics"
-  private const val MAX_IMAGES=10
+  private const val MAX_IMAGES=24
+  const val MAX_SAVED_IMAGES=24
   private fun folder(ctx:Context)=File(ctx.cacheDir,FOLDER).also{it.mkdirs()}
   private fun index(ctx:Context)=File(folder(ctx),"index.json")
   private fun entries(ctx:Context):JSONArray=try{
    JSONArray(index(ctx).takeIf{it.exists()}?.readText(Charsets.UTF_8)?:"[]")
   }catch(_:Exception){JSONArray()}
   fun count(ctx:Context):Int=entries(ctx).length()
+  /** Insert all retained images into a single diagnostic report ZIP. */
+  fun appendToDiagnosticZip(ctx:Context,zip:ZipOutputStream):Int{
+   val records=entries(ctx)
+   val dir=folder(ctx)
+   zip.putNextEntry(ZipEntry("screenshots/index.json"))
+   zip.write(records.toString(2).toByteArray(Charsets.UTF_8))
+   zip.closeEntry()
+   var included=0
+   for(i in 0 until records.length()){
+    val name=records.optJSONObject(i)?.optString("file").orEmpty()
+    if(!Regex("""screen_[0-9]+[.]jpg""").matches(name))continue
+    val source=File(dir,name)
+    if(!source.isFile)continue
+    zip.putNextEntry(ZipEntry("screenshots/$name"))
+    source.inputStream().use{it.copyTo(zip)}
+    zip.closeEntry()
+    included++
+   }
+   return included
+  }
+
   fun exportInfo(ctx:Context):String=JSONObject().apply{
    put("note","Images remain private until manually shared; detections are visual hypotheses")
    put("images",entries(ctx))
