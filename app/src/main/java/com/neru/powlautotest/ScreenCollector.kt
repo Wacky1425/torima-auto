@@ -89,7 +89,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   * The bar stays visible, but is deliberately untouchable for a brief period.
   * This changes the WindowManager touchability, not merely View visibility.
   */
- fun prepareHomeTouch(x:Int,y:Int,onReady:(Boolean,String)->Unit){
+ fun prepareHomeTouch(x:Int,y:Int,onReady:(Boolean,String)->Unit,restoreMs:Long=4_500L){
   val panel=bar
   val p=lp
   val manager=wm
@@ -118,7 +118,13 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   },HomeTouchTrials.OVERLAY_SETTLE_MS)
   val restoration=Runnable{if(homeBypassEpoch==epoch)restoreHomeTouch()}
   homeRestore=restoration
-  homeHandler.postDelayed(restoration,4_500L)
+  homeHandler.postDelayed(restoration,restoreMs)
+ }
+ /** Disable the bar's touch interception for the whole passive finger test. */
+ fun prepareManualHomeObservation(onReady:(Boolean,String)->Unit){
+  val display=service.resources.displayMetrics
+  prepareHomeTouch(display.widthPixels/2,display.heightPixels*52/100,
+   onReady,20_000L)
  }
  fun restoreHomeTouch(){
   homeBypassEpoch++
@@ -182,6 +188,14 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    autoControls.addView(control("学習"){updateAutoStatus(service.beginTeachTap())})
    autoControls.addView(control("登録"){updateAutoStatus(service.saveTaughtTap())})
    panel.addView(autoControls)
+   val manualControls=LinearLayout(service).apply{
+    orientation=LinearLayout.HORIZONTAL
+    gravity=Gravity.CENTER_VERTICAL
+   }
+   manualControls.addView(control("指で押す比較（18秒）"){
+    updateAutoStatus(service.startManualHomeComparison())
+   })
+   panel.addView(manualControls)
    val status=TextView(service).apply{
     textSize=11f;setTextColor(Color.rgb(210,225,240));maxLines=4
    }
