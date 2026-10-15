@@ -795,7 +795,7 @@ class AutoFlow(
      "previous=$previous current=$current clickEvent=$homeClickObserved")
     homeLastTrial?.let{
      HomeTrialJournal.outcome(service,it.id,HomeOutcomePolicy.REWARD_DECREASED,
-      "HOMEの残回数が$previous→$currentに減少。操作回数とは別に観測")
+      "HOMEの残回数が${previous}→${current}に減少。操作回数とは別に観測")
      HomeTouchProfile.markSuccessfulTrial(service,it.id)
     }
     update("HOME操作後に残回数が${previous}→${current}へ減少。成功パターンを記録")
