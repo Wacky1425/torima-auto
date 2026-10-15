@@ -66,4 +66,24 @@ class GachaSafetyTest {
   }
  }
 
+ @Test fun exactLearnedMatchBypassesRedundantAdProofOnlyWithoutExplicitGacha(){
+  for(kind in listOf("LEARNED","LEARNED_TEXT","LEARNED_ICON")){
+   assertTrue(GachaSafety.exactLearnedCloseAllowed(kind,true,false))
+   assertFalse(GachaSafety.exactLearnedCloseAllowed(kind,false,false))
+   assertFalse(GachaSafety.exactLearnedCloseAllowed(kind,true,true))
+  }
+  assertFalse(GachaSafety.exactLearnedCloseAllowed("AD_CLOSE",true,false))
+  assertFalse(GachaSafety.exactLearnedCloseAllowed("UNKNOWN",true,false))
+ }
+ @Test fun exactMatchStillHonorsGachaTransitionTiming(){
+  assertFalse(GachaSafety.canDismissProvenAdAfterResult(
+   GachaSafety.Phase.AWAIT_CARDS,"LEARNED",true,10_000L))
+  assertFalse(GachaSafety.canDismissProvenAdAfterResult(
+   GachaSafety.Phase.AWAIT_RESULT,"LEARNED",true,10_000L))
+  assertFalse(GachaSafety.canDismissProvenAdAfterResult(
+   GachaSafety.Phase.AWAIT_REWARD,"LEARNED",true,2_000L))
+  assertTrue(GachaSafety.canDismissProvenAdAfterResult(
+   GachaSafety.Phase.AWAIT_REWARD,"LEARNED",true,3_100L))
+ }
+
 }
