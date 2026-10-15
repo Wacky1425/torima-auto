@@ -17,6 +17,9 @@ class PowlAccessibilityService:AccessibilityService(){
  private val teachOverlay by lazy { TeachOverlay(this,learnedActions){msg->screenCollector.updateAutoStatus(msg)} }
  private val autoFlow by lazy { AutoFlow(this){ message -> screenCollector.updateAutoStatus(message) } }
  private val imageDiagnostics by lazy{ScreenshotDiagnostics(this)}
+ private val manualHomeComparison by lazy{
+  HomeManualComparison(this){msg->screenCollector.updateAutoStatus(msg)}
+ }
  internal fun probeOverlayIcons(onDone:(List<OverlayIconDetector.Marker>?)->Unit){
   imageDiagnostics.probeOverlay(onDone)
  }
@@ -24,6 +27,15 @@ class PowlAccessibilityService:AccessibilityService(){
   screenCollector.prepareHomeTouch(x,y,onReady)
  }
  internal fun restoreHomeTouch(){screenCollector.restoreHomeTouch()}
+ internal fun prepareManualHomeObservation(onReady:(Boolean,String)->Unit){
+  screenCollector.prepareManualHomeObservation(onReady)
+ }
+ fun isManualHomeComparisonRunning():Boolean=manualHomeComparison.isActive()
+ fun finishManualHomeComparison(){manualHomeComparison.cancel()}
+ fun startManualHomeComparison():String{
+  if(autoFlow.isRunning())stopAutomaticOperation()
+  return manualHomeComparison.start()
+ }
  fun saveVisualScreenshot(stage:String,nodeCount:Int=0,manual:Boolean=true,
   onDone:(String)->Unit={}){
   imageDiagnostics.capture(stage,nodeCount,manual){message->
@@ -68,6 +80,7 @@ class PowlAccessibilityService:AccessibilityService(){
  override fun onInterrupt(){}
  override fun onAccessibilityEvent(e:AccessibilityEvent?){
   if(e==null)return
+  manualHomeComparison.onEvent(e)
   if(e.eventType==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
    val p=e.packageName?.toString().orEmpty()
    val playPopup=p=="com.google.android.gms" && isPlayBrandedInstallPopup(rootInActiveWindow)
@@ -93,6 +106,7 @@ class PowlAccessibilityService:AccessibilityService(){
   }
  }
  override fun onDestroy(){
+  manualHomeComparison.cancel()
   teachOverlay.cancelCapture("サービス終了")
   stopSequence()
   screenCollector.hide()
@@ -130,6 +144,8 @@ class PowlAccessibilityService:AccessibilityService(){
  }
  fun isAutomaticOperationRunning():Boolean=autoFlow.isRunning()
  fun startAutomaticOperation():String {
+  if(manualHomeComparison.isActive())
+   return "指タップ比較の18秒間は自動操作を開始できません。比較終了後に開始してください"
   stopSequence()
   val shown=screenCollector.show()
   if(shown.startsWith("記録バーを表示できません")){
