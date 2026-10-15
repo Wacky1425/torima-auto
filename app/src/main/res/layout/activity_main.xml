@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.5" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.6" android:textSize="23sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:layout_marginTop="10dp" android:text="診断を送るなら、このボタン1つだけでOK。"
  android:textStyle="bold" android:textSize="16sp"/>
@@ -9,7 +9,7 @@
  android:layout_height="wrap_content" android:minHeight="58dp"
  android:text="診断をまとめて共有（ZIP 1個）"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="HOMEの試行結果・操作履歴・回収履歴・画面記録・スクリーンショットをまとめます。共有時は自動操作を停止して結果を確定します。共有先は自分で選べます。"
+ android:text="HOMEの自動試行と指タップ比較、操作履歴、画面記録、画像をまとめます。自動→手動の順で実行してから共有してください。共有先は自分で選べます。"
  android:paddingBottom="8dp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
@@ -30,7 +30,7 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="トリマ画面上のバーから自動開始・停止。Google Playが前面に出たら自動でトリマに復帰します。HOME紫ボタンは実画面の高さと「または」の位置から探し、学習座標・ボタン／親ACTION_CLICK・中央タップなど最大7方式を比較。HOMEからの広告遷移は入力実行とは別に確認し、結果を一括診断ZIPに記録します。広告の×を押した直後は、通信待ちやガチャ読み込みで出る一時的な×を押しません。次の報酬・ガチャ・HOME画面が3秒以上安定してから再開し、90秒間確認できなければ停止します。"/>
-<Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="記録・自動操作バーを表示"/>
+<Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="記録・自動操作バーを表示（指タップ比較もここ）"/>
 <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
 <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
