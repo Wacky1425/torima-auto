@@ -11,6 +11,12 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="トリマHOMEの自動試行後、操作バーの『指で押す比較（18秒）』を使います。指と自動の違い、CLICKイベント、画像をZIP1個にまとめます。自動→指→共有の順で操作してください。"
  android:paddingBottom="8dp"/>
+<Switch android:id="@+id/enableHomeRecovery"
+ android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:minHeight="50dp" android:text="HOMEで進めない時に1回だけ自動復旧する"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:text="HOMEで2方式失敗 → トリマのアプリ情報から強制停止・再起動を試行 → 最大3方式で再確認。設定画面が判別できなければ通常の開き直しに切り替え、他のアプリは停止しません。"
+ android:paddingBottom="8dp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
