@@ -828,6 +828,8 @@ class AutoFlow(
    homeExperimentStartedAt=now
    homeExperimentStartingCount=CollectionTaskPolicy.remaining(decision.detail)
    homeTrialList=HomeTouchTrials.ordered(HomeTouchProfile.bestTrialId(service))
+   if(homeRecoveryAttempts>0 && HomeRecoveryPolicy.enabled(service))
+    homeTrialList=homeTrialList.take(HomeRecoveryPolicy.POST_RESTART_TRIALS)
    homeTrialIndex=0
    homeLastTrial=null
    homeLastTrialAt=0L
@@ -866,6 +868,20 @@ class AutoFlow(
    if(homeTrialIndex>0 &&
     now-homeLastTrialAt<HomeTouchTrials.DELAY_BETWEEN_TRIALS_MS){
     update("HOMEの画面遷移なし。${waitSeconds}秒経過、次の押し方まで待機")
+    return true
+   }
+   val sinceLast=if(homeLastTrialAt>0L) now-homeLastTrialAt else 0L
+   if(HomeRecoveryPolicy.shouldRecover(HomeRecoveryPolicy.enabled(service),
+     homeTrialIndex,homeRecoveryAttempts,homeTrialInFlight,
+     decision.kind=="HOME" && decision.target!=null,sinceLast)){
+    return recoverStalledHome(now)
+   }
+   if(homeRecoveryAttempts>0 && HomeRecoveryPolicy.enabled(service) &&
+      HomeRecoveryPolicy.exhaustedAfterRestart(
+       homeTrialIndex,homeRecoveryAttempts,sinceLast)){
+    homeTrace("restart_no_improvement",homeLastTrial?.id ?: "NONE",
+     "afterRestartAttempts=$homeTrialIndex; no further kill or tap")
+    stopWithReason("HOMEの再起動後も進まず。連打や再起動を繰り返さず停止")
     return true
    }
    if(homeTrialIndex>=homeTrialList.size){
@@ -1260,6 +1276,10 @@ class AutoFlow(
    val now=SystemClock.elapsedRealtime()
    if(collection.budgetExceeded()){
     stopWithReason("実行時間が3時間に達したため未完了として停止")
+    return
+   }
+   if(homeRecoveryActive){
+    next(950)
     return
    }
    if(recoverPlay(now)){
