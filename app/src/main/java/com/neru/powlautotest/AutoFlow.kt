@@ -99,7 +99,8 @@ class AutoFlow(
   val key:String,
   val target:Item?=null,
   val detail:String="",
-  val touch:Point?=null
+  val touch:Point?=null,
+  val exactLearned:Boolean=false
  )
 
  private fun resetLiveVisual(){
@@ -332,11 +333,19 @@ class AutoFlow(
   return null
  }
 
+ private fun exactLearnedCloseTrusted(decision:Decision,snapshot:Snapshot):Boolean{
+  val gachaUiVisible=listOf("カードを1枚選んでください","ガチャWチャンスに挑戦",
+   "友達にシェアする","動画を見て再チャレンジ",
+   "動画スキップ","持っている枚数").any{snapshot.has(it)}
+  return GachaSafety.exactLearnedCloseAllowed(
+   decision.kind,decision.exactLearned,gachaUiVisible)
+ }
  private fun gachaProtects(decision:Decision,now:Long,snapshot:Snapshot):Boolean{
   if(gachaPhase==GachaSafety.Phase.NONE)return false
   val adProof=trustedAdEvidence(snapshot)
   val actualAd=GachaSafety.canDismissProvenAdAfterResult(
-   gachaPhase,decision.kind,adProof!=null,now-gachaPhaseSince)
+   gachaPhase,decision.kind,adProof!=null || exactLearnedCloseTrusted(decision,snapshot),
+   now-gachaPhaseSince)
   val accepted=GachaSafety.allows(gachaPhase,decision.kind,waitingKey==decision.key) ||
    actualAd
   val seconds=(now-gachaPhaseSince)/1000L
@@ -559,7 +568,8 @@ class AutoFlow(
    return Decision(if(memory.visualIcon)"LEARNED_ICON"
     else if(memory.gestureOnly)"LEARNED_TEXT" else "LEARNED",memory.title,
     "LEARNED:${memory.bounds.toShortString()}:${memory.title}",item,
-    "ユーザーが登録した画面と閉じる領域だけを操作",memory.tapPoint)
+    "ユーザーが登録した画面と閉じる領域だけを操作",memory.tapPoint,
+    memory.exact)
   }
   if(snap.count<=2){
    return Decision("OPAQUE","広告または不明画面（UIが${snap.count}件）","OPAQUE",null,
@@ -1067,7 +1077,8 @@ class AutoFlow(
    // Button captions alone are unsafe: distinguish an ad SDK from a gacha.
    if(GachaSafety.requiresAdEvidence(decision.kind)){
     val proof=trustedAdEvidence(snapshot)
-    if(proof==null){
+    val exactLearned=exactLearnedCloseTrusted(decision,snapshot)
+    if(proof==null && !exactLearned){
      verifiedAdKey=""
      verifiedAdSince=0L
      if(unknownSince==0L)unknownSince=now
@@ -1082,13 +1093,14 @@ class AutoFlow(
     unknownSince=0L
     // Gacha animation might momentarily expose an X. Require a stable, clearly
     // identified ad *and target* over consecutive polls before acting.
-    val key="$proof|${decision.key}"
+    val proofSource=proof?: "LEARNED_EXACT"
+    val key="$proofSource|${decision.key}"
     if(verifiedAdKey!=key){
      verifiedAdKey=key
      verifiedAdSince=now
     }
     if(now-verifiedAdSince<1700L){
-     update("広告判定の安定待ち：$proof。1.7秒継続してから×を許可")
+     update("閉じる操作の安定待ち：$proofSource。1.7秒継続してから操作")
      next(850)
      return
     }
