@@ -17,6 +17,9 @@ class PowlAccessibilityService:AccessibilityService(){
  private val teachOverlay by lazy { TeachOverlay(this,learnedActions){msg->screenCollector.updateAutoStatus(msg)} }
  private val autoFlow by lazy { AutoFlow(this){ message -> screenCollector.updateAutoStatus(message) } }
  private val imageDiagnostics by lazy{ScreenshotDiagnostics(this)}
+ fun probeOverlayIcons(onDone:(List<OverlayIconDetector.Marker>?)->Unit){
+  imageDiagnostics.probeOverlay(onDone)
+ }
  fun saveVisualScreenshot(stage:String,nodeCount:Int=0,manual:Boolean=true,
   onDone:(String)->Unit={}){
   imageDiagnostics.capture(stage,nodeCount,manual){message->
