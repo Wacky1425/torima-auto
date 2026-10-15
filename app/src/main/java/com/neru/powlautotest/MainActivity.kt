@@ -18,12 +18,12 @@ class MainActivity:AppCompatActivity(){
   state.text=if(s==null)"Service: 未接続" else "Service: 接続済み"
   collectionOverview.text=CollectionRunStore.summary(this@MainActivity)
   findViewById<TextView>(R.id.visualDiagnosticsCount).text=
-   "保存画像：${ScreenshotDiagnostics.count(this@MainActivity)}枚（最大10枚）"
+   "保存画像：${ScreenshotDiagnostics.count(this@MainActivity)}枚（最大${ScreenshotDiagnostics.MAX_SAVED_IMAGES}枚）"
   val preferred=HomeTouchProfile.bestTrialId(this@MainActivity)
   val style=HomeTouchTrials.variants.firstOrNull{it.id==preferred}
-  homeExperimentInfo.text=if(style==null)
-   "HOME診断：成功方式は未確定。操作バー透過・ノードクリック・親クリック・座標など7通りを検証"
-   else "HOME診断：前回画面遷移を確認した方式：${style.label}"
+  val latest=HomeTrialJournal.shortSummary(this@MainActivity)
+  homeExperimentInfo.text=latest +
+   if(style!=null && !latest.contains("HOME成功")) "\n以前に成功を記録した入力：${style.label}" else ""
   val text=s?.report.orEmpty()
   if(text.isNotBlank() && text!=lastShown){lastShown=text;results.text=text}
   h.postDelayed(this,500)
@@ -35,6 +35,35 @@ class MainActivity:AppCompatActivity(){
   collectionOverview.text=CollectionRunStore.summary(this)
   findViewById<Button>(R.id.checkUpdate).setOnClickListener{ TorimaUpdater(this,findViewById(R.id.updateStatus)).check() }
   findViewById<Button>(R.id.openSettings).setOnClickListener{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}
+  findViewById<Button>(R.id.shareAllDiagnostics).setOnClickListener{
+   // Freeze the journal so the report and images describe the same trial run.
+   PowlAccessibilityService.instance?.let{
+    if(it.isAutomaticOperationRunning())it.stopAutomaticOperation()
+   }
+   Toast.makeText(this,"HOME結果・操作履歴・画像をZIPにまとめています",Toast.LENGTH_SHORT).show()
+   Thread{
+    try{
+     val zip=DiagnosticBundleExporter.create(this)
+     runOnUiThread{
+      try{
+       val uri=FileProvider.getUriForFile(this,"$packageName.fileprovider",zip)
+       val share=Intent(Intent.ACTION_SEND).apply{
+        type="application/zip"
+        putExtra(Intent.EXTRA_STREAM,uri)
+        clipData=ClipData.newUri(contentResolver,"Torima 診断ZIP",uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+       }
+       startActivity(Intent.createChooser(share,"ChatGPTなどへ診断ZIPを1つ共有"))
+      }catch(e:Exception){
+       Toast.makeText(this,"共有画面を開けません：${e.javaClass.simpleName}",Toast.LENGTH_LONG).show()
+      }
+     }
+    }catch(e:Exception){
+     runOnUiThread{Toast.makeText(this,
+      "診断ZIP作成に失敗：${e.javaClass.simpleName}",Toast.LENGTH_LONG).show()}
+    }
+   }.start()
+  }
   findViewById<Button>(R.id.checkHome).setOnClickListener{runTest(false)}
   findViewById<Button>(R.id.tapHome).setOnClickListener{runTest(true)}
 
