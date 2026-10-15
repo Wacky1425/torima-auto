@@ -528,7 +528,7 @@ class AutoFlow(
   }
   val close=closeButton(snap)
   val adCounter=n.any{it.node.isVisibleToUser &&
-   Regex("""Ad\\s+[0-9]+\\s+of\\s+[0-9]+""",RegexOption.IGNORE_CASE)
+   Regex("""Ad\s+[0-9]+\s+of\s+[0-9]+""",RegexOption.IGNORE_CASE)
     .containsMatchIn(it.text)}
   val skipOnClose=close.singleOrNull()?.let{button->
    adCounter && n.any{it.node.isVisibleToUser && it.text.trim().equals("Skip",true) &&
@@ -1008,8 +1008,13 @@ class AutoFlow(
     return
    }
    if(monitorCollection(snapshot,now))return
+   val initial=choose(snapshot)
+   if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD ||
+    initial.kind in listOf("UNKNOWN","OPAQUE","AD_VISUAL_X","AD_VISUAL_NEXT")){
+    probeLiveOverlay(now)
+   }
    val decision=choose(snapshot)
-   // Screenshots are only diagnostic, not permission to tap visual X buttons.
+   // A visual glyph requires independent ad evidence and stable frames.
    // Do not photograph continuously; save at most one difficult screen per 35s.
    if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE"){
     if(visualUnknownSince==0L)visualUnknownSince=now
@@ -1130,6 +1135,22 @@ class AutoFlow(
     next()
     return
    }
+   if(decision.target==null &&
+     decision.kind in listOf("AD_VISUAL_X","AD_VISUAL_NEXT")){
+    val point=decision.touch
+    val width=service.resources.displayMetrics.widthPixels
+    val height=service.resources.displayMetrics.heightPixels
+    if(point==null || point.x !in (width*72/100)..width ||
+     point.y !in 0..(height*18/100)){
+     stopWithReason("画像候補が画面上部の許可領域外。停止")
+     return
+    }
+    val safeBounds=Rect(point.x-30,point.y-30,point.x+31,point.y+31)
+    update("${decision.display}：画面右上のマークを操作")
+    gestureTap(safeBounds,decision.display,120L,point)
+    next()
+    return
+   }
    if(decision.target==null){
     update("${decision.display}：操作なし。${decision.detail}")
     if(unknownSince>0 && now-unknownSince>=120000L){
@@ -1161,7 +1182,8 @@ class AutoFlow(
    if(decision.kind in listOf("W_CHANCE","CARDS","CARD_RESULT")){
     markGachaAction(decision.kind,now)
    }
-   if(GachaSafety.requiresAdEvidence(decision.kind)){
+   if(decision.kind in listOf("AD_CLOSE","AD_VISUAL_X",
+     "LEARNED","LEARNED_TEXT","LEARNED_ICON")){
     postAdClosedAt=now
     postAdNextKind=""
     postAdNextSince=0L
