@@ -26,6 +26,16 @@ internal object GachaSafety {
   phase==Phase.AWAIT_REWARD && requiresAdEvidence(kind) && adSdkProven &&
    elapsedMs>=3_000L
 
+ /**
+  * A user-registered target is already fully verified against the CURRENT
+  * screen signature, node type, resource ID/label, and bounding rectangle by
+  * LearnedActions.match(). A second SDK-specific ad proof is unnecessary.
+  * This exception never applies to contextual matches or explicit gacha UI.
+  */
+ fun exactLearnedCloseAllowed(kind:String,exact:Boolean,gachaUiVisible:Boolean):Boolean =
+  exact && !gachaUiVisible &&
+   kind in listOf("LEARNED","LEARNED_TEXT","LEARNED_ICON")
+
  fun newPhaseAfter(kind:String):Phase?=when(kind){
   "W_CHANCE"->Phase.AWAIT_CARDS
   "CARDS"->Phase.AWAIT_RESULT
