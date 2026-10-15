@@ -20,6 +20,12 @@ class PowlAccessibilityService:AccessibilityService(){
  private val manualHomeComparison by lazy{
   HomeManualComparison(this){msg->screenCollector.updateAutoStatus(msg)}
  }
+ private val homeRecovery by lazy{
+  HomeSettingsRecovery(this){msg->screenCollector.updateAutoStatus(msg)}
+ }
+ internal fun runHomeRecovery(done:(Boolean,Boolean,String)->Unit):Boolean=
+  homeRecovery.start(done)
+ internal fun cancelHomeRecovery(){homeRecovery.cancel()}
  internal fun probeOverlayIcons(onDone:(List<OverlayIconDetector.Marker>?)->Unit){
   imageDiagnostics.probeOverlay(onDone)
  }
@@ -29,6 +35,9 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun restoreHomeTouch(){screenCollector.restoreHomeTouch()}
  internal fun prepareManualHomeObservation(onReady:(Boolean,String)->Unit){
   screenCollector.prepareManualHomeObservation(onReady)
+ }
+ internal fun prepareRecoveryOverlay(onReady:(Boolean,String)->Unit){
+  screenCollector.prepareRecoveryOverlay(onReady)
  }
  fun isManualHomeComparisonRunning():Boolean=manualHomeComparison.isActive()
  fun finishManualHomeComparison(){manualHomeComparison.cancel()}
@@ -106,6 +115,7 @@ class PowlAccessibilityService:AccessibilityService(){
   }
  }
  override fun onDestroy(){
+  homeRecovery.cancel()
   manualHomeComparison.cancel()
   teachOverlay.cancelCapture("サービス終了")
   stopSequence()
