@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityEvent
 
 /**
  * Conservative local state machine. Every poll classifies the CURRENT screen only.
@@ -49,6 +50,8 @@ class AutoFlow(
  private var homeLastTrial:HomeTouchTrials.Trial?=null
  private var homeLastTrialAt=0L
  private var homeTrialInFlight=false
+ private var homeClickObserved=false
+ private var homeTrialGeneration=0
  private var homeNonHomeSince=0L
  private var homeNonHomeKind=""
  // Leave HOME only after a user-like touch; defer success until an actual
@@ -144,6 +147,26 @@ class AutoFlow(
   return Decision(kind,"画像検出：${if(marker.kind=="NEXT")"進む二重矢印" else "×"}",
    kind,null,"連続${liveVisualCount}フレーム＋広告の独立証拠あり",point)
  }
+ /**
+  * App-side TYPE_VIEW_CLICKED is extra evidence, NOT proof that a video opened.
+  * Gesture completed without a click event is useful when isolating interception.
+  */
+ fun onHomeClickObserved(e:AccessibilityEvent){
+  if(!running || homeExperimentStartedAt==0L || homeLastTrial==null ||
+   homeLastTrialAt==0L)return
+  val age=SystemClock.elapsedRealtime()-homeLastTrialAt
+  if(age !in 0L..5_000L)return
+  homeClickObserved=true
+  val node=e.source
+  val rect=Rect()
+  node?.getBoundsInScreen(rect)
+  TeachOverlay.recordHomeExperiment(service,"app_click_event",homeLastTrial!!.id,
+   "after=${age}ms class=${node?.className?.toString()?.substringAfterLast('.')} " +
+    "rect=${rect.toShortString()} desc=${node?.contentDescription?.toString()?.take(60)}")
+ }
+ private fun homeTrace(stage:String,trialId:String,details:String){
+  TeachOverlay.recordHomeExperiment(service,stage,trialId,details)
+ }
  private fun resetHomeExperiment(){
   homeExperimentStartedAt=0L
   homeExperimentStartingCount=null
@@ -152,6 +175,8 @@ class AutoFlow(
   homeLastTrial=null
   homeLastTrialAt=0L
   homeTrialInFlight=false
+  homeClickObserved=false
+  homeTrialGeneration++
   homeNonHomeSince=0L
   homeNonHomeKind=""
  }
