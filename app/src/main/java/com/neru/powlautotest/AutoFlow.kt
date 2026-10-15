@@ -226,6 +226,7 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  service.restoreHomeTouch()
   resetHomeExperiment()
   playRecoveryStep=0
   gachaPhase=GachaSafety.Phase.NONE
@@ -766,13 +767,15 @@ class AutoFlow(
    val previous=homeExperimentStartingCount
    val current=CollectionTaskPolicy.remaining(decision.detail)
    if(previous!=null && current!=null && current<previous){
+    homeTrace("reward_decreased",homeLastTrial?.id ?: "NONE",
+     "previous=$previous current=$current clickEvent=$homeClickObserved")
     homeLastTrial?.let{HomeTouchProfile.markSuccessfulTrial(service,it.id)}
     update("HOME操作後に残回数が${previous}→${current}へ減少。成功パターンを記録")
     resetHomeExperiment()
     return true
    }
    if(HomeTouchTrials.hasTimedOut(homeExperimentStartedAt,now)){
-    stopWithReason("HOMEタップ診断が48秒を超えても遷移なし（試行ログを確認）")
+    stopWithReason("HOME診断が85秒経過。画面と試行ログを確認")
     return true
    }
    if(homeTrialInFlight){
@@ -786,7 +789,9 @@ class AutoFlow(
     return true
    }
    if(homeTrialIndex>=homeTrialList.size){
-    stopWithReason("HOME紫ボタンを学習位置110／240／520msと別位置300msで試しても遷移なし")
+    homeTrace("all_methods_failed",homeLastTrial?.id ?: "NONE",
+     "tries=${homeTrialIndex},clickEvent=$homeClickObserved,kind=${decision.kind},remaining=${decision.detail.take(120)}")
+    stopWithReason("HOME入力方式を全7種類試しても遷移を確認できず。操作履歴と画像ZIPを確認")
     return true
    }
    if(decision.kind=="HOME_WAIT" || decision.target==null){
@@ -817,6 +822,9 @@ class AutoFlow(
   val independentAdProof=trustedAdEvidence(snapshot)!=null
   val positive=HomeTouchTrials.plausibleTransition(decision.kind) &&
    (!GachaSafety.requiresAdEvidence(decision.kind) || independentAdProof)
+  homeTrace("screen_transition",homeLastTrial?.id ?: "NONE",
+   "kind=${decision.kind} positive=$positive proof=$independentAdProof " +
+    "nodes=${snapshot.count} clickEvent=$homeClickObserved")
   if(positive){
    val trial=homeLastTrial
    if(trial!=null){
@@ -857,7 +865,11 @@ class AutoFlow(
   val accepted=service.dispatchGesture(gesture,object:AccessibilityService.GestureResultCallback(){
    override fun onCompleted(gestureDescription:GestureDescription?){
     if(id!=generation||!running)return
-    if(info.startsWith("HOME試行 "))homeTrialInFlight=false
+    if(info.startsWith("HOME試行 ")){
+     homeTrialInFlight=false
+     homeTrace("gesture_completed",homeLastTrial?.id ?: "NONE",
+      "x=$x y=$y holdMs=$holdMs clickEvent=$homeClickObserved (completion != app click)")
+    }
     update("$info／ジェスチャー完了 ($x,$y) ${holdMs}ms／移動${tinyDriftPx}px。画面遷移確認待ち")
    }
    override fun onCancelled(gestureDescription:GestureDescription?){
@@ -872,6 +884,7 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  service.restoreHomeTouch()
   resetHomeExperiment()
   clearDeferredHome()
   postAdClosedAt=0L
@@ -884,6 +897,7 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  service.restoreHomeTouch()
   update("タンク動画回収タスク完了。HOMEの残り0回を繰り返し確認")
  }
  /**
