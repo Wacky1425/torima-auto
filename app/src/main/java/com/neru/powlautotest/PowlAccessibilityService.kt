@@ -20,6 +20,10 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun probeOverlayIcons(onDone:(List<OverlayIconDetector.Marker>?)->Unit){
   imageDiagnostics.probeOverlay(onDone)
  }
+ internal fun prepareHomeTouch(x:Int,y:Int,onReady:(Boolean,String)->Unit){
+  screenCollector.prepareHomeTouch(x,y,onReady)
+ }
+ internal fun restoreHomeTouch(){screenCollector.restoreHomeTouch()}
  fun saveVisualScreenshot(stage:String,nodeCount:Int=0,manual:Boolean=true,
   onDone:(String)->Unit={}){
   imageDiagnostics.capture(stage,nodeCount,manual){message->
@@ -76,6 +80,11 @@ class PowlAccessibilityService:AccessibilityService(){
    }else if(p.isNotBlank() && p!=packageName && p!="com.android.systemui"){
     lastObservedTopPackage=p
    }
+  }
+  if(e.eventType==AccessibilityEvent.TYPE_VIEW_CLICKED &&
+   e.packageName?.toString()=="jp.co.incrementp.milemobile" &&
+   autoFlow.isRunning()){
+   autoFlow.onHomeClickObserved(e)
   }
   if(e.eventType==AccessibilityEvent.TYPE_VIEW_CLICKED &&
    e.packageName?.toString()=="jp.co.incrementp.milemobile" &&
