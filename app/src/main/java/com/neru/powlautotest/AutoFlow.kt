@@ -326,11 +326,14 @@ class AutoFlow(
   if(mainInstall && fullScreenLayout && namedAdClose)return "FULLSCREEN_AD_INSTALL"
   val adCounter=visible.any{Regex("""Ad\s+[0-9]+\s+of\s+[0-9]+""",RegexOption.IGNORE_CASE)
    .containsMatchIn(it.text)}
-  if(adCounter && namedAdClose &&
-   (snap.has("詳細を表示") || snap.has("詳しくはこちら") ||
-    snap.has("Ads served by Meta") ||
-    visible.any{it.text.trim().equals("Skip",true)}))
-   return "META_AD_SLIDE"
+  val metaProvider=visible.any{
+   it.text.contains("Ads served by Meta",true) ||
+    it.desc.contains("Ads served by Meta",true)
+  }
+  val metaControl=snap.has("詳細を表示") || snap.has("詳しくはこちら") ||
+   visible.any{it.text.trim().equals("Skip",true)}
+  if(namedAdClose && (adCounter && (metaControl || metaProvider) ||
+    metaProvider && metaControl))return "META_AD_SLIDE"
   val branded=visible.any{it.text.contains("zeta",true) || it.desc.contains("zeta",true)}
   if(branded && cta && visible.any{it.text=="App icon" || it.desc=="App icon" ||
     it.text=="Privacy info" || it.desc=="Privacy info"})return "ZETA_INSTALL_CARD"
