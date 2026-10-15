@@ -23,7 +23,8 @@ class MainActivity:AppCompatActivity(){
   val style=HomeTouchTrials.variants.firstOrNull{it.id==preferred}
   val latest=HomeTrialJournal.shortSummary(this@MainActivity)
   homeExperimentInfo.text=latest + "\n" +
-   HomeManualComparison.summary(this@MainActivity) +
+   HomeManualComparison.summary(this@MainActivity) + "\n" +
+   HomeRecoveryJournal.summary(this@MainActivity) +
    if(style!=null && !latest.contains("HOME成功")) "\n以前に成功を記録した入力：${style.label}" else ""
   val text=s?.report.orEmpty()
   if(text.isNotBlank() && text!=lastShown){lastShown=text;results.text=text}
@@ -35,6 +36,15 @@ class MainActivity:AppCompatActivity(){
   homeExperimentInfo=findViewById(R.id.homeExperimentInfo)
   collectionOverview.text=CollectionRunStore.summary(this)
   findViewById<Button>(R.id.checkUpdate).setOnClickListener{ TorimaUpdater(this,findViewById(R.id.updateStatus)).check() }
+  findViewById<Switch>(R.id.enableHomeRecovery).apply{
+   isChecked=HomeRecoveryPolicy.enabled(this@MainActivity)
+   setOnCheckedChangeListener{_,checked->
+    HomeRecoveryPolicy.setEnabled(this@MainActivity,checked)
+    Toast.makeText(this@MainActivity,
+     if(checked)"HOMEの自動復旧を有効にしました" else "HOMEの自動復旧を無効にしました",
+     Toast.LENGTH_SHORT).show()
+   }
+  }
   findViewById<Button>(R.id.openSettings).setOnClickListener{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}
   findViewById<Button>(R.id.shareAllDiagnostics).setOnClickListener{
    // Freeze the journal so the report and images describe the same trial run.
