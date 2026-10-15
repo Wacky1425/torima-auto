@@ -160,12 +160,13 @@ class AutoFlow(
   val node=e.source
   val rect=Rect()
   node?.getBoundsInScreen(rect)
-  TeachOverlay.recordHomeExperiment(service,"app_click_event",homeLastTrial!!.id,
+  homeTrace("app_click_event",homeLastTrial!!.id,
    "after=${age}ms class=${node?.className?.toString()?.substringAfterLast('.')} " +
     "rect=${rect.toShortString()} desc=${node?.contentDescription?.toString()?.take(60)}")
  }
  private fun homeTrace(stage:String,trialId:String,details:String){
   TeachOverlay.recordHomeExperiment(service,stage,trialId,details)
+  HomeTrialJournal.note(service,trialId,stage,details)
  }
  private fun resetHomeExperiment(){
   homeExperimentStartedAt=0L
@@ -216,6 +217,7 @@ class AutoFlow(
   playRecoveryStep=0
   playRecoveryAt=0L
   playRecoveryAttempts=0
+  HomeTrialJournal.beginRun(service)
   collection.begin()
   update("起動中：タンク動画回収を開始（上限3時間）。学習ルール${LearnedActions.count(service)}件も照合")
   h.postDelayed(poll,450)
@@ -238,6 +240,7 @@ class AutoFlow(
   postAdNextKind=""
   postAdNextSince=0L
   if(wasRunning){
+   HomeTrialJournal.endRun(service,"STOPPED","ユーザーが自動操作を停止")
    collection.finish("STOPPED","ユーザーが自動操作を停止")
    update("停止中（ユーザー操作で停止）")
   }
@@ -664,6 +667,8 @@ class AutoFlow(
   steps++
   val gen=generation
   val label="HOME試行 ${homeTrialIndex}/${homeTrialList.size}：${trial.label}"
+  HomeTrialJournal.beginAttempt(service,trial.id,trial.label,trial.mode.name,
+   "対象座標=(${point.x},${point.y}) ボタン=${bounds.toShortString()} 試行${homeTrialIndex}")
   val node=button.node
   homeTrace("before",trial.id,"button=${bounds.toShortString()} " +
    "tap=(${point.x},${point.y}) class=${node.className?.toString()?.substringAfterLast('.')} " +
@@ -690,6 +695,8 @@ class AutoFlow(
    homeTrace("overlay",trial.id,overlayNote)
    if(!ready){
     homeTrialInFlight=false
+    HomeTrialJournal.outcome(service,trial.id,HomeOutcomePolicy.ABORTED,
+     "操作バーのタッチ透過に失敗: $overlayNote")
     stopWithReason("HOME診断：操作バーのタッチ透過に失敗。誤操作防止で停止")
     return@prepareHomeTouch
    }
@@ -697,6 +704,8 @@ class AutoFlow(
    val fresh=if(freshSnap!=null)choose(freshSnap) else null
    if(fresh?.kind!="HOME" || fresh.target==null){
     homeTrialInFlight=false
+    HomeTrialJournal.outcome(service,trial.id,HomeOutcomePolicy.ABORTED,
+     "入力前にHOME画面が変化したため操作を見送り")
     homeTrace("screen_changed_before_touch",trial.id,
      "kind=${fresh?.kind ?: "NO_ROOT"}; stale node is never clicked")
     update("HOME操作前の再判定で画面が変化。旧座標でのタップは禁止")
@@ -708,6 +717,8 @@ class AutoFlow(
    if(!rect.contains(xy.x,xy.y) || rect.width()<100 ||
      !rect.contains(xy.x+trial.tinyDriftPx,xy.y)){
     homeTrialInFlight=false
+    HomeTrialJournal.outcome(service,trial.id,HomeOutcomePolicy.ABORTED,
+     "入力直前の最新ボタン座標が試行条件と一致しない")
     homeTrace("geometry_rejected",trial.id,"fresh=${rect.toShortString()} xy=${xy.x},${xy.y}")
     update("HOME再判定でボタン位置が不適切。今回の操作を見送り")
     return@prepareHomeTouch
@@ -782,7 +793,11 @@ class AutoFlow(
    if(previous!=null && current!=null && current<previous){
     homeTrace("reward_decreased",homeLastTrial?.id ?: "NONE",
      "previous=$previous current=$current clickEvent=$homeClickObserved")
-    homeLastTrial?.let{HomeTouchProfile.markSuccessfulTrial(service,it.id)}
+    homeLastTrial?.let{
+     HomeTrialJournal.outcome(service,it.id,HomeOutcomePolicy.REWARD_DECREASED,
+      "HOMEの残回数が$previous→$currentに減少。操作回数とは別に観測")
+     HomeTouchProfile.markSuccessfulTrial(service,it.id)
+    }
     update("HOME操作後に残回数が${previous}→${current}へ減少。成功パターンを記録")
     resetHomeExperiment()
     return true
@@ -802,6 +817,8 @@ class AutoFlow(
     return true
    }
    if(homeTrialIndex>=homeTrialList.size){
+    homeLastTrial?.let{HomeTrialJournal.outcome(service,it.id,
+     HomeOutcomePolicy.NO_NAVIGATION,"全試行後もHOMEを確認。広告遷移なし")}
     homeTrace("all_methods_failed",homeLastTrial?.id ?: "NONE",
      "tries=${homeTrialIndex},clickEvent=$homeClickObserved,kind=${decision.kind},remaining=${decision.detail.take(120)}")
     stopWithReason("HOME入力方式を全7種類試しても遷移を確認できず。操作履歴と画像ZIPを確認")
@@ -811,6 +828,8 @@ class AutoFlow(
     update("HOME紫ボタンのクリック範囲が一時的に取得不可。座標試行せず再判定")
     return true
    }
+   homeLastTrial?.let{HomeTrialJournal.outcome(service,it.id,
+    HomeOutcomePolicy.NO_NAVIGATION,"7秒以上経過後もHOMEを確認。次方式へ切替")}
    return tryHomePattern(decision,now)
   }
   // The current screen no longer looks like HOME. Confirm a stable different
@@ -832,9 +851,15 @@ class AutoFlow(
    return true
   }
   if(now-homeNonHomeSince<HomeTouchTrials.NON_HOME_CONFIRM_MS)return true
-  val independentAdProof=trustedAdEvidence(snapshot)!=null
-  val positive=HomeTouchTrials.plausibleTransition(decision.kind) &&
-   (!GachaSafety.requiresAdEvidence(decision.kind) || independentAdProof)
+  val adEvidence=trustedAdEvidence(snapshot)
+  val exactLearned=exactLearnedCloseTrusted(decision,snapshot)
+  val homeOutcome=HomeOutcomePolicy.classifyNewScreen(decision.kind,
+   adEvidence!=null,exactLearned)
+  val positive=HomeOutcomePolicy.isConfirmed(homeOutcome)
+  homeLastTrial?.let{HomeTrialJournal.outcome(service,it.id,homeOutcome,
+   "確認した画面=${decision.kind} / 広告証拠=${adEvidence ?: "なし"} / " +
+    "学習済み完全一致=$exactLearned / nodes=${snapshot.count}")}
+  val independentAdProof=adEvidence!=null
   homeTrace("screen_transition",homeLastTrial?.id ?: "NONE",
    "kind=${decision.kind} positive=$positive proof=$independentAdProof " +
     "nodes=${snapshot.count} clickEvent=$homeClickObserved")
@@ -904,6 +929,7 @@ class AutoFlow(
   postAdClosedAt=0L
   postAdNextKind=""
   postAdNextSince=0L
+  HomeTrialJournal.endRun(service,"FAILED",reason)
   collection.finish("FAILED",reason)
   update("停止：$reason")
  }
@@ -912,6 +938,7 @@ class AutoFlow(
   generation++
   h.removeCallbacks(poll)
   service.restoreHomeTouch()
+  HomeTrialJournal.endRun(service,"COMPLETED","HOME残回数0を複数回確認")
   update("タンク動画回収タスク完了。HOMEの残り0回を繰り返し確認")
  }
  /**
@@ -1100,6 +1127,10 @@ class AutoFlow(
    decision.kind in listOf("AD_CLOSE","LEARNED","LEARNED_TEXT","LEARNED_ICON") &&
    trustedAdEvidence(snapshot)!=null
   if(recognisableReward || provenAd){
+   HomeTrialJournal.outcome(service,trial.id,
+    if(provenAd)HomeOutcomePolicy.AD_OPEN_CONFIRMED
+    else HomeOutcomePolicy.NEXT_SCREEN_CONFIRMED,
+    "不明画面の後に${decision.kind}を確認。広告証拠=${trustedAdEvidence(snapshot) ?: "なし"}")
    HomeTouchProfile.markSuccessfulTrial(service,trial.id)
    update("HOMEの${trial.durationMs}msタッチ後に${decision.kind}を確認。操作方法を次回優先（報酬回収は未確定）")
    clearDeferredHome()
