@@ -326,7 +326,11 @@ class AutoFlow(
   if(mainInstall && fullScreenLayout && namedAdClose)return "FULLSCREEN_AD_INSTALL"
   val adCounter=visible.any{Regex("""Ad\s+[0-9]+\s+of\s+[0-9]+""",RegexOption.IGNORE_CASE)
    .containsMatchIn(it.text)}
-  if(adCounter && namedAdClose && snap.has("詳細を表示"))return "META_AD_SLIDE"
+  if(adCounter && namedAdClose &&
+   (snap.has("詳細を表示") || snap.has("詳しくはこちら") ||
+    snap.has("Ads served by Meta") ||
+    visible.any{it.text.trim().equals("Skip",true)}))
+   return "META_AD_SLIDE"
   val branded=visible.any{it.text.contains("zeta",true) || it.desc.contains("zeta",true)}
   if(branded && cta && visible.any{it.text=="App icon" || it.desc=="App icon" ||
     it.text=="Privacy info" || it.desc=="Privacy info"})return "ZETA_INSTALL_CARD"
@@ -348,6 +352,13 @@ class AutoFlow(
    now-gachaPhaseSince)
   val accepted=GachaSafety.allows(gachaPhase,decision.kind,waitingKey==decision.key) ||
    actualAd
+  // After a card result, a positively identified new video is NOT
+  // another gacha animation: discard the stale AWAIT_REWARD phase.
+  if(actualAd && gachaPhase==GachaSafety.Phase.AWAIT_REWARD){
+   gachaPhase=GachaSafety.Phase.NONE
+   update("ガチャ結果後の広告を確認。ガチャ待機を解除して広告処理へ")
+   return false
+  }
   val seconds=(now-gachaPhaseSince)/1000L
   if(seconds>=150L){
    stopWithReason("ガチャ中の次画面を150秒確認できなかったため停止（$gachaPhase）")
@@ -544,7 +555,10 @@ class AutoFlow(
     button.rect.contains(it.rect.centerX(),it.rect.centerY())}
   }?:false
   if(skipOnClose){
-   return Decision("AD_SKIP","動画広告のSkip","AD_SKIP",
+   val counter=n.firstOrNull{it.node.isVisibleToUser &&
+    Regex("""Ad\s+[0-9]+\s+of\s+[0-9]+""",RegexOption.IGNORE_CASE)
+     .containsMatchIn(it.text)}?.text?.trim().orEmpty()
+   return Decision("AD_SKIP","動画広告のSkip","AD_SKIP:$counter",
     close.single(),"広告に表示されたSkip。スキップ券は押さない")
   }
   val widthPixels=service.resources.displayMetrics.widthPixels
@@ -947,49 +961,65 @@ class AutoFlow(
   }
  }
  /**
-  * After any rewarded ad-close, Android can expose a bottom dismiss X while
-  * switching to the gacha. That is a transition artifact, not another ad.
-  * Wait until a positive non-ad screen is stable, or stop safely.
+  * A closed video can temporarily expose a bottom X during gacha loading.
+  * Protect the four seconds right after exit. Once the next *actual* screen
+  * is stable, even if it is another ad, normal screen-specific actions resume.
   */
  private fun protectPostAdTransition(decision:Decision,snapshot:Snapshot,now:Long):Boolean{
   if(postAdClosedAt==0L)return false
   val waited=now-postAdClosedAt
   if(PostAdTransitionPolicy.timedOut(waited)){
-   stopWithReason("広告終了後のガチャ／報酬画面を90秒識別できず、安全停止")
+   stopWithReason("広告終了後の遷移先を90秒識別できず、安全停止")
    return true
   }
-  val current=decision.kind
-  val hasTarget=decision.target!=null
-  // Residual WebView/SDK data may still be present in the loading hierarchy.
-  val adVisible=trustedAdEvidence(snapshot)!=null
-  val cleanNext=current in PostAdTransitionPolicy.nextScreens &&
-   hasTarget && !adVisible
-  if(!cleanNext){
+  if(PostAdTransitionPolicy.quietPeriodActive(waited)){
    postAdNextKind=""
    postAdNextSince=0L
-   update("広告終了後の読み込み保護：${waited/1000L}秒。画面=${current}。×は押さず待機")
+   update("広告終了後のガチャ読み込み保護：${waited/1000L}/4秒。×を押さず待機")
    return true
   }
-  if(postAdNextKind!=current){
-   postAdNextKind=current
+  val proof=trustedAdEvidence(snapshot)
+  val exact=exactLearnedCloseTrusted(decision,snapshot)
+  val current=decision.kind
+  val hasTarget=decision.target!=null || decision.touch!=null
+  val cleanNext=current in PostAdTransitionPolicy.nextScreens &&
+   decision.target!=null && proof==null
+  val nextAd=current in PostAdTransitionPolicy.adActions &&
+   hasTarget && (proof!=null || exact)
+  if(!cleanNext && !nextAd){
+   postAdNextKind=""
+   postAdNextSince=0L
+   update("広告後の画面を再確認中：${current}。不明な×は押さない")
+   return true
+  }
+  val stableKey="${decision.key}|${proof ?: if(exact) "EXACT" else "NEXT"}"
+  if(postAdNextKind!=stableKey){
+   postAdNextKind=stableKey
    postAdNextSince=now
-   update("広告の次画面${current}を確認中。3秒安定するまで全タップを保留")
+   update("広告後に${current}を確認。表示の安定を待機")
    return true
   }
-  if(!PostAdTransitionPolicy.canLeaveTransition(
-    current,hasTarget,adVisible,now-postAdNextSince)){
-   update("広告後の${current}表示を確認中。ガチャ読み込み中の×を保護")
+  val stableFor=now-postAdNextSince
+  val ready=if(nextAd)
+   PostAdTransitionPolicy.canContinueOnVerifiedAd(current,hasTarget,
+    proof!=null || exact,waited,stableFor)
+  else PostAdTransitionPolicy.canLeaveTransition(current,decision.target!=null,
+   proof!=null,stableFor)
+  if(!ready){
+   update("広告後の${current}確認中：${stableFor/1000L}秒。再確認してから操作")
    return true
   }
   postAdClosedAt=0L
   postAdNextKind=""
   postAdNextSince=0L
-  // The previous completed ad click must not be retried on the new UI.
-  waitingKey=null
-  fallbackAttempted=false
+  // Never retry an unchanged previous close target as a *new* reward cycle.
+  if(waitingKey!=decision.key){
+   waitingKey=null
+   fallbackAttempted=false
+  }
   verifiedAdKey=""
   verifiedAdSince=0L
-  update("広告後の${current}画面を安定確認。通常処理を再開")
+  update("広告後の${current}を確認。通常の判定に復帰")
   return false
  }
  private fun check(){
