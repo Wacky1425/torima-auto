@@ -54,4 +54,16 @@ class GachaSafetyTest {
   assertNull(GachaSafety.newPhaseAfter("AD_CLOSE"))
   assertNull(GachaSafety.newPhaseAfter("LEARNED"))
  }
+ @Test fun postGachaMetaSkipAndVisualNextRequireAdProof(){
+  val p=GachaSafety.Phase.AWAIT_REWARD
+  for(kind in listOf("AD_SKIP","AD_GOOGLE_PLAY","AD_VISUAL_X","AD_VISUAL_NEXT")){
+   assertTrue(GachaSafety.requiresAdEvidence(kind))
+   assertTrue(GachaSafety.canDismissProvenAdAfterResult(p,kind,true,3100L))
+   assertFalse(GachaSafety.canDismissProvenAdAfterResult(p,kind,false,3100L))
+   assertFalse(GachaSafety.canDismissProvenAdAfterResult(p,kind,true,2000L))
+   assertFalse(GachaSafety.canDismissProvenAdAfterResult(
+    GachaSafety.Phase.AWAIT_RESULT,kind,true,9000L))
+  }
+ }
+
 }
