@@ -1,0 +1,67 @@
+package com.neru.powlautotest
+
+import android.content.Context
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+/**
+ * One report, one share action. Creates a local archive but never uploads it.
+ * The user chooses ChatGPT or another destination in the Android share sheet.
+ */
+internal object DiagnosticBundleExporter {
+ private const val DIR="diagnostic_exports"
+ fun create(ctx:Context):File{
+  val folder=File(ctx.cacheDir,DIR).also{it.mkdirs()}
+  val archive=File(folder,"torima-diagnostics-v3.5.zip")
+  val temp=File(folder,"torima-diagnostics-v3.5.tmp")
+  if(temp.exists())temp.delete()
+  val resultText=HomeTrialJournal.report(ctx)
+  try{
+   ZipOutputStream(FileOutputStream(temp)).use{zip->
+    fun put(name:String,content:String){
+     zip.putNextEntry(ZipEntry(name))
+     zip.write(content.toByteArray(Charsets.UTF_8))
+     zip.closeEntry()
+    }
+    put("00_HOME_診断結果.txt",resultText)
+    put("01_HOME_試行詳細.json",HomeTrialJournal.export(ctx))
+    put("02_操作履歴.json",TeachOverlay.export(ctx))
+    put("03_回収タスク履歴.json",CollectionRunStore.export(ctx))
+    put("04_画面ノード記録.txt",ScreenCollector.export(ctx))
+    put("05_学習済み操作.txt",LearnedActions.export(ctx))
+    val screenshots=ScreenshotDiagnostics.appendToDiagnosticZip(ctx,zip)
+    put("manifest.json",JSONObject().apply{
+     put("formatVersion",1)
+     put("appVersion","3.5")
+     put("createdAt",System.currentTimeMillis())
+     put("screenshotCount",screenshots)
+     put("containsPersonalScreenImages",screenshots>0)
+     put("homeOutcomeSummary",HomeTrialJournal.shortSummary(ctx))
+     put("localOnlyUntilUserShares",true)
+    }.toString(2))
+    put("README_まず読む.txt",
+     "Torima Auto v3.5 の診断データを1ファイルにまとめたZIPです。\n" +
+     "まず 00_HOME_診断結果.txt を開くと、HOMEから実際に先に進めた" +
+     "方式（または未確認）が分かります。\n" +
+     "01_HOME_試行詳細.json には押し方、入力結果、CLICKイベント、" +
+     "その後の画面判定と観測根拠が記録されています。\n" +
+     "02～05には操作履歴、回収履歴、UI画面記録、学習済み操作をまとめています。\n" +
+     "screenshots/ に保存されていた実際の前後画像と検出結果があります。\n" +
+     "HOME→広告確認と報酬獲得は別です。画面を識別できない場合は成功扱いしません。\n" +
+     "ZIP内には画面画像や操作記録が含まれます。共有相手は自分で選んでください。\n")
+   }
+   if(archive.exists())archive.delete()
+   if(!temp.renameTo(archive)){
+    temp.copyTo(archive,overwrite=true)
+    temp.delete()
+   }
+   return archive
+  }catch(e:Exception){
+   temp.delete()
+   throw e
+  }
+ }
+}
