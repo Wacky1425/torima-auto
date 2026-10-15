@@ -23,7 +23,7 @@ class MainActivity:AppCompatActivity(){
   val style=HomeTouchTrials.variants.firstOrNull{it.id==preferred}
   homeExperimentInfo.text=if(style==null)
    "HOME診断：成功方式は未確定。操作バー透過・ノードクリック・親クリック・座標など7通りを検証"
-   else "HOME押し方：前回の画面遷移を確認した方式：${style.durationMs}ms／${style.label}"
+   else "HOME診断：前回画面遷移を確認した方式：${style.label}"
   val text=s?.report.orEmpty()
   if(text.isNotBlank() && text!=lastShown){lastShown=text;results.text=text}
   h.postDelayed(this,500)
