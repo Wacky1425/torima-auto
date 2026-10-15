@@ -54,6 +54,8 @@ class AutoFlow(
  private var homeTrialGeneration=0
  private var homeNonHomeSince=0L
  private var homeNonHomeKind=""
+ private var homeRecoveryAttempts=0
+ private var homeRecoveryActive=false
  // Leave HOME only after a user-like touch; defer success until an actual
  // recognized ad/retry screen is seen, never credit an opaque window alone.
  private var deferredHomeTrial:HomeTouchTrials.Trial?=null
@@ -217,6 +219,9 @@ class AutoFlow(
   playRecoveryStep=0
   playRecoveryAt=0L
   playRecoveryAttempts=0
+  homeRecoveryAttempts=0
+  homeRecoveryActive=false
+  HomeRecoveryJournal.begin(service)
   HomeTrialJournal.beginRun(service)
   collection.begin()
   update("起動中：タンク動画回収を開始（上限3時間）。学習ルール${LearnedActions.count(service)}件も照合")
@@ -228,6 +233,8 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  service.cancelHomeRecovery()
+  homeRecoveryActive=false
   service.restoreHomeTouch()
   resetHomeExperiment()
   playRecoveryStep=0
@@ -923,6 +930,8 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  service.cancelHomeRecovery()
+  homeRecoveryActive=false
   service.restoreHomeTouch()
   resetHomeExperiment()
   clearDeferredHome()
@@ -937,6 +946,8 @@ class AutoFlow(
   running=false
   generation++
   h.removeCallbacks(poll)
+  service.cancelHomeRecovery()
+  homeRecoveryActive=false
   service.restoreHomeTouch()
   HomeTrialJournal.endRun(service,"COMPLETED","HOME残回数0を複数回確認")
   update("タンク動画回収タスク完了。HOMEの残り0回を繰り返し確認")
