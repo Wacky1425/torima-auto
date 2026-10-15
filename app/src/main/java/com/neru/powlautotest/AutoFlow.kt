@@ -629,6 +629,11 @@ class AutoFlow(
   * without navigation is a failed trial, not proof that anything was collected.
   * Keep the experiment active across transient HOME_WAIT (button not clickable).
   */
+ /**
+  * Run one HOME hypothesis at a time, using the exact CURRENT button node.
+  * The collector bar becomes non-touchable for a short period; its normal
+  * touch handling could otherwise intercept a gesture at HOME's y-coordinate.
+  */
  private fun tryHomePattern(decision:Decision,now:Long):Boolean{
   val button=decision.target?:return true
   val trial=homeTrialList.getOrNull(homeTrialIndex)?:return true
@@ -636,24 +641,104 @@ class AutoFlow(
    stopWithReason("操作回数の上限に達したためHOME試行を停止")
    return true
   }
-  val rect=button.rect
-  val point=when(trial.position){
+  val bounds=button.rect
+  fun pointFor(rect:Rect):Point=when(trial.position){
    HomeTouchTrials.Position.UPPER_BUTTON_RIGHT_CENTER->HomeTouchProfile.rightCenter(rect)
+   HomeTouchTrials.Position.UPPER_BUTTON_CENTER->Point(rect.centerX(),rect.centerY())
    HomeTouchTrials.Position.LEARNED->HomeTouchProfile.current(service,rect)
   }
-  val finalX=point.x+trial.tinyDriftPx
-  if(!rect.contains(point.x,point.y) || !rect.contains(finalX,point.y)){
-   stopWithReason("HOME試行位置が紫ボタンの内側ではないため安全停止")
+  val point=pointFor(bounds)
+  if(!bounds.contains(point.x,point.y) ||
+    !bounds.contains(point.x+trial.tinyDriftPx,point.y)){
+   stopWithReason("HOME試行位置が紫ボタンの範囲外のため安全停止")
    return true
   }
   homeLastTrial=trial
   homeLastTrialAt=now
   homeTrialIndex++
+  homeTrialGeneration++
+  val trialToken=homeTrialGeneration
   homeTrialInFlight=true
+  homeClickObserved=false
   steps++
-  update("HOME試行 ${homeTrialIndex}/${homeTrialList.size}：${trial.label}／" +
-   "${trial.durationMs}ms、座標(${point.x},${point.y})、微移動${trial.tinyDriftPx}px")
-  gestureTap(rect,"HOME試行 ${trial.id}",trial.durationMs,point,trial.tinyDriftPx)
+  val gen=generation
+  val label="HOME試行 ${homeTrialIndex}/${homeTrialList.size}：${trial.label}"
+  val node=button.node
+  homeTrace("before",trial.id,"button=${bounds.toShortString()} " +
+   "tap=(${point.x},${point.y}) class=${node.className?.toString()?.substringAfterLast('.')} " +
+   "click=${node.isClickable} enabled=${node.isEnabled} visible=${node.isVisibleToUser} " +
+   "selected=${node.isSelected} children=${node.childCount} " +
+   "windowId=${node.windowId} mode=${trial.mode}")
+  service.saveVisualScreenshot("HOME before ${trial.id}",0,false)
+  update("$label。操作バーのタッチを透過して${HomeTouchTrials.OVERLAY_SETTLE_MS}ms待機")
+  service.prepareHomeTouch(point.x,point.y){ready,overlayNote->
+   if(!running || generation!=gen || trialToken!=homeTrialGeneration)return@prepareHomeTouch
+   homeTrace("overlay",trial.id,overlayNote)
+   if(!ready){
+    homeTrialInFlight=false
+    stopWithReason("HOME診断：操作バーのタッチ透過に失敗。誤操作防止で停止")
+    return@prepareHomeTouch
+   }
+   val freshSnap=readCurrent()
+   val fresh=if(freshSnap!=null)choose(freshSnap) else null
+   if(fresh?.kind!="HOME" || fresh.target==null){
+    homeTrialInFlight=false
+    homeTrace("screen_changed_before_touch",trial.id,
+     "kind=${fresh?.kind ?: "NO_ROOT"}; stale node is never clicked")
+    update("HOME操作前の再判定で画面が変化。旧座標でのタップは禁止")
+    return@prepareHomeTouch
+   }
+   val active=fresh.target
+   val rect=active.rect
+   val xy=pointFor(rect)
+   if(!rect.contains(xy.x,xy.y) || rect.width()<100 ||
+     !rect.contains(xy.x+trial.tinyDriftPx,xy.y)){
+    homeTrialInFlight=false
+    homeTrace("geometry_rejected",trial.id,"fresh=${rect.toShortString()} xy=${xy.x},${xy.y}")
+    update("HOME再判定でボタン位置が不適切。今回の操作を見送り")
+    return@prepareHomeTouch
+   }
+   homeLastTrialAt=SystemClock.elapsedRealtime()
+   homeTrace("dispatch",trial.id,
+    "mode=${trial.mode} xy=(${xy.x},${xy.y}) freshBounds=${rect.toShortString()} " +
+     "freshNodes=${freshSnap?.count} remaining=${fresh.detail.take(100)}")
+   when(trial.mode){
+    HomeTouchTrials.Mode.GESTURE->{
+     update("$label／タッチ (${xy.x},${xy.y}) ${trial.durationMs}ms")
+     gestureTap(rect,"HOME試行 ${trial.id}",trial.durationMs,xy,trial.tinyDriftPx)
+    }
+    HomeTouchTrials.Mode.NODE_CLICK->{
+     val ok=active.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+     homeTrialInFlight=false
+     homeTrace("action_click_result",trial.id,"button ACTION_CLICK=$ok")
+     update("$label／ボタンACTION_CLICK=$ok（遷移は未確認）")
+    }
+    HomeTouchTrials.Mode.PARENT_CLICK->{
+     val parent=active.node.parent
+     val parentRect=Rect()
+     parent?.getBoundsInScreen(parentRect)
+     val valid=HomeTouchTrials.parentIsNarrow(rect.width(),rect.height(),
+      parentRect.width(),parentRect.height(),parentRect.contains(rect),
+      parent!=null && parent.isClickable && parent.isEnabled && parent.isVisibleToUser)
+     val ok=if(valid)parent?.performAction(AccessibilityNodeInfo.ACTION_CLICK)==true else false
+     homeTrialInFlight=false
+     homeTrace("parent_click_result",trial.id,
+      "parentRect=${parentRect.toShortString()} parentValid=$valid ACTION_CLICK=$ok")
+     update("$label／親ノード有効=$valid／ACTION_CLICK=$ok（遷移は未確認）")
+    }
+   }
+   h.postDelayed({
+    if(running && generation==gen){
+     val after=readCurrent()
+     val state=if(after!=null)choose(after) else null
+     homeTrace("after_2s",trial.id,
+      "kind=${state?.kind ?: "NO_ROOT"} nodes=${after?.count ?: 0} " +
+       "tapEvent=$homeClickObserved detail=${state?.detail?.take(160) ?: ""}")
+     if(after!=null)service.saveVisualScreenshot("HOME after ${trial.id}",
+      after.count,false)
+    }
+   },2_450L)
+  }
   return true
  }
  private fun handleHomeTrial(decision:Decision,snapshot:Snapshot,now:Long):Boolean{
