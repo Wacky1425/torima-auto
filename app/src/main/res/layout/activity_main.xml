@@ -9,7 +9,7 @@
  android:layout_height="wrap_content" android:minHeight="58dp"
  android:text="診断をまとめて共有（ZIP 1個）"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="HOMEの自動試行と指タップ比較、操作履歴、画面記録、画像をまとめます。自動→手動の順で実行してから共有してください。共有先は自分で選べます。"
+ android:text="トリマHOMEの自動試行後、操作バーの『指で押す比較（18秒）』を使います。指と自動の違い、CLICKイベント、画像をZIP1個にまとめます。自動→指→共有の順で操作してください。"
  android:paddingBottom="8dp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
