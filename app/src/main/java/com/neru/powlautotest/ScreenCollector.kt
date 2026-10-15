@@ -3,6 +3,8 @@ package com.neru.powlautotest
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -79,6 +81,58 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  private var top=false
  private var title:TextView?=null
  private var info:TextView?=null
+ private val homeHandler=Handler(Looper.getMainLooper())
+ private var homeOriginalFlags:Int?=null
+ private var homeBypassEpoch=0
+ private var homeRestore:Runnable?=null
+ /** Allow gesture injection to reach Torima instead of our own overlay window.
+  * The bar stays visible, but is deliberately untouchable for a brief period.
+  * This changes the WindowManager touchability, not merely View visibility.
+  */
+ fun prepareHomeTouch(x:Int,y:Int,onReady:(Boolean,String)->Unit){
+  val panel=bar
+  val p=lp
+  val manager=wm
+  if(panel==null || p==null || manager==null){
+   homeHandler.postDelayed({onReady(true,"操作バーなし")},HomeTouchTrials.OVERLAY_SETTLE_MS)
+   return
+  }
+  val rect=Rect()
+  val covered=panel.getGlobalVisibleRect(rect) && rect.contains(x,y)
+  if(homeOriginalFlags==null)homeOriginalFlags=p.flags
+  homeBypassEpoch++
+  val epoch=homeBypassEpoch
+  homeRestore?.let{homeHandler.removeCallbacks(it)}
+  p.flags=p.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+  try{
+   manager.updateViewLayout(panel,p)
+  }catch(e:Exception){
+   restoreHomeTouch()
+   onReady(false,"オーバーレイ透過設定失敗：${e.javaClass.simpleName}")
+   return
+  }
+  val note="操作バー領域=${rect.toShortString()}／ボタン位置が重なる=${covered}／タッチ透過ON"
+  homeHandler.postDelayed({
+   if(homeBypassEpoch!=epoch)return@postDelayed
+   onReady(true,note)
+  },HomeTouchTrials.OVERLAY_SETTLE_MS)
+  val restoration=Runnable{if(homeBypassEpoch==epoch)restoreHomeTouch()}
+  homeRestore=restoration
+  homeHandler.postDelayed(restoration,4_500L)
+ }
+ fun restoreHomeTouch(){
+  homeBypassEpoch++
+  homeRestore?.let{homeHandler.removeCallbacks(it)}
+  homeRestore=null
+  val old=homeOriginalFlags
+  homeOriginalFlags=null
+  val p=lp
+  val panel=bar
+  if(old!=null && p!=null && panel!=null){
+   p.flags=old
+   try{wm?.updateViewLayout(panel,p)}catch(_:Exception){}
+  }
+ }
  private var autoStatus="停止中"
  fun isVisible():Boolean=bar!=null
  fun updateAutoStatus(text:String){
@@ -153,6 +207,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  }
  fun hide(){
   service.stopAutomaticOperation()
+  restoreHomeTouch()
   val view=bar
   bar=null;lp=null;title=null;info=null
   if(view!=null)try{wm?.removeView(view)}catch(_:Exception){}
