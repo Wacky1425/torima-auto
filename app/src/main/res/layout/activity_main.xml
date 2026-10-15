@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.4" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.5" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:layout_marginTop="10dp" android:text="診断を送るなら、このボタン1つだけでOK。"
+ android:textStyle="bold" android:textSize="16sp"/>
+<Button android:id="@+id/shareAllDiagnostics" android:layout_width="match_parent"
+ android:layout_height="wrap_content" android:minHeight="58dp"
+ android:text="診断をまとめて共有（ZIP 1個）"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:text="HOMEの試行結果・操作履歴・回収履歴・画面記録・スクリーンショットをまとめます。共有時は自動操作を停止して結果を確定します。共有先は自分で選べます。"
+ android:paddingBottom="8dp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
 <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
@@ -9,7 +18,7 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:layout_marginTop="16dp" android:text="回収タスク・実行記録" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="今回の基盤で管理する対象は『トリマのタンク動画』のみ。HOMEの残り回数を記録し、0回を2度確認した場合だけ完了として停止します。未対応の回収対象は完了扱いしません。実行は最大3時間で安全停止。"/>
+ android:text="今回の基盤で管理する対象は『トリマのタンク動画』のみ。HOMEの残り回数とHOME遷移に成功した入力方式を記録し、0回を2度確認した場合だけ完了として停止します。未対応の回収対象は完了扱いしません。実行は最大3時間で安全停止。"/>
 <TextView android:id="@+id/collectionOverview" android:layout_width="match_parent"
  android:layout_height="wrap_content" android:padding="10dp"
  android:text="回収タスク：実行記録なし" android:textIsSelectable="true"/>
@@ -20,14 +29,14 @@
  android:layout_height="wrap_content" android:text="回収タスク・所要時間の履歴をコピー"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="トリマ画面上のバーから自動開始・停止。Google Playが前面に出たら自動でトリマに復帰します。HOME紫ボタンは実画面の高さと「または」の位置から探し、学習位置110ms→240ms→520ms→別位置300msを最大4回試します。約6.5秒おきに画面遷移を確認し、成功した押し方を次回優先します。広告の×を押した直後は、通信待ちやガチャ読み込みで出る一時的な×を押しません。次の報酬・ガチャ・HOME画面が3秒以上安定してから再開し、90秒間確認できなければ停止します。"/>
+ android:text="トリマ画面上のバーから自動開始・停止。Google Playが前面に出たら自動でトリマに復帰します。HOME紫ボタンは実画面の高さと「または」の位置から探し、学習座標・ボタン／親ACTION_CLICK・中央タップなど最大7方式を比較。HOMEからの広告遷移は入力実行とは別に確認し、結果を一括診断ZIPに記録します。広告の×を押した直後は、通信待ちやガチャ読み込みで出る一時的な×を押しません。次の報酬・ガチャ・HOME画面が3秒以上安定してから再開し、90秒間確認できなければ停止します。"/>
 <Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="記録・自動操作バーを表示"/>
 <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
 <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:layout_marginTop="12dp" android:text="画像診断（×・閉じるの視覚認識）" android:textSize="18sp"/>
+ android:layout_marginTop="12dp" android:text="個別の画像診断（通常は上の一括共有だけでOK）" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="トリマ画面の操作バーから「画像」を押すと、ノードのない広告も画像で記録できます。自動実行中に6秒以上不明だった画面も間隔を空けて撮影。画面内の×形状候補を端末内で検出し、画像と候補座標を保存します。候補は確定したボタンではないため、自動タップしません。保存画像は端末内のみ・最新10枚まで。内容を確認してからZIPを共有してください。"/>
+ android:text="トリマ画面の操作バーから「画像」を押すと、ノードのない広告も画像で記録できます。自動実行中に6秒以上不明だった画面も間隔を空けて撮影。画面内の×形状候補を端末内で検出し、画像と候補座標を保存します。候補は確定したボタンではありません。保存画像は端末内のみ・最新24枚まで。内容を確認してからZIPを共有してください。"/>
 <TextView android:id="@+id/visualDiagnosticsCount" android:layout_width="match_parent"
  android:layout_height="wrap_content" android:text="画像記録：0枚"/>
 <Button android:id="@+id/shareVisualDiagnostics" android:layout_width="match_parent"
