@@ -137,12 +137,18 @@ class AutoFlow(
   val marker=liveVisual?:return null
   val now=SystemClock.elapsedRealtime()
   if(now-liveVisualAt>2_800L || liveVisualCount<2 || now-liveVisualSince<1_600L)return null
-  if(trustedAdEvidence(snap)==null)return null
+  // After the short post-gacha grace, a stable corner glyph may be used
+  // even if this ad SDK hides its accessibility metadata.
+  val proof=trustedAdEvidence(snap)
+  val briefPostGacha=gachaPhase==GachaSafety.Phase.AWAIT_REWARD &&
+   now-gachaPhaseSince>=GachaSafety.REWARD_AD_GRACE_MS &&
+   !hasExplicitGachaUi(snap) && postAdClosedAt==0L
+  if(proof==null && !briefPostGacha)return null
   val x=marker.x;val y=marker.y
   val point=if(marker.kind=="NEXT")Point(x-30,y) else Point(x,y)
   val kind=if(marker.kind=="NEXT")"AD_VISUAL_NEXT" else "AD_VISUAL_X"
   return Decision(kind,"画像検出：${if(marker.kind=="NEXT")"進む二重矢印" else "×"}",
-   kind,null,"連続${liveVisualCount}フレーム＋広告の独立証拠あり",point)
+   kind,null,"マーク連続${liveVisualCount}回／${proof?:"ガチャ直後の短時間保護経過"}",point)
  }
  private fun resetHomeExperiment(){
   homeExperimentStartedAt=0L
@@ -333,12 +339,29 @@ class AutoFlow(
   return null
  }
 
- private fun exactLearnedCloseTrusted(decision:Decision,snapshot:Snapshot):Boolean{
-  val gachaUiVisible=listOf("カードを1枚選んでください","ガチャWチャンスに挑戦",
+ private fun hasExplicitGachaUi(snapshot:Snapshot):Boolean=
+  listOf("カードを1枚選んでください","ガチャWチャンスに挑戦",
    "友達にシェアする","動画を見て再チャレンジ",
    "動画スキップ","持っている枚数").any{snapshot.has(it)}
-  return GachaSafety.exactLearnedCloseAllowed(
-   decision.kind,decision.exactLearned,gachaUiVisible)
+
+ private fun exactLearnedCloseTrusted(decision:Decision,snapshot:Snapshot):Boolean=
+  GachaSafety.exactLearnedCloseAllowed(
+   decision.kind,decision.exactLearned,hasExplicitGachaUi(snapshot))
+
+ private fun adControlAfterShortGrace(decision:Decision,snapshot:Snapshot,now:Long):Boolean{
+  val target=decision.target
+  // UI-node-based controls must exist RIGHT NOW. No old saved screen,
+  // generic "Close", unknown screen, or plain timer can trigger a tap.
+  val namedClose=decision.kind=="AD_CLOSE" && target?.canPress==true &&
+   target.desc.trim() in listOf("Close Ad","closeButton","Close button","close_btn")
+  val labeledSkip=decision.kind=="AD_SKIP" && target?.canPress==true &&
+   snapshot.nodes.any{it.node.isVisibleToUser && it.text.trim().equals("Skip",true)}
+  val stableImage=decision.kind in listOf("AD_VISUAL_X","AD_VISUAL_NEXT") &&
+   decision.touch!=null && liveVisualCount>=2 && now-liveVisualAt<=2_800L &&
+   now-liveVisualSince>=1_600L
+  return GachaSafety.mayUseVisibleAdControlAfterGrace(
+   gachaPhase,decision.kind,now-gachaPhaseSince,hasExplicitGachaUi(snapshot),
+   namedClose || labeledSkip,stableImage,exactLearnedCloseTrusted(decision,snapshot))
  }
  private fun gachaProtects(decision:Decision,now:Long,snapshot:Snapshot):Boolean{
   if(gachaPhase==GachaSafety.Phase.NONE)return false
@@ -346,8 +369,9 @@ class AutoFlow(
   val actualAd=GachaSafety.canDismissProvenAdAfterResult(
    gachaPhase,decision.kind,adProof!=null || exactLearnedCloseTrusted(decision,snapshot),
    now-gachaPhaseSince)
+  val shortGraceControl=adControlAfterShortGrace(decision,snapshot,now)
   val accepted=GachaSafety.allows(gachaPhase,decision.kind,waitingKey==decision.key) ||
-   actualAd
+   actualAd || shortGraceControl
   val seconds=(now-gachaPhaseSince)/1000L
   if(seconds>=150L){
    stopWithReason("ガチャ中の次画面を150秒確認できなかったため停止（$gachaPhase）")
@@ -365,7 +389,10 @@ class AutoFlow(
      TeachOverlay.recordGachaDiagnostic(service,snapshot.root,
       "$gachaPhase/${decision.kind}/${seconds}秒")
     }
-    update("ガチャ保護（$gachaPhase / ${seconds}秒）：誤タップを防止して待機。画面=${decision.display}")
+    if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD &&
+     now-gachaPhaseSince>=GachaSafety.REWARD_AD_GRACE_MS)
+     update("ガチャ短時間保護は終了。操作できる広告ボタンを探索中：${decision.display}")
+    else update("ガチャ保護（$gachaPhase / ${seconds}秒）：誤タップを防止して待機。画面=${decision.display}")
    }
    return true
   }
@@ -1078,7 +1105,8 @@ class AutoFlow(
    if(GachaSafety.requiresAdEvidence(decision.kind)){
     val proof=trustedAdEvidence(snapshot)
     val exactLearned=exactLearnedCloseTrusted(decision,snapshot)
-    if(proof==null && !exactLearned){
+    if(proof==null && !exactLearned &&
+     !adControlAfterShortGrace(decision,snapshot,now)){
      verifiedAdKey=""
      verifiedAdSince=0L
      if(unknownSince==0L)unknownSince=now
@@ -1147,23 +1175,18 @@ class AutoFlow(
     next()
     return
    }
-   if(decision.target==null &&
-     decision.kind in listOf("AD_VISUAL_X","AD_VISUAL_NEXT")){
-    val point=decision.touch
+   val visualTap=if(decision.kind in listOf("AD_VISUAL_X","AD_VISUAL_NEXT"))
+    decision.touch else null
+   if(visualTap!=null){
     val width=service.resources.displayMetrics.widthPixels
     val height=service.resources.displayMetrics.heightPixels
-    if(point==null || point.x !in (width*72/100)..width ||
-     point.y !in 0..(height*18/100)){
-     stopWithReason("画像候補が画面上部の許可領域外。停止")
+    if(visualTap.x !in (width*72/100)..width ||
+     visualTap.y !in 0..(height*18/100)){
+     stopWithReason("画像マークが許可領域外。停止")
      return
     }
-    val safeBounds=Rect(point.x-30,point.y-30,point.x+31,point.y+31)
-    update("${decision.display}：画面右上のマークを操作")
-    gestureTap(safeBounds,decision.display,120L,point)
-    next()
-    return
    }
-   if(decision.target==null){
+   if(decision.target==null && visualTap==null){
     update("${decision.display}：操作なし。${decision.detail}")
     if(unknownSince>0 && now-unknownSince>=120000L){
      stopWithReason("不明画面が2分以上続いたため停止（${decision.display}）")
@@ -1200,6 +1223,15 @@ class AutoFlow(
     postAdNextKind=""
     postAdNextSince=0L
     update("広告の終了操作を実行：次の画面へ切り替わるまで追加の×を禁止")
+   }
+   if(visualTap!=null){
+    // Share the ordinary cooldown, action cap, waitingKey and post-ad guard.
+    // Previously visual taps returned BEFORE those safety checks.
+    val safeBounds=Rect(visualTap.x-30,visualTap.y-30,visualTap.x+31,visualTap.y+31)
+    update("${decision.display}：安定した操作マークを1回タップ")
+    gestureTap(safeBounds,decision.display,120L,visualTap)
+    next()
+    return
    }
    if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON")){
     // A nonclickable close label / ad dismiss parent cannot be activated by
