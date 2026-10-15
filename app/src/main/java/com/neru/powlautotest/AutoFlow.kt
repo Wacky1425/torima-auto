@@ -670,6 +670,19 @@ class AutoFlow(
    "click=${node.isClickable} enabled=${node.isEnabled} visible=${node.isVisibleToUser} " +
    "selected=${node.isSelected} children=${node.childCount} " +
    "windowId=${node.windowId} mode=${trial.mode}")
+  // Check other windows (dialogues, accessibility overlays) that can
+  // receive or obscure touches at precisely the HOME coordinate.
+  try{
+   val summary=service.windows.orEmpty().take(9).joinToString(" ; "){w->
+    val r=Rect();w.getBoundsInScreen(r)
+    "type=${w.type},layer=${w.layer},active=${w.isActive},focus=${w.isFocused}," +
+     "coversPoint=${r.contains(point.x,point.y)},bounds=${r.toShortString()}," +
+     "pkg=${w.root?.packageName?.toString().orEmpty().take(40)}"
+   }
+   homeTrace("window_layers",trial.id,summary)
+  }catch(e:Exception){
+   homeTrace("window_layers",trial.id,"window API error=${e.javaClass.simpleName}")
+  }
   service.saveVisualScreenshot("HOME before ${trial.id}",0,false)
   update("$label。操作バーのタッチを透過して${HomeTouchTrials.OVERLAY_SETTLE_MS}ms待機")
   service.prepareHomeTouch(point.x,point.y){ready,overlayNote->
@@ -846,6 +859,7 @@ class AutoFlow(
   point:Point?=null,tinyDriftPx:Int=0) {
   if(!running)return
   if(service.rootInActiveWindow?.packageName?.toString()!=TARGET){
+   if(info.startsWith("HOME試行 "))homeTrialInFlight=false
    update("前面がトリマではないためジェスチャー中止")
    return
   }
