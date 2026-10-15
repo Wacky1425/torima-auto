@@ -55,7 +55,8 @@ class LearnedActions(private val ctx:Context) {
  )
  data class Match(val node:AccessibilityNodeInfo,val bounds:Rect,
   val title:String,val gestureOnly:Boolean=false,val tapPoint:Point?=null,
-  val visualIcon:Boolean=false)
+  val visualIcon:Boolean=false,
+  val exact:Boolean=false)
 
  /**
   * Users already explicitly pressed 登録 on these examples. Upgrade only the
@@ -393,6 +394,6 @@ class LearnedActions(private val ctx:Context) {
   val point=if(gestureOnly && chosen.target.bounds.contains(tx,ty))Point(tx,ty)
    else null
   return Match(chosen.target.node,chosen.target.bounds,title,gestureOnly,point,
-   chosen.rule.optBoolean("visualIcon",false))
+   chosen.rule.optBoolean("visualIcon",false),bestScore>=1000)
  }
 }
