@@ -148,7 +148,7 @@ internal object HomeTrialJournal {
   val formatter=SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.JAPAN)
   fun time(t:Long)=if(t>0)formatter.format(Date(t)) else "不明"
   val lines=StringBuilder()
-  lines.append("Torima Auto HOME診断まとめ v3.5\n")
+  lines.append("Torima Auto HOME診断まとめ v3.7\n")
   lines.append("開始: ${time(data.optLong("runStartedAt"))}\n")
   lines.append("実行状態: ${data.optString("runState","未開始")}\n")
   lines.append("試行数: ${items.length()}\n")
