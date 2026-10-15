@@ -65,6 +65,58 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  private val io=Executors.newSingleThreadExecutor()
  private var busy=false
  private var lastRequest=0L
+ private var lastProbeRequest=0L
+
+ /** Scan overlay marks in RAM. No screenshots are persisted by this path. */
+ fun probeOverlay(done:(List<OverlayIconDetector.Marker>?)->Unit){
+  val root=service.rootInActiveWindow
+  if(root?.packageName?.toString()!=TARGET || Build.VERSION.SDK_INT<30){done(null);return}
+  val now=SystemClock.elapsedRealtime()
+  if(busy || now-lastProbeRequest<1_300L ||
+   (lastRequest>0 && now-lastRequest<1_300L)){done(null);return}
+  busy=true;lastProbeRequest=now
+  val windowId=root.windowId
+  fun finish(image:Bitmap?){
+   if(image==null){busy=false;done(null);return}
+   io.execute{
+    val markers=try{
+     val width=540
+     val height=(image.height.toLong()*width/image.width).toInt()
+     val small=Bitmap.createScaledBitmap(image,width,height,true)
+     val pixels=IntArray(width*height)
+     small.getPixels(pixels,0,width,0,0,width,height)
+     if(small!==image)small.recycle()
+     OverlayIconDetector.detect(pixels,width,height).map{
+      it.copy(x=it.x*image.width/width,y=it.y*image.height/height)
+     }
+    }catch(_:Exception){null}
+    finally{image.recycle()}
+    service.mainExecutor.execute{busy=false;done(markers)}
+   }
+  }
+  fun display(){
+   try{service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
+    object:AccessibilityService.TakeScreenshotCallback{
+     override fun onSuccess(result:AccessibilityService.ScreenshotResult){
+      finish(toSoftwareBitmap(result))
+     }
+     override fun onFailure(errorCode:Int){finish(null)}
+    })}catch(_:Exception){finish(null)}
+  }
+  if(Build.VERSION.SDK_INT>=34 && windowId>=0){
+   try{service.takeScreenshotOfWindow(windowId,service.mainExecutor,
+    object:AccessibilityService.TakeScreenshotCallback{
+     override fun onSuccess(result:AccessibilityService.ScreenshotResult){
+      finish(toSoftwareBitmap(result))
+     }
+     override fun onFailure(errorCode:Int){
+      if(service.rootInActiveWindow?.packageName?.toString()==TARGET)display()
+      else finish(null)
+     }
+    })}catch(_:Exception){display()}
+  }else display()
+ }
+
 
  fun capture(stage:String,nodeCount:Int,manual:Boolean,done:(String)->Unit){
   val root=service.rootInActiveWindow
