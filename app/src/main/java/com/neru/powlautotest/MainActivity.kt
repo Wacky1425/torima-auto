@@ -22,7 +22,8 @@ class MainActivity:AppCompatActivity(){
   val preferred=HomeTouchProfile.bestTrialId(this@MainActivity)
   val style=HomeTouchTrials.variants.firstOrNull{it.id==preferred}
   val latest=HomeTrialJournal.shortSummary(this@MainActivity)
-  homeExperimentInfo.text=latest +
+  homeExperimentInfo.text=latest + "\n" +
+   HomeManualComparison.summary(this@MainActivity) +
    if(style!=null && !latest.contains("HOME成功")) "\n以前に成功を記録した入力：${style.label}" else ""
   val text=s?.report.orEmpty()
   if(text.isNotBlank() && text!=lastShown){lastShown=text;results.text=text}
@@ -39,6 +40,7 @@ class MainActivity:AppCompatActivity(){
    // Freeze the journal so the report and images describe the same trial run.
    PowlAccessibilityService.instance?.let{
     if(it.isAutomaticOperationRunning())it.stopAutomaticOperation()
+    if(it.isManualHomeComparisonRunning())it.finishManualHomeComparison()
    }
    Toast.makeText(this,"HOME結果・操作履歴・画像をZIPにまとめています",Toast.LENGTH_SHORT).show()
    Thread{
