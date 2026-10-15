@@ -571,7 +571,11 @@ class AutoFlow(
     "AD_GOOGLE_PLAY",topPlay.single(),"上部ナビゲーションのみ")
   }
   if(close.isNotEmpty()){
-   return Decision("AD_CLOSE","広告の終了ボタン","AD_CLOSE:${close.first().desc.trim()}:${close.first().rect.toShortString()}",
+   val counter=n.firstOrNull{it.node.isVisibleToUser &&
+    Regex("""Ad\s+[0-9]+\s+of\s+[0-9]+""",RegexOption.IGNORE_CASE)
+     .containsMatchIn(it.text)}?.text?.trim().orEmpty()
+   return Decision("AD_CLOSE","広告の終了ボタン",
+    "AD_CLOSE:$counter:${close.first().desc.trim()}:${close.first().rect.toShortString()}",
     close.singleOrNull(),"閉じる候補=${close.size}")
   }
   visualOverlayDecision(snap)?.let{return it}
@@ -1187,8 +1191,31 @@ class AutoFlow(
      stopWithReason("画像候補が画面上部の許可領域外。停止")
      return
     }
+    val previous=recentActions[decision.key]?:0L
+    if(previous>0L && now-previous<6_000L){
+     update("画像マークの連続タップを抑制。再判定中")
+     next()
+     return
+    }
+    if(steps>=MAX_ACTIONS){
+     stopWithReason("画像操作の上限に達したため停止")
+     return
+    }
+    recentActions[decision.key]=now
+    steps++
+    waitingKey=decision.key
+    waitingSince=now
+    lastActionTitle=decision.display
+    fallbackAttempted=false
+    if(PostAdTransitionPolicy.isAdTransitionAction(decision.kind)){
+     postAdClosedAt=now
+     postAdNextKind=""
+     postAdNextSince=0L
+    }
+    liveVisual=null
+    liveVisualCount=0
     val safeBounds=Rect(point.x-30,point.y-30,point.x+31,point.y+31)
-    update("${decision.display}：画面右上のマークを操作")
+    update("${decision.display}：確定した画面右上のマークを操作")
     gestureTap(safeBounds,decision.display,120L,point)
     next()
     return
@@ -1224,8 +1251,7 @@ class AutoFlow(
    if(decision.kind in listOf("W_CHANCE","CARDS","CARD_RESULT")){
     markGachaAction(decision.kind,now)
    }
-   if(decision.kind in listOf("AD_CLOSE","AD_VISUAL_X",
-     "LEARNED","LEARNED_TEXT","LEARNED_ICON")){
+   if(PostAdTransitionPolicy.isAdTransitionAction(decision.kind)){
     postAdClosedAt=now
     postAdNextKind=""
     postAdNextSince=0L
