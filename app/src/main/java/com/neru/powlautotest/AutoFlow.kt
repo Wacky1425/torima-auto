@@ -60,6 +60,12 @@ class AutoFlow(
  private var unknownSince=0L
  private var visualUnknownSince=0L
  private var visualLastCaptureAt=0L
+ private var liveVisualAt=0L
+ private var liveVisualSince=0L
+ private var liveVisualCount=0
+ private var liveVisual:OverlayIconDetector.Marker?=null
+ private var visualProbePending=false
+ private var visualProbeLast=0L
  private var lastKind=""
  private var learnedTextSeenAt=0L
  // Gacha animations and ads may both display an X; keep their phases distinct.
@@ -96,6 +102,47 @@ class AutoFlow(
   val touch:Point?=null
  )
 
+ private fun resetLiveVisual(){
+  liveVisualAt=0L;liveVisualSince=0L;liveVisualCount=0
+  liveVisual=null;visualProbePending=false;visualProbeLast=0L
+ }
+ /**
+  * Sample transient overlay glyphs, not screenshots of entire advertisers.
+  * Never treat one screenshot or an icon alone as tap authorization.
+  */
+ private fun probeLiveOverlay(now:Long){
+  if(visualProbePending || now-visualProbeLast<1_350L)return
+  visualProbePending=true;visualProbeLast=now
+  val expectedGeneration=generation
+  service.probeOverlayIcons { markers ->
+   visualProbePending=false
+   if(!running || generation!=expectedGeneration || markers==null)return@probeOverlayIcons
+   val candidate=markers.filter{it.score>=85 && it.region=="top-right"}
+    .sortedWith(compareBy<OverlayIconDetector.Marker>{if(it.kind=="NEXT")0 else 1}
+     .thenByDescending{it.score}).firstOrNull()
+   val old=liveVisual
+   if(candidate!=null && old!=null && candidate.kind==old.kind &&
+    kotlin.math.abs(candidate.x-old.x)<=28 &&
+    kotlin.math.abs(candidate.y-old.y)<=28){
+    liveVisualCount++
+   }else{
+    liveVisualCount=if(candidate==null)0 else 1
+    liveVisualSince=SystemClock.elapsedRealtime()
+   }
+   liveVisual=candidate;liveVisualAt=SystemClock.elapsedRealtime()
+  }
+ }
+ private fun visualOverlayDecision(snap:Snapshot):Decision?{
+  val marker=liveVisual?:return null
+  val now=SystemClock.elapsedRealtime()
+  if(now-liveVisualAt>2_800L || liveVisualCount<2 || now-liveVisualSince<1_600L)return null
+  if(trustedAdEvidence(snap)==null)return null
+  val x=marker.x;val y=marker.y
+  val point=if(marker.kind=="NEXT")Point(x-30,y) else Point(x,y)
+  val kind=if(marker.kind=="NEXT")"AD_VISUAL_NEXT" else "AD_VISUAL_X"
+  return Decision(kind,"画像検出：${if(marker.kind=="NEXT")"進む二重矢印" else "×"}",
+   kind,null,"連続${liveVisualCount}フレーム＋広告の独立証拠あり",point)
+ }
  private fun resetHomeExperiment(){
   homeExperimentStartedAt=0L
   homeExperimentStartingCount=null
@@ -126,6 +173,7 @@ class AutoFlow(
   unknownSince=0L
   visualUnknownSince=0L
   visualLastCaptureAt=0L
+  resetLiveVisual()
   lastKind=""
   learnedTextSeenAt=0L
   gachaPhase=GachaSafety.Phase.NONE
@@ -155,6 +203,7 @@ class AutoFlow(
   resetHomeExperiment()
   playRecoveryStep=0
   gachaPhase=GachaSafety.Phase.NONE
+  resetLiveVisual()
   cardResultVisibleSince=0L
   verifiedAdKey=""
   verifiedAdSince=0L
