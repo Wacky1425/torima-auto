@@ -13,6 +13,7 @@ package com.neru.powlautotest
  */
 internal object StableAdClosePolicy {
  const val STABLE_MS=3_000L
+ const val AFTER_GACHA_STABLE_MS=6_000L
  const val MIN_SAMPLES=2
  const val POLL_WHEN_UNSURE_MS=850L
  private val GACHA_TERMS=listOf(
@@ -41,11 +42,11 @@ internal object StableAdClosePolicy {
  fun isStableCloseAllowed(
   kind:String,hasUniqueTopRightTarget:Boolean,explicitGacha:Boolean,
   gachaCardPhase:Boolean,postAdQuiet:Boolean,loading:Boolean,
-  stableMs:Long,samples:Int
+  stableMs:Long,samples:Int,requiredMs:Long=STABLE_MS
  ):Boolean =
   kind=="AD_CLOSE" && hasUniqueTopRightTarget && !explicitGacha &&
    !gachaCardPhase && !postAdQuiet && !loading &&
-   stableMs>=STABLE_MS && samples>=MIN_SAMPLES
+   stableMs>=requiredMs && samples>=MIN_SAMPLES
 
  /** Looser screen matching only when the unique target node/ID and bounds
   * already matched; a single common word like 'close' is NOT a screen match. */
