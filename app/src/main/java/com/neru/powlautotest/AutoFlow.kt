@@ -71,6 +71,8 @@ class AutoFlow(
  private var liveVisual:OverlayIconDetector.Marker?=null
  private var visualProbePending=false
  private var visualProbeLast=0L
+ // A visual X with no SDK metadata needs a known video-ad entry path.
+ private var videoAdSessionActive=false
  private var lastKind=""
  private var learnedTextSeenAt=0L
  // Gacha animations and ads may both display an X; keep their phases distinct.
@@ -132,8 +134,7 @@ class AutoFlow(
    visualProbePending=false
    if(!running || generation!=expectedGeneration || markers==null)return@probeOverlayIcons
    val candidate=markers.filter{it.score>=85 && it.region=="top-right"}
-    .sortedWith(compareBy<OverlayIconDetector.Marker>{if(it.kind=="NEXT")0 else 1}
-     .thenByDescending{it.score}).firstOrNull()
+    .maxByOrNull{it.score}
    val old=liveVisual
    if(candidate!=null && old!=null && candidate.kind==old.kind &&
     kotlin.math.abs(candidate.x-old.x)<=28 &&
@@ -149,13 +150,22 @@ class AutoFlow(
  private fun visualOverlayDecision(snap:Snapshot):Decision?{
   val marker=liveVisual?:return null
   val now=SystemClock.elapsedRealtime()
-  if(now-liveVisualAt>2_800L || liveVisualCount<2 || now-liveVisualSince<1_600L)return null
-  if(trustedAdEvidence(snap)==null)return null
+  val requiredMs=if(FastAdMode.enabled(service))900L else 1_600L
+  if(now-liveVisualAt>2_800L || liveVisualCount<2 ||
+   now-liveVisualSince<requiredMs)return null
+  val proven=trustedAdEvidence(snap)!=null
+  val screenshotProven=marker.kind=="X" && marker.score>=445 &&
+   videoAdSessionActive &&
+   !StableAdClosePolicy.hasGachaOrLoadingText(
+    snap.nodes.filter{it.node.isVisibleToUser}.flatMap{listOf(it.text,it.desc)})
+  if(!proven && !screenshotProven)return null
   val x=marker.x;val y=marker.y
   val point=if(marker.kind=="NEXT")Point(x-30,y) else Point(x,y)
   val kind=if(marker.kind=="NEXT")"AD_VISUAL_NEXT" else "AD_VISUAL_X"
   return Decision(kind,"画像検出：${if(marker.kind=="NEXT")"進む二重矢印" else "×"}",
-   kind,null,"連続${liveVisualCount}フレーム＋広告の独立証拠あり",point)
+   "$kind:${point.x},${point.y}",null,
+   "画像2枚の同じ位置に×／score=${marker.score}／広告SDK=$proven／動画経路=$videoAdSessionActive",
+   point)
  }
  /**
   * App-side TYPE_VIEW_CLICKED is extra evidence, NOT proof that a video opened.
@@ -212,6 +222,7 @@ class AutoFlow(
   visualLastCaptureAt=0L
   resetLiveVisual()
   resetStableAdClose()
+  videoAdSessionActive=false
   lastKind=""
   learnedTextSeenAt=0L
   gachaPhase=GachaSafety.Phase.NONE
