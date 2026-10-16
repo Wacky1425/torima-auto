@@ -225,6 +225,14 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   sampled.getPixels(pixels,0,scanWidth,0,0,scanWidth,scanHeight)
   if(sampled!==image)sampled.recycle()
   val results=VisualCloseDetector.detect(pixels,scanWidth,scanHeight)
+  // Store the same 540px pixel-X result that feeds automatic screen actions.
+  val xWidth=540
+  val xHeight=(image.height.toLong()*xWidth/image.width).toInt()
+  val xImage=Bitmap.createScaledBitmap(image,xWidth,xHeight,true)
+  val xPixels=IntArray(xWidth*xHeight)
+  xImage.getPixels(xPixels,0,xWidth,0,0,xWidth,xHeight)
+  if(xImage!==image)xImage.recycle()
+  val pixelX=PixelAdCloseDetector.detectWhiteX(xPixels,xWidth,xHeight)
   val dir=folder(service)
   val now=System.currentTimeMillis()
   val filename="screen_${now}.jpg"
@@ -246,6 +254,12 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
    put("stage",stage.take(65));put("manual",manual)
    put("nodes",nodeCount);put("width",image.width);put("height",image.height)
    put("xCandidatesAreNotConfirmedButtons",true)
+   put("livePixelX",if(pixelX!=null)JSONObject().apply{
+    put("x",pixelX.x*image.width/xWidth)
+    put("y",pixelX.y*image.height/xHeight)
+    put("score",pixelX.score)
+    put("requiresMultipleLiveFrames",true)
+   } else JSONObject.NULL)
    put("candidates",JSONArray().also{arr->
     for(c in results)arr.put(JSONObject().apply{
      put("x",c.x*image.width/scanWidth)
@@ -263,6 +277,6 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
    newIndex.remove(0)
   }
   index(service).writeText(newIndex.toString(),Charsets.UTF_8)
-  return "画像保存：$filename（nodes=$nodeCount／×形状の候補${results.size}件）。アプリの「画像診断を共有」から確認できます。候補は自動で押しません。"
+  return "画像保存：$filename（nodes=$nodeCount／従来候補${results.size}件／画像から右上×=${pixelX!=null}）。複数フレームと現在の画面の照合後に自動操作にも使います。"
  }
 }
