@@ -23,6 +23,8 @@ class StableAdClosePolicyTest {
  @Test fun transientLoadingIsASeparateState(){
   assertTrue(StableAdClosePolicy.plausibleTransientLoading(
    1,false,false,false))
+  assertFalse(StableAdClosePolicy.plausibleTransientLoading(
+   2,false,false,false,true))
   assertTrue(StableAdClosePolicy.plausibleTransientLoading(
    90,true,false,false))
   assertTrue(StableAdClosePolicy.plausibleTransientLoading(
