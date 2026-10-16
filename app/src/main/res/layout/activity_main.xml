@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.10" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.11" android:textSize="23sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:layout_marginTop="10dp" android:text="診断を送るなら、このボタン1つだけでOK。"
  android:textStyle="bold" android:textSize="16sp"/>
@@ -22,7 +22,7 @@
  android:layout_width="match_parent" android:layout_height="wrap_content"
  android:minHeight="50dp" android:text="HOMEで進めない時に1回だけ自動復旧する"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="HOMEで2方式失敗 → トリマのアプリ情報から強制停止・再起動を試行 → 最大3方式で再確認。設定画面が判別できなければ通常の開き直しに切り替え、他のアプリは停止しません。"
+ android:text="HOMEで2方式失敗 → 紫ボタン上の画面を少し下にスワイプ → 取り直したボタンを再タップ。進まなければトリマのアプリ情報から強制停止・再起動を試行 → 最大3方式で再確認。設定画面が判別できなければ通常の開き直しに切り替え、他のアプリは停止しません。"
  android:paddingBottom="8dp"/>
 <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
 <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
