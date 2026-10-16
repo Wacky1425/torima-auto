@@ -297,15 +297,24 @@ class LearnedActions(private val ctx:Context) {
     ((pick.viewId.isNotBlank() && node.viewId==pick.viewId) ||
      (pick.viewId.isBlank() && pick.label.isNotBlank() && node.label==pick.label))
   }==1
+  val explicitTaughtClose=pick!=null &&
+   TeachRulePolicy.userTaughtCornerDismissWithoutSdk(
+    pick.label,uniqueNamedTarget,
+    pick.bounds.left,pick.bounds.top,pick.bounds.right,pick.bounds.bottom,
+    ctx.resources.displayMetrics.widthPixels,
+    maxOf(ctx.resources.displayMetrics.heightPixels,pick.bounds.bottom),
+    sample.items.flatMap{listOf(it.node.text?.toString().orEmpty(),
+     it.node.contentDescription?.toString().orEmpty())})
   val safe=sample.signature!=null && pick!=null &&
     (if(visualIcon)verifiedImageAd && imageCandidates.size==1
      else (pick.label.isNotBlank()||pick.viewId.isNotBlank()) &&
-      (!textOnly || sdkProof) && uniqueNamedTarget)
+      (!textOnly || sdkProof || explicitTaughtClose) && uniqueNamedTarget)
   val reason=when{
    sample.rootCount<=2->"UIが${sample.rootCount}件。画面を識別できず、自動再現は無効。"
    pick==null->"押した位置に識別可能なボタンや閉じる表示がなく、自動再現は無効。"
    sample.signature==null->"画面を他の広告から区別する特徴が不足し、自動再現は無効。"
-   textOnly && !sdkProof && !visualIcon->"閉じる文字は記録可能ですが、広告固有の情報が不足。自動実行は保留。"
+   textOnly && !sdkProof && !visualIcon && !explicitTaughtClose->
+    "閉じる文字は記録可能ですが、同じ広告と特定できる情報や右上の一意な×が不足。自動実行は保留。"
    !safe->"操作対象の識別名が曖昧なため自動再現は無効。"
    dismissParent!=null->"広告画面・閉じる親領域・閉じる文字を確認。押した座標を登録可能。"
    visualIcon->"広告専用画面と右上の画像ボタンを確認。教えた位置をこの画面限定で登録可能。"
