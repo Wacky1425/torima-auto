@@ -81,9 +81,20 @@ class PowlAccessibilityService:AccessibilityService(){
    }
   }
   inspect(root)
-  return labels.any{it.contains("Google Play",ignoreCase=true)||
-   it.contains("Play ストア",ignoreCase=true)} &&
-   labels.any{it.contains("インストール")||it.contains("Install",ignoreCase=true)}
+  val branded=labels.any{
+   it.contains("Google Play",ignoreCase=true) ||
+    it.contains("Play ストア",ignoreCase=true)
+  }
+  // On some OEM Play bottom-sheets the install CTA is not exposed in the
+  // accessibility tree. Play Pass / app-purchase details still identify the
+  // Play product sheet when the foreground *package* is GMS.
+  val productSheet=labels.any{
+   it.contains("インストール") || it.contains("Install",ignoreCase=true) ||
+    it.contains("Play Pass",ignoreCase=true) ||
+    it.contains("アプリ内課金") || it.contains("レビュー") ||
+    it.contains("件のレビュー")
+  }
+  return branded && productSheet
  }
  override fun onServiceConnected(){super.onServiceConnected();instance=this;report="サービス接続完了"}
  override fun onInterrupt(){}
