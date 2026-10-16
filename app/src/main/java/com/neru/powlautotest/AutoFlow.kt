@@ -105,7 +105,8 @@ class AutoFlow(
   val target:Item?=null,
   val detail:String="",
   val touch:Point?=null,
-  val exactLearned:Boolean=false
+  val exactLearned:Boolean=false,
+  val registeredLearned:Boolean=false
  )
 
  private fun resetLiveVisual(){
@@ -376,18 +377,18 @@ class AutoFlow(
   return null
  }
 
- private fun exactLearnedCloseTrusted(decision:Decision,snapshot:Snapshot):Boolean{
+ private fun registeredLearnedCloseTrusted(decision:Decision,snapshot:Snapshot):Boolean{
   val gachaUiVisible=listOf("カードを1枚選んでください","ガチャWチャンスに挑戦",
    "友達にシェアする","動画を見て再チャレンジ",
    "動画スキップ","持っている枚数").any{snapshot.has(it)}
-  return GachaSafety.exactLearnedCloseAllowed(
-   decision.kind,decision.exactLearned,gachaUiVisible)
+  return LearnedClosePolicy.approvedOnCurrentScreen(
+   decision.kind,decision.registeredLearned,gachaUiVisible)
  }
  private fun gachaProtects(decision:Decision,now:Long,snapshot:Snapshot):Boolean{
   if(gachaPhase==GachaSafety.Phase.NONE)return false
   val adProof=trustedAdEvidence(snapshot)
   val actualAd=GachaSafety.canDismissProvenAdAfterResult(
-   gachaPhase,decision.kind,adProof!=null || exactLearnedCloseTrusted(decision,snapshot),
+   gachaPhase,decision.kind,adProof!=null || registeredLearnedCloseTrusted(decision,snapshot),
    now-gachaPhaseSince)
   val accepted=GachaSafety.allows(gachaPhase,decision.kind,waitingKey==decision.key) ||
    actualAd
@@ -920,7 +921,7 @@ class AutoFlow(
   }
   if(now-homeNonHomeSince<HomeTouchTrials.NON_HOME_CONFIRM_MS)return true
   val adEvidence=trustedAdEvidence(snapshot)
-  val exactLearned=exactLearnedCloseTrusted(decision,snapshot)
+  val exactLearned=registeredLearnedCloseTrusted(decision,snapshot)
   val homeOutcome=HomeOutcomePolicy.classifyNewScreen(decision.kind,
    adEvidence!=null,exactLearned)
   val positive=HomeOutcomePolicy.isConfirmed(homeOutcome)
@@ -1227,7 +1228,7 @@ class AutoFlow(
    return true
   }
   val proof=trustedAdEvidence(snapshot)
-  val exact=exactLearnedCloseTrusted(decision,snapshot)
+  val exact=registeredLearnedCloseTrusted(decision,snapshot)
   val current=decision.kind
   val hasTarget=decision.target!=null || decision.touch!=null
   val cleanNext=current in PostAdTransitionPolicy.nextScreens &&
@@ -1330,7 +1331,7 @@ class AutoFlow(
    }
    if(decision.kind!=lastKind){
     lastKind=decision.kind
-    if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON"))learnedTextSeenAt=now
+    if(LearnedClosePolicy.isLearnedKind(decision.kind))learnedTextSeenAt=now
     if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE" ||
      decision.kind=="HOME_WAIT" || decision.kind=="SHARE")unknownSince=now else unknownSince=0L
    }
@@ -1359,7 +1360,7 @@ class AutoFlow(
    // Button captions alone are unsafe: distinguish an ad SDK from a gacha.
    if(GachaSafety.requiresAdEvidence(decision.kind)){
     val proof=trustedAdEvidence(snapshot)
-    val exactLearned=exactLearnedCloseTrusted(decision,snapshot)
+    val exactLearned=registeredLearnedCloseTrusted(decision,snapshot)
     if(proof==null && !exactLearned){
      verifiedAdKey=""
      verifiedAdSince=0L
