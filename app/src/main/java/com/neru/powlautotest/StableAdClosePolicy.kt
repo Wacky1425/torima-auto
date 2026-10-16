@@ -35,9 +35,10 @@ internal object StableAdClosePolicy {
  }
 
  fun plausibleTransientLoading(nodeCount:Int,hasProgressIndicator:Boolean,
-  hasLoadingText:Boolean,postAdQuiet:Boolean):Boolean =
+  hasLoadingText:Boolean,postAdQuiet:Boolean,
+  identifiedStableCornerTarget:Boolean=false):Boolean =
   postAdQuiet || hasLoadingText || hasProgressIndicator ||
-   nodeCount<=2
+   (nodeCount<=2 && !identifiedStableCornerTarget)
 
  fun isStableCloseAllowed(
   kind:String,hasUniqueTopRightTarget:Boolean,explicitGacha:Boolean,
