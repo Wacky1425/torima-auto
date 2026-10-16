@@ -6,7 +6,7 @@ import org.junit.Test
 class TeachRulePolicyUserDismissTest{
  private fun can(label:String="×",unique:Boolean=true,
   x:Int=990,y:Int=105,width:Int=72,height:Int=72,
-  labels:List<String>=listOf("Whiteout Survival","広告を終了")):Boolean =
+  labels:List<String> = listOf("Whiteout Survival","広告を終了")):Boolean =
   TeachRulePolicy.userTaughtCornerDismissWithoutSdk(
    label,unique,x,y,x+width,y+height,1080,2412,labels)
 
