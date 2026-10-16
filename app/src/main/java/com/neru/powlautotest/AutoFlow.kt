@@ -1529,10 +1529,10 @@ class AutoFlow(
     postAdNextSince=0L
     update("広告の終了操作を実行：次の画面へ切り替わるまで追加の×を禁止")
    }
-   if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON")){
-    // A nonclickable close label / ad dismiss parent cannot be activated by
-    // ACTION_CLICK. Use the exact user-confirmed coordinate, not the node center.
-    update("${decision.display}：学習したタップ位置でジェスチャー実行")
+   if(decision.registeredLearned){
+    // Use the user's taught coordinate even if the node advertises
+    // ACTION_CLICK: click callbacks may be true but ignored by ad SDK.
+    update("${decision.display}：学習したタップ位置を優先して操作")
     gestureTap(decision.target.rect,decision.display,120L,decision.touch)
     next()
     return
