@@ -338,8 +338,11 @@ class LearnedActions(private val ctx:Context) {
    val exact=sig!=null && sig==stored
    val savedAnchors=stableAnchors(stored)
    val overlap=activeAnchors.intersect(savedAnchors).size
-   val required=maxOf(2,(savedAnchors.size*60+99)/100)
-   val contextual=sig!=null && savedAnchors.size>=2 && overlap>=required
+   // A user-taught X already needs the same unique class/ID and nearby
+   // button rectangle. Permit moderate creative text changes (~45% shared
+   // screen anchors), while requiring at least two distinctive anchors.
+   val contextual=sig!=null &&
+    StableAdClosePolicy.sufficientAnchorOverlap(savedAnchors.size,overlap)
    val id=rule.optString("viewId");val label=rule.optString("label")
    val clazz=rule.optString("clazz")
    val gestureOnly=rule.optBoolean("gestureOnly",false)
@@ -366,10 +369,10 @@ class LearnedActions(private val ctx:Context) {
         ctx.resources.displayMetrics.widthPixels,
         maxOf(ctx.resources.displayMetrics.heightPixels,n.bounds.bottom))
      else if(id.isNotBlank())n.viewId==id else n.label==label) &&
-    kotlin.math.abs(n.bounds.left-rule.optInt("left"))<40 &&
-    kotlin.math.abs(n.bounds.top-rule.optInt("top"))<40 &&
-    kotlin.math.abs(n.bounds.right-rule.optInt("right"))<40 &&
-    kotlin.math.abs(n.bounds.bottom-rule.optInt("bottom"))<40
+    kotlin.math.abs(n.bounds.left-rule.optInt("left"))<65 &&
+    kotlin.math.abs(n.bounds.top-rule.optInt("top"))<65 &&
+    kotlin.math.abs(n.bounds.right-rule.optInt("right"))<65 &&
+    kotlin.math.abs(n.bounds.bottom-rule.optInt("bottom"))<65
    }
    val node=candidates.singleOrNull()?:continue
    // Exact matches outrank approximate anchor matches; strong IDs outrank labels.
