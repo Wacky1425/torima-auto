@@ -383,6 +383,22 @@ class AutoFlow(
   val branded=visible.any{it.text.contains("zeta",true) || it.desc.contains("zeta",true)}
   if(branded && cta && visible.any{it.text=="App icon" || it.desc=="App icon" ||
     it.text=="Privacy info" || it.desc=="Privacy info"})return "ZETA_INSTALL_CARD"
+  // Shopping endcards can expose a full-width CTA and an unmistakable
+  // top-right X while hiding all advertiser SDK metadata.
+  val promoCta=visible.any{item->
+   val name=item.text.trim().ifBlank{item.desc.trim()}
+   name in listOf("今すぐチェック","商品をチェック","詳細を見る",
+    "商品を見る","サイトを見る","今すぐ見る") &&
+    item.rect.centerY()>=screenH*55/100
+  }
+  if(promoCta &&
+   !StableAdClosePolicy.hasGachaOrLoadingText(
+    visible.flatMap{listOf(it.text,it.desc)})){
+   val x=closeButton(snap).singleOrNull()
+   if(x!=null && StableAdClosePolicy.upperRightClose(
+    x.rect.left,x.rect.top,x.rect.right,x.rect.bottom,
+    screenW,screenH))return "PROMO_CTA_AND_TOP_RIGHT_CLOSE"
+  }
   return null
  }
 
