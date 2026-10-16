@@ -264,7 +264,7 @@ class LearnedActions(private val ctx:Context) {
   return Proposal(sample.signature,pick?.label.orEmpty(),pick?.viewId.orEmpty(),
    pick?.clazz.orEmpty(),pick?.bounds?:Rect(),x,y,reason,safe,textOnly,visualIcon)
  }
- fun register(p:Proposal):String{
+ fun register(p:Proposal,observedOutcome:String=""):String{
   val sig=p.signature
   if(!p.safe || sig==null)return "特徴が不足したため操作ルールには登録できません。"
   val current=read(ctx)
@@ -278,6 +278,7 @@ class LearnedActions(private val ctx:Context) {
    put("signature",sig);put("label",p.label);put("viewId",p.viewId);put("clazz",p.clazz)
    put("gestureOnly",p.gestureOnly)
    put("visualIcon",p.visualIcon)
+   if(observedOutcome.isNotBlank())put("observedOutcome",observedOutcome.take(70))
    put("left",p.bounds.left);put("top",p.bounds.top)
    put("right",p.bounds.right);put("bottom",p.bounds.bottom)
    put("tapX",p.x);put("tapY",p.y)
