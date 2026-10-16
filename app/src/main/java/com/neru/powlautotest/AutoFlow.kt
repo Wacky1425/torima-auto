@@ -79,6 +79,13 @@ class AutoFlow(
  private var cardResultVisibleSince=0L
  private var verifiedAdKey=""
  private var verifiedAdSince=0L
+ // Some adverts (e.g. a branded full-screen shopping endcard) expose an
+ // unambiguous top-right X, but no advertiser/SDK metadata in accessibility.
+ // A stable close target is a valid fallback; a transient gacha-loading X is not.
+ private var stableCloseKey=""
+ private var stableCloseSince=0L
+ private var stableCloseReads=0
+ private var stableCloseLastReadAt=0L
  // Block any new ad/learned close while the previously closed ad transitions
  // into a gacha or reward screen (including slow-network loading overlays).
  private var postAdClosedAt=0L
@@ -376,6 +383,87 @@ class AutoFlow(
     it.text=="Privacy info" || it.desc=="Privacy info"})return "ZETA_INSTALL_CARD"
   return null
  }
+
+ private fun resetStableAdClose(){
+  stableCloseKey=""
+  stableCloseSince=0L
+  stableCloseReads=0
+  stableCloseLastReadAt=0L
+ }
+ /** Return false for incomplete transitions and the short-lived gacha X. */
+ private fun transientGachaLoading(snap:Snapshot,now:Long):Boolean{
+  val loadingText=StableAdClosePolicy.hasGachaOrLoadingText(
+   snap.nodes.filter{it.node.isVisibleToUser}.flatMap{listOf(it.text,it.desc)})
+  val spinner=snap.nodes.any{
+   it.node.isVisibleToUser &&
+    it.node.className?.toString()?.contains("ProgressBar",true)==true
+  }
+  val postAdQuiet=postAdClosedAt>0L &&
+   PostAdTransitionPolicy.quietPeriodActive(now-postAdClosedAt)
+  return StableAdClosePolicy.plausibleTransientLoading(
+   snap.count,spinner,loadingText,postAdQuiet)
+ }
+ /** One observation per poll. Do not promote a single transient frame. */
+ private fun observeStableAdClose(decision:Decision,snap:Snapshot,now:Long){
+  val target=decision.target
+  val rootBounds=Rect();snap.root.getBoundsInScreen(rootBounds)
+  val display=service.resources.displayMetrics
+  val width=maxOf(display.widthPixels,rootBounds.right)
+  val height=maxOf(display.heightPixels,rootBounds.bottom)
+  val corner=target!=null && StableAdClosePolicy.upperRightClose(
+   target.rect.left,target.rect.top,target.rect.right,target.rect.bottom,
+   width,height)
+  val prohibited=StableAdClosePolicy.hasGachaOrLoadingText(
+   snap.nodes.filter{it.node.isVisibleToUser}.flatMap{listOf(it.text,it.desc)})
+  val gachaAnimation=gachaPhase==GachaSafety.Phase.AWAIT_CARDS ||
+   gachaPhase==GachaSafety.Phase.AWAIT_RESULT
+  val loading=transientGachaLoading(snap,now)
+  if(decision.kind!="AD_CLOSE" || !corner || prohibited ||
+    gachaAnimation || loading || trustedAdEvidence(snap)!=null){
+   resetStableAdClose()
+   return
+  }
+  val key="${decision.key}|nodes=${snap.count}"
+  if(key!=stableCloseKey){
+   stableCloseKey=key
+   stableCloseSince=now
+   stableCloseReads=1
+   stableCloseLastReadAt=now
+   // Save one visual reference of this otherwise unclassifiable ad
+   // for the bundled diagnostic ZIP, not a cloud upload.
+   if(visualLastCaptureAt==0L || now-visualLastCaptureAt>=35_000L){
+    visualLastCaptureAt=now
+    service.saveVisualScreenshot("右上×の安定判定待ち・広告候補",snap.count,false)
+   }
+  }else if(now>stableCloseLastReadAt){
+   stableCloseReads++
+   stableCloseLastReadAt=now
+  }
+ }
+ private fun stableAdCloseEvidence(decision:Decision,snap:Snapshot,now:Long):String?{
+  if(decision.kind!="AD_CLOSE" || decision.target==null ||
+   stableCloseKey!="${decision.key}|nodes=${snap.count}" ||
+   stableCloseSince<=0L)return null
+  val elapsed=now-stableCloseSince
+  val required=if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD)
+   StableAdClosePolicy.AFTER_GACHA_STABLE_MS else StableAdClosePolicy.STABLE_MS
+  val bounds=decision.target.rect
+  val screen=service.resources.displayMetrics
+  val topRight=StableAdClosePolicy.upperRightClose(
+   bounds.left,bounds.top,bounds.right,bounds.bottom,
+   screen.widthPixels,maxOf(screen.heightPixels,bounds.bottom))
+  if(!StableAdClosePolicy.isStableCloseAllowed(
+    decision.kind,topRight,false,
+    gachaPhase in listOf(GachaSafety.Phase.AWAIT_CARDS,
+      GachaSafety.Phase.AWAIT_RESULT),
+    postAdClosedAt>0L &&
+      PostAdTransitionPolicy.quietPeriodActive(now-postAdClosedAt),
+    transientGachaLoading(snap,now),elapsed,stableCloseReads,
+    required))return null
+  return "STABLE_TOP_RIGHT_X"
+ }
+ private fun adEvidence(decision:Decision,snap:Snapshot,now:Long):String? =
+  trustedAdEvidence(snap)?:stableAdCloseEvidence(decision,snap,now)
 
  private fun registeredLearnedCloseTrusted(decision:Decision,snapshot:Snapshot):Boolean{
   val gachaUiVisible=listOf("カードを1枚選んでください","ガチャWチャンスに挑戦",
