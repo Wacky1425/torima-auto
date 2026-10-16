@@ -122,6 +122,9 @@ class TeachOverlay(
  private var homeSeparatorTop=0
  private var proposed:LearnedActions.Proposal?=null
  private var changed=false
+ private var outcomeEligible=false
+ private var outcomeKind="PENDING"
+ private var outcomePackage=""
  private var teachId=0
  private var active=false
  private fun dp(n:Int)=(n*service.resources.displayMetrics.density+0.5f).toInt()
@@ -139,6 +142,9 @@ class TeachOverlay(
   }?.map{it.bounds.top}?.distinct()?.singleOrNull()?:0
   proposed=null
   changed=false
+  outcomeEligible=false
+  outcomeKind="PENDING"
+  outcomePackage=""
   outcomeReady=false
   homeTeachSucceeded=false
   teachId++
@@ -222,6 +228,9 @@ class TeachOverlay(
   val p=memory.propose(root,x,y)
   proposed=p
   changed=false
+  outcomeEligible=false
+  outcomeKind="PENDING"
+  outcomePackage=""
   outcomeReady=false
   homeTeachSucceeded=false
   val selectedName=p.label.lowercase()
@@ -263,8 +272,11 @@ class TeachOverlay(
  private fun recordOutcome(p:LearnedActions.Proposal){
   val afterRoot=service.rootInActiveWindow
   val afterPkg=afterRoot?.packageName?.toString().orEmpty()
-  if(afterPkg=="com.android.vending" || service.isPlayBrandedInstallPopup(afterRoot)){
-   // Proven: this teach operation started on a Torima window and ended in Play.
+  val verifiedPlaySheet=service.isPlayBrandedInstallPopup(afterRoot)
+  val playAfterTap=TeachingOutcomePolicy.isPlayDestination(afterPkg,verifiedPlaySheet)
+  if(playAfterTap){
+   // Playback may bring up a Play sheet even after a dismiss tap.
+   // Save this transition as an observed result, not a presumed ad close.
    service.markPlayTransitionFromTorima()
   }
   val after=memory.scan(afterRoot)
@@ -276,6 +288,15 @@ class TeachOverlay(
   }==true
   homeTeachSucceeded=changed && afterPkg==APP && !afterStillHome &&
    HomeTouchProfile.qualifies(service,beforeSignature,p.x,p.y,homeSeparatorTop)
+  val closeSource=TeachingOutcomePolicy.isNamedDismissTarget(
+   p.label,p.viewId,p.bounds.width(),p.bounds.height(),
+   service.resources.displayMetrics.widthPixels,
+   service.resources.displayMetrics.heightPixels)
+  outcomeEligible=TeachingOutcomePolicy.eligibleForRule(
+   p.safe,changed,afterPkg,verifiedPlaySheet,closeSource)
+  outcomeKind=TeachingOutcomePolicy.outcomeName(
+   afterPkg,verifiedPlaySheet,outcomeEligible)
+  outcomePackage=afterPkg
   try{
    record(service,JSONObject().apply{
     put("type","teaching_tap")
@@ -287,38 +308,50 @@ class TeachOverlay(
     put("afterPackage",afterPkg)
     put("afterNodes",after?.rootCount?:0)
     put("screenChanged",changed)
-    put("eligibleForRule",(p.safe && changed && afterPkg==APP) || homeTeachSucceeded)
+    put("eligibleForRule",outcomeEligible || homeTeachSucceeded)
+    put("sourceTargetSafe",p.safe)
+    put("sourceDismissTarget",closeSource)
+    put("observedPlaySheet",playAfterTap)
+    put("outcomeKind",outcomeKind)
     put("homeTouchCalibration",homeTeachSucceeded)
    })
   }catch(_:Exception){}
   outcomeReady=true
-  val ok=(p.safe&&changed&&afterPkg==APP) || homeTeachSucceeded
-  status(if(ok)
-   "操作の画面変化を確認。『登録』で次回から使える自動操作ルールを保存できます。"
-   else "操作例を取得しました。『登録』すると未完成の学習例として保存します。自動再現は画面識別後に対応：${p.message}")
+  status(when{
+   outcomeKind=="PLAY_AFTER_TAUGHT_DISMISS"->
+    "学習した閉じる操作でGoogle Playへ移動したことを確認。『登録』で自動操作ルールに保存できます（Playからの復帰は別処理）。"
+   outcomeEligible || homeTeachSucceeded->
+    "学習元の画面・操作対象・画面変化を確認。『登録』で自動操作ルールに保存できます。"
+   !p.safe->
+    "学習操作の画面変化は記録できたが、学習元の対象を特定できず保留：${p.message}"
+   else->
+    "操作後の画面変化は記録。ただし閉じる操作と確認できない外部遷移のため、自動実行は保留。"
+  })
  }
  fun confirm():String {
   val p=proposed?:return "保存できる操作がありません。先に『学習』してください。"
-  if(!outcomeReady)return "まだタップ後の画面判定中です。2秒ほど待って『登録』を押してください。"
-  val afterRoot=service.rootInActiveWindow
-  val afterPkg=afterRoot?.packageName?.toString().orEmpty()
-  val current=memory.scan(afterRoot)
-  val changeConfirmed=changed || (current!=null &&
-   (current.rootCount!=beforeCount || current.signature!=beforeSignature))
-  // The user's explicit "登録" must always save their demonstration.
-  // Only the well-identified target can become an auto-replay rule.
-  val msg=if(homeTeachSucceeded && changeConfirmed && afterPkg==APP){
-   HomeTouchProfile.register(service,p.x,p.y)
-  }else if(p.safe&&changeConfirmed&&afterPkg==APP){
-   memory.register(p)
-  }else{
-   memory.saveDemonstration(p,changeConfirmed,
-    if(!changeConfirmed)"操作後の画面変化を確認できませんでした"
-    else if(afterPkg!=APP)"操作後の前面アプリがトリマではありません"
-    else p.message)
+  if(!outcomeReady)
+   return "まだタップ後の画面判定中です。2秒ほど待って『登録』を押してください。"
+  // Use the recorded teaching result, not foreground app at registration time.
+  val msg=when{
+   homeTeachSucceeded && changed->
+    HomeTouchProfile.register(service,p.x,p.y)
+   outcomeEligible && changed->
+    memory.register(p,outcomeKind)
+   else->memory.saveDemonstration(p,changed,
+    when{
+     !changed->"学習操作後の画面変化を確認できませんでした"
+     !p.safe->"学習元の対象の識別情報が不足：${p.message}"
+     outcomePackage!="jp.co.incrementp.milemobile"->
+      "別アプリへの遷移は確認したが、閉じる操作とは確定できない: $outcomePackage"
+     else->p.message
+    })
   }
+  if(outcomeKind=="PLAY_AFTER_TAUGHT_DISMISS" && outcomeEligible){
+   status("$msg。Play画面へ変わったことだけ確認済み。次回はPlayからトリマへ戻す処理を使用します。")
+  }else status(msg)
   proposed=null
-  status(msg)
+  outcomeEligible=false
   return msg
  }
  fun observedClick(event:AccessibilityEvent){
