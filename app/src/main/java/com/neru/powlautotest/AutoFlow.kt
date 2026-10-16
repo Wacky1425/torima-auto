@@ -1383,7 +1383,7 @@ class AutoFlow(
     unknownSince=0L
     // Gacha animation might momentarily expose an X. Require a stable, clearly
     // identified ad *and target* over consecutive polls before acting.
-    val proofSource=proof?: "LEARNED_EXACT"
+    val proofSource=proof?: "LEARNED_REGISTERED"
     val key="$proofSource|${decision.key}"
     if(verifiedAdKey!=key){
      verifiedAdKey=key
@@ -1417,9 +1417,10 @@ class AutoFlow(
      }
 
      val elapsed=now-waitingSince
-     val retryDelay=if(decision.registeredLearned)
-      LearnedClosePolicy.AFTER_TAP_RETRY_MS else 4_000L
-     if(!fallbackAttempted && elapsed>=retryDelay && decision.target!=null){
+     val canRetry=if(decision.registeredLearned)
+      LearnedClosePolicy.canRetry(decision.kind,true,fallbackAttempted,elapsed)
+     else !fallbackAttempted && elapsed>=4_000L
+     if(canRetry && decision.target!=null){
       fallbackAttempted=true
       if(decision.registeredLearned){
        // The first action uses the taught touch point. If an unchanged
@@ -1437,9 +1438,10 @@ class AutoFlow(
       next()
       return
      }
-     val giveUp=if(decision.registeredLearned)
-      LearnedClosePolicy.AFTER_TAP_GIVE_UP_MS else 13_000L
-     if(elapsed>=giveUp){
+     val shouldStop=if(decision.registeredLearned)
+      LearnedClosePolicy.shouldStopWaiting(decision.kind,elapsed)
+     else elapsed>=13_000L
+     if(shouldStop){
       stopWithReason("$lastActionTitle の操作後も画面が変わらないため、安全停止")
       return
      }
