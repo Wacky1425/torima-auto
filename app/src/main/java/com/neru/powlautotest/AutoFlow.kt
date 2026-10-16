@@ -261,6 +261,7 @@ class AutoFlow(
   gachaPhase=GachaSafety.Phase.NONE
   resetLiveVisual()
   resetStableAdClose()
+  videoAdSessionActive=false
   cardResultVisibleSince=0L
   verifiedAdKey=""
   verifiedAdSince=0L
@@ -497,7 +498,12 @@ class AutoFlow(
   return "STABLE_TOP_RIGHT_X"
  }
  private fun adEvidence(decision:Decision,snap:Snapshot,now:Long):String? =
-  trustedAdEvidence(snap)?:stableAdCloseEvidence(decision,snap,now)
+  trustedAdEvidence(snap)?:stableAdCloseEvidence(decision,snap,now)?:
+   if(decision.kind=="AD_VISUAL_X" && videoAdSessionActive &&
+    liveVisual?.score?.let{it>=445}==true && liveVisualCount>=2 &&
+    !StableAdClosePolicy.hasGachaOrLoadingText(
+     snap.nodes.filter{it.node.isVisibleToUser}.flatMap{listOf(it.text,it.desc)}))
+    "PIXEL_X_IN_CONFIRMED_VIDEO_FLOW" else null
 
  private fun registeredLearnedCloseTrusted(decision:Decision,snapshot:Snapshot):Boolean{
   val gachaUiVisible=listOf("カードを1枚選んでください","ガチャWチャンスに挑戦",
@@ -1344,6 +1350,14 @@ class AutoFlow(
   * is stable, even if it is another ad, normal screen-specific actions resume.
   */
  private fun protectPostAdTransition(decision:Decision,snapshot:Snapshot,now:Long):Boolean{
+  if(FastAdMode.enabled(service)){
+   // Explicit experimental option: no post-ad quiet time, stable-screen
+   // wait or 90-second transition lock. Other gacha UI stays distinct.
+   postAdClosedAt=0L
+   postAdNextKind=""
+   postAdNextSince=0L
+   return false
+  }
   if(postAdClosedAt==0L)return false
   val waited=now-postAdClosedAt
   if(PostAdTransitionPolicy.timedOut(waited)){
@@ -1436,6 +1450,8 @@ class AutoFlow(
     probeLiveOverlay(now)
    }
    val decision=choose(snapshot)
+   if(decision.kind in listOf("HOME","HOME_WAIT","W_CHANCE","CARDS",
+     "CARD_RESULT","SHARE_CLOSE"))videoAdSessionActive=false
    observeStableAdClose(decision,snapshot,now)
    // A visual glyph requires independent ad evidence and stable frames.
    // Do not photograph continuously; save at most one difficult screen per 35s.
@@ -1619,7 +1635,8 @@ class AutoFlow(
     waitingSince=now
     lastActionTitle=decision.display
     fallbackAttempted=false
-    if(PostAdTransitionPolicy.isAdTransitionAction(decision.kind)){
+    if(FastAdMode.shouldStartPostAdGuard(FastAdMode.enabled(service),
+      PostAdTransitionPolicy.isAdTransitionAction(decision.kind))){
      postAdClosedAt=now
      postAdNextKind=""
      postAdNextSince=0L
@@ -1642,7 +1659,10 @@ class AutoFlow(
     return
    }
    val last=recentActions[decision.key]?:0L
-   if(now-last<LearnedClosePolicy.repeatCooldown(decision.kind)){
+   val cooldown=if(FastAdMode.enabled(service) &&
+    decision.kind in listOf("AD_CLOSE","AD_VISUAL_X","AD_VISUAL_NEXT"))
+    2_500L else LearnedClosePolicy.repeatCooldown(decision.kind)
+   if(now-last<cooldown){
     update("${decision.display}：同一画面の連続操作を抑止中")
     next()
     return
@@ -1663,11 +1683,23 @@ class AutoFlow(
    if(decision.kind in listOf("W_CHANCE","CARDS","CARD_RESULT")){
     markGachaAction(decision.kind,now)
    }
+   if(decision.kind in listOf("SKIP_NO","RETRY")){
+    videoAdSessionActive=true
+    resetLiveVisual()
+    update("動画再生へ進む操作を実行。広告表示中は画像の×検出も使用")
+   }
    if(PostAdTransitionPolicy.isAdTransitionAction(decision.kind)){
-    postAdClosedAt=now
-    postAdNextKind=""
-    postAdNextSince=0L
-    update("広告の終了操作を実行：次の画面へ切り替わるまで追加の×を禁止")
+    if(FastAdMode.enabled(service)){
+     postAdClosedAt=0L
+     postAdNextKind=""
+     postAdNextSince=0L
+     update("高速実験モード：広告終了後の4秒保護・次画面待機をスキップ")
+    }else{
+     postAdClosedAt=now
+     postAdNextKind=""
+     postAdNextSince=0L
+     update("広告の終了操作を実行：次の画面へ切り替わるまで追加の×を禁止")
+    }
    }
    if(decision.registeredLearned){
     // Use the user's taught coordinate even if the node advertises
