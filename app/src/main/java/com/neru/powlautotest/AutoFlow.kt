@@ -914,6 +914,144 @@ class AutoFlow(
   return true
  }
  /**
+  * Try a single, small pull-down *outside* the purple button before forcing
+  * any restart. Input injection occurs only while Torima's current HOME
+  * button is uniquely identified. Both swipe and retry use fresh geometry.
+  */
+ private fun swipeThenRetapHome(decision:Decision,now:Long):Boolean{
+  val firstButton=decision.target?:return true
+  val display=service.resources.displayMetrics
+  val initial=HomeSwipeRecoveryPolicy.strokeFor(
+   firstButton.rect.left,firstButton.rect.top,firstButton.rect.right,
+   display.widthPixels,display.heightPixels)
+  homeSwipeAttempted=true
+  if(initial==null){
+   homeTrace("swipe_unavailable",HomeSwipeRecoveryPolicy.ID,
+    "purple=${firstButton.rect.toShortString()} screen=${display.widthPixels}x${display.heightPixels}")
+   update("HOMEの短い下スワイプに適切な余白がないため、安全に再起動へ切替")
+   return recoverStalledHome(now)
+  }
+  homeSwipeActive=true
+  homeTrialInFlight=true
+  homeTrialGeneration++
+  val touchToken=homeTrialGeneration
+  val generationAtStart=generation
+  fun stillActive():Boolean=running && generation==generationAtStart &&
+   touchToken==homeTrialGeneration && homeSwipeActive
+  fun abort(reason:String){
+   if(!stillActive())return
+   homeSwipeActive=false
+   homeTrialInFlight=false
+   service.restoreHomeTouch()
+   homeTrace("swipe_aborted",HomeSwipeRecoveryPolicy.ID,reason)
+   update("HOMEスワイプ復旧：$reason。画面を再判定し、必要なら再起動")
+   next(450L)
+  }
+  homeTrace("swipe_before_restart",HomeSwipeRecoveryPolicy.ID,
+   "twoFailed=${homeTrialIndex} old=${firstButton.rect.toShortString()} " +
+    "from=(${initial.x},${initial.fromY}) to=(${initial.x},${initial.toY}) " +
+    "durationMs=${HomeSwipeRecoveryPolicy.SWIPE_DURATION_MS}")
+  update("HOMEで2回進めず。再起動前に画面を少し下へスワイプして再タップ")
+  service.prepareHomeTouch(initial.x,initial.fromY){ready,note->
+   if(!stillActive())return@prepareHomeTouch
+   if(!ready){
+    abort("操作バー透過ができず：$note")
+    return@prepareHomeTouch
+   }
+   val freshSnap=readCurrent()
+   val fresh=if(freshSnap!=null)choose(freshSnap)else null
+   val target=fresh?.target
+   if(fresh?.kind!="HOME" || target==null){
+    abort("スワイプ直前にHOME以外へ変化：${fresh?.kind ?: "NO_ROOT"}")
+    return@prepareHomeTouch
+   }
+   val sw=HomeSwipeRecoveryPolicy.strokeFor(
+    target.rect.left,target.rect.top,target.rect.right,
+    display.widthPixels,display.heightPixels)
+   if(sw==null){
+    abort("最新画面では、紫ボタンに触れないスワイプ経路が取れない")
+    return@prepareHomeTouch
+   }
+   val path=Path().apply{
+    moveTo(sw.x.toFloat(),sw.fromY.toFloat())
+    lineTo(sw.x.toFloat(),sw.toY.toFloat())
+   }
+   val gesture=GestureDescription.Builder().addStroke(
+    GestureDescription.StrokeDescription(path,0,
+     HomeSwipeRecoveryPolicy.SWIPE_DURATION_MS)).build()
+   val accepted=service.dispatchGesture(gesture,
+    object:AccessibilityService.GestureResultCallback(){
+     override fun onCancelled(gestureDescription:GestureDescription?){
+      abort("短い下スワイプがキャンセル")
+     }
+     override fun onCompleted(gestureDescription:GestureDescription?){
+      if(!stillActive())return
+      homeTrace("swipe_completed",HomeSwipeRecoveryPolicy.ID,
+       "downBy=${sw.toY-sw.fromY}px complete != content moved")
+      h.postDelayed({
+       if(!stillActive())return@postDelayed
+       val after=readCurrent()
+       val nextDecision=if(after!=null)choose(after)else null
+       val nextButton=nextDecision?.target
+       if(nextButton==null || !HomeSwipeRecoveryPolicy.freshlyIdentifiedHome(
+         nextDecision.kind,nextButton.rect.left,nextButton.rect.top,
+         nextButton.rect.right,nextButton.rect.bottom,
+         display.widthPixels,display.heightPixels)){
+        abort("スワイプ後は${nextDecision?.kind ?: "NO_ROOT"}。古い座標では押さない")
+        return@postDelayed
+       }
+       val point=HomeTouchProfile.current(service,nextButton.rect)
+       homeTrace("swipe_fresh_home",HomeSwipeRecoveryPolicy.ID,
+        "old=${firstButton.rect.toShortString()} " +
+         "new=${nextButton.rect.toShortString()} tap=(${point.x},${point.y})")
+       update("HOMEを少し下にスワイプ完了。現在の紫ボタンを取り直してもう1回だけ押す")
+       service.prepareHomeTouch(point.x,point.y){tapReady,tapNote->
+        if(!stillActive())return@prepareHomeTouch
+        if(!tapReady){
+         abort("再タップ前の操作バー透過に失敗：$tapNote")
+         return@prepareHomeTouch
+        }
+        val latestSnapshot=readCurrent()
+        val latest=if(latestSnapshot!=null)choose(latestSnapshot)else null
+        val current=latest?.target
+        if(current==null || !HomeSwipeRecoveryPolicy.freshlyIdentifiedHome(
+          latest.kind,current.rect.left,current.rect.top,
+          current.rect.right,current.rect.bottom,
+          display.widthPixels,display.heightPixels)){
+         abort("タップ直前は${latest?.kind ?: "NO_ROOT"}。再操作を中止")
+         return@prepareHomeTouch
+        }
+        val currentPoint=HomeTouchProfile.current(service,current.rect)
+        if(!current.rect.contains(currentPoint.x,currentPoint.y)){
+         abort("再取得した紫ボタン内に学習タップ位置がない")
+         return@prepareHomeTouch
+        }
+        val trial=HomeTouchTrials.swipeRecoveryRetry
+        homeLastTrial=trial
+        homeLastTrialAt=SystemClock.elapsedRealtime()
+        homeTrialIndex++
+        homeClickObserved=false
+        HomeTrialJournal.beginAttempt(service,trial.id,trial.label,
+         trial.mode.name,"下スワイプ後の最新紫ボタン ${current.rect.toShortString()}" +
+          " point=(${currentPoint.x},${currentPoint.y})")
+        homeTrace("swipe_retry_dispatch",trial.id,
+         "tap=${currentPoint.x},${currentPoint.y} " +
+          "button=${current.rect.toShortString()} " +
+          "swipeDone=true methods=${homeTrialIndex}")
+        homeSwipeActive=false
+        // gestureTap's callback will clear homeTrialInFlight after completion.
+        gestureTap(current.rect,"HOME試行 ${trial.id}",
+         trial.durationMs,currentPoint)
+        next(500L)
+       }
+      },HomeSwipeRecoveryPolicy.AFTER_SWIPE_SETTLE_MS)
+     }
+    },null)
+   if(!accepted)abort("短い下スワイプがAndroidに拒否された")
+  }
+  return true
+ }
+ /**
   * HOME failure recovery is triggered only while the CURRENT screen is HOME.
   * Settings UI is verified before any Force stop is pressed; a blocked OEM
   * settings screen produces a logged soft relaunch rather than blind taps.
