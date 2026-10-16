@@ -27,6 +27,11 @@ internal object HomeTouchTrials {
   Trial("learned_520","学習位置520ms・操作バーを透過",520L,Position.LEARNED),
   Trial("right_300","右寄り59.3%で300ms",300L,Position.UPPER_BUTTON_RIGHT_CENTER)
  )
+ // Keep separate from ordered() so existing tap preference remains unchanged.
+ val swipeRecoveryRetry=Trial(
+  HomeSwipeRecoveryPolicy.ID,
+  "HOMEを少し下へスワイプ→再取得した紫ボタンをタップ",
+  HomeSwipeRecoveryPolicy.RETRY_HOLD_MS,Position.LEARNED)
  const val OVERLAY_SETTLE_MS=220L
  const val DELAY_BETWEEN_TRIALS_MS=7_000L
  const val MAX_EXPERIMENT_MS=85_000L
