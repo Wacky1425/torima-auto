@@ -1389,8 +1389,12 @@ class AutoFlow(
      verifiedAdKey=key
      verifiedAdSince=now
     }
-    if(now-verifiedAdSince<1700L){
-     update("閉じる操作の安定待ち：$proofSource。1.7秒継続してから操作")
+    val stableWait=if(decision.registeredLearned)
+     LearnedClosePolicy.STABLE_FOR_MS else 1_700L
+    if(now-verifiedAdSince<stableWait){
+     update(if(decision.registeredLearned)
+      "登録済み操作を照合完了。画面安定を約1.4秒確認してからタップ"
+     else "閉じる操作の安定待ち：$proofSource。1.7秒継続してから操作")
      next(850)
      return
     }
