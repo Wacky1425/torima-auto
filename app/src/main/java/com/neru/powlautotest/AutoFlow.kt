@@ -418,8 +418,13 @@ class AutoFlow(
   }
   val postAdQuiet=postAdClosedAt>0L &&
    PostAdTransitionPolicy.quietPeriodActive(now-postAdClosedAt)
+  val d=service.resources.displayMetrics
+  val candidate=closeButton(snap).singleOrNull()
+  val corner=candidate!=null && StableAdClosePolicy.upperRightClose(
+   candidate.rect.left,candidate.rect.top,candidate.rect.right,
+   candidate.rect.bottom,d.widthPixels,d.heightPixels)
   return StableAdClosePolicy.plausibleTransientLoading(
-   snap.count,spinner,loadingText,postAdQuiet)
+   snap.count,spinner,loadingText,postAdQuiet,corner)
  }
  /** One observation per poll. Do not promote a single transient frame. */
  private fun observeStableAdClose(decision:Decision,snap:Snapshot,now:Long){
