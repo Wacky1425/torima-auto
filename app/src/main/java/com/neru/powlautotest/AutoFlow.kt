@@ -1416,15 +1416,30 @@ class AutoFlow(
       return
      }
 
-     if(!fallbackAttempted && seconds>=4 && decision.target!=null){
+     val elapsed=now-waitingSince
+     val retryDelay=if(decision.registeredLearned)
+      LearnedClosePolicy.AFTER_TAP_RETRY_MS else 4_000L
+     if(!fallbackAttempted && elapsed>=retryDelay && decision.target!=null){
       fallbackAttempted=true
-      update("${decision.display}：命令後も同じ画面。確認済み箇所を1回だけタップ")
-      gestureTap(decision.target.rect,decision.display,
-       point=if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON"))decision.touch else null)
+      if(decision.registeredLearned){
+       // The first action uses the taught touch point. If an unchanged
+       // CURRENT target is visible, try a different input method just once.
+       val clicked=decision.target.node.isClickable &&
+        decision.target.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+       update("${decision.display}：数秒後も同じ画面。再照合して1回だけ再試行（ACTION_CLICK=$clicked）")
+       if(!clicked)gestureTap(decision.target.rect,decision.display,
+        120L,decision.touch)
+      }else{
+       update("${decision.display}：命令後も同じ画面。確認済み箇所を1回だけタップ")
+       gestureTap(decision.target.rect,decision.display,
+        point=if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON"))decision.touch else null)
+      }
       next()
       return
      }
-     if(seconds>=13){
+     val giveUp=if(decision.registeredLearned)
+      LearnedClosePolicy.AFTER_TAP_GIVE_UP_MS else 13_000L
+     if(elapsed>=giveUp){
       stopWithReason("$lastActionTitle の操作後も画面が変わらないため、安全停止")
       return
      }
@@ -1436,11 +1451,8 @@ class AutoFlow(
     fallbackAttempted=false
     homeHoldAttempted=false
    }
-   if(decision.kind in listOf("LEARNED_TEXT","LEARNED_ICON") && now-learnedTextSeenAt<4000L){
-    update("学習した『閉じる』表示を確認。操作可能になるまで4秒待機中")
-    next()
-    return
-   }
+   // Registered rules already had a short stable-screen check above.
+   // The old unconditional extra 4s delay made learning ineffective.
    if(decision.target==null &&
      decision.kind in listOf("AD_VISUAL_X","AD_VISUAL_NEXT")){
     val point=decision.touch
@@ -1490,7 +1502,7 @@ class AutoFlow(
     return
    }
    val last=recentActions[decision.key]?:0L
-   if(now-last<18000L){
+   if(now-last<LearnedClosePolicy.repeatCooldown(decision.kind)){
     update("${decision.display}：同一画面の連続操作を抑止中")
     next()
     return
