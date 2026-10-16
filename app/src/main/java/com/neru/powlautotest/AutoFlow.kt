@@ -586,6 +586,23 @@ class AutoFlow(
     "ボタン候補=${above.size} / 幅広ボタン=${wideButtons.size} / " +
      "下のボタン=${below.size} / または=${separator!=null} / タンク=$tank")
   }
+  // A registered rule is more specific than the generic close-button guess.
+  // Its target is already matched by screen features, ID/class and bounds.
+  val memory=learned.match(snap.root)
+  if(memory!=null){
+   val item=Item(memory.node,memory.node.text?.toString().orEmpty(),
+    memory.node.contentDescription?.toString().orEmpty(),memory.bounds)
+   // Distinguish successive slides (Ad 1 of 2 / Ad 2 of 2) even when
+   // their close button and learned title/coordinates are identical.
+   val counter=n.firstOrNull{it.node.isVisibleToUser &&
+    Regex("""Ad\s+[0-9]+\s+of\s+[0-9]+""",RegexOption.IGNORE_CASE)
+     .containsMatchIn(it.text)}?.text?.trim().orEmpty()
+   return Decision(if(memory.visualIcon)"LEARNED_ICON"
+    else if(memory.gestureOnly)"LEARNED_TEXT" else "LEARNED",memory.title,
+    "LEARNED:${memory.bounds.toShortString()}:${memory.title}:$counter",item,
+    "本人が登録した画面と一意の対象を再照合済み",memory.tapPoint,
+    memory.exact,true)
+  }
   val close=closeButton(snap)
   val adCounter=n.any{it.node.isVisibleToUser &&
    Regex("""Ad\s+[0-9]+\s+of\s+[0-9]+""",RegexOption.IGNORE_CASE)
@@ -619,16 +636,6 @@ class AutoFlow(
     close.singleOrNull(),"閉じる候補=${close.size}")
   }
   visualOverlayDecision(snap)?.let{return it}
-  val memory=learned.match(snap.root)
-  if(memory!=null){
-   val item=Item(memory.node,memory.node.text?.toString().orEmpty(),
-    memory.node.contentDescription?.toString().orEmpty(),memory.bounds)
-   return Decision(if(memory.visualIcon)"LEARNED_ICON"
-    else if(memory.gestureOnly)"LEARNED_TEXT" else "LEARNED",memory.title,
-    "LEARNED:${memory.bounds.toShortString()}:${memory.title}",item,
-    "ユーザーが登録した画面と閉じる領域だけを操作",memory.tapPoint,
-    memory.exact)
-  }
   if(snap.count<=2){
    return Decision("OPAQUE","広告または不明画面（UIが${snap.count}件）","OPAQUE",null,
     "アクセシビリティで×を取得できない")
