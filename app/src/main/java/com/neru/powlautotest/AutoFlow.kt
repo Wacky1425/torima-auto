@@ -1464,11 +1464,26 @@ class AutoFlow(
      verifiedAdSince=0L
      if(unknownSince==0L)unknownSince=now
      if(now-unknownSince>=120000L){
-      stopWithReason("広告とガチャを2分間区別できなかったため停止")
+      stopWithReason("画面を2分間識別できないため停止。診断ZIPで読み込み画面を確認")
       return
      }
-     update("広告かガチャか判定不能：${decision.display} の×は押さず待機")
-     next()
+     if(transientGachaLoading(snapshot,now)){
+      update("ガチャ演出／画面読み込み中を検出。短時間の×は押さず再確認")
+      next(StableAdClosePolicy.POLL_WHEN_UNSURE_MS)
+      return
+     }
+     if(decision.kind=="AD_CLOSE" && stableCloseSince>0L){
+      val seconds=(now-stableCloseSince)/1000.0
+      val minMs=if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD)
+       StableAdClosePolicy.AFTER_GACHA_STABLE_MS else StableAdClosePolicy.STABLE_MS
+      update("広告の右上×を確認：${"%.1f".format(seconds)}秒 / ${minMs/1000}秒の安定待ち。完了後に自動で押す")
+      next(StableAdClosePolicy.POLL_WHEN_UNSURE_MS)
+      return
+     }
+     update(if(decision.kind=="AD_CLOSE")
+      "下部または不明な×を検出。ガチャの読み込み用×と区別して再確認中"
+      else "広告固有の情報を取得できず。現在の画面を再判定中")
+     next(StableAdClosePolicy.POLL_WHEN_UNSURE_MS)
      return
     }
     unknownSince=0L
