@@ -11,6 +11,13 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="トリマHOMEの自動試行後、操作バーの『指で押す比較（18秒）』を使います。指と自動の違い、CLICKイベント、画像をZIP1個にまとめます。自動→指→共有の順で操作してください。"
  android:paddingBottom="8dp"/>
+<Switch android:id="@+id/fastAdMode"
+ android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:minHeight="52dp"
+ android:text="高速実験：広告終了後の保護・待機をOFF（初期ON）"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+ android:text="検証用：広告を閉じた後の4秒保護・追加の画面安定待機を無効化。以前のようにガチャ読み込み中の×を押してキャンセルする危険があるため、問題が出たらOFFに戻してください。画像の×は複数回の検出で位置を確認してから押します。"
+ android:paddingBottom="10dp"/>
 <Switch android:id="@+id/enableHomeRecovery"
  android:layout_width="match_parent" android:layout_height="wrap_content"
  android:minHeight="50dp" android:text="HOMEで進めない時に1回だけ自動復旧する"/>
