@@ -386,13 +386,19 @@ class LearnedActions(private val ctx:Context) {
   if(positions.size!=1)return null
   val chosen=leaders.first()
   val gestureOnly=chosen.rule.optBoolean("gestureOnly",false)
-  val kind=if(bestScore>=1000)"完全一致" else "共通特徴照合"
+  val kind=when{
+   bestScore>=1000->"完全一致"
+   bestScore>=500->"広告終了ボタン一致"
+   else->"登録画面の特徴一致"
+  }
   val title="学習済み($kind): "+
    chosen.target.label.ifBlank{chosen.target.viewId}.take(36)
   val tx=chosen.rule.optInt("tapX",Int.MIN_VALUE)
   val ty=chosen.rule.optInt("tapY",Int.MIN_VALUE)
-  val point=if(gestureOnly && chosen.target.bounds.contains(tx,ty))Point(tx,ty)
-   else null
+  // A user explicitly picked this point. Preserve it even for an
+  // ACTION_CLICK-capable node: some ad SDKs ignore accessibility clicks
+  // but respond to the actual touch at the taught location.
+  val point=if(chosen.target.bounds.contains(tx,ty))Point(tx,ty) else null
   return Match(chosen.target.node,chosen.target.bounds,title,gestureOnly,point,
    chosen.rule.optBoolean("visualIcon",false),bestScore>=1000)
  }
