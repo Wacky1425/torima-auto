@@ -56,6 +56,8 @@ class AutoFlow(
  private var homeNonHomeKind=""
  private var homeRecoveryAttempts=0
  private var homeRecoveryActive=false
+ private var homeSwipeAttempted=false
+ private var homeSwipeActive=false
  // Leave HOME only after a user-like touch; defer success until an actual
  // recognized ad/retry screen is seen, never credit an opaque window alone.
  private var deferredHomeTrial:HomeTouchTrials.Trial?=null
@@ -189,6 +191,8 @@ class AutoFlow(
   HomeTrialJournal.note(service,trialId,stage,details)
  }
  private fun resetHomeExperiment(){
+  homeSwipeAttempted=false
+  homeSwipeActive=false
   homeExperimentStartedAt=0L
   homeExperimentStartingCount=null
   homeTrialList=emptyList()
