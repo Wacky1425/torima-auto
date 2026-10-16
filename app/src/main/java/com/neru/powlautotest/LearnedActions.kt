@@ -165,7 +165,7 @@ class LearnedActions(private val ctx:Context) {
  private fun promotePreviouslyTaughtPlayCloseExamples(){
   val pending=demonstrationList(ctx)
   if(pending.length()==0)return
-  val matches=Regex("""\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]""")
+  val matches=Regex("""\[(\d+),(\d+)\]\[(\d+),(\d+)\]""")
   val width=ctx.resources.displayMetrics.widthPixels
   val height=ctx.resources.displayMetrics.heightPixels
   val kept=JSONArray()
