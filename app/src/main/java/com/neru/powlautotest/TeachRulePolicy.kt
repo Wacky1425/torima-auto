@@ -28,6 +28,34 @@ internal object TeachRulePolicy {
  private val sensitive=Regex("(?i)インストール|install|友達にシェア|share|購入|課金|許可|同意|subscribe|購入する")
  fun isDismissLabel(label:String):Boolean = label.trim().lowercase() in closers
  fun isForbidden(label:String):Boolean = sensitive.containsMatchIn(label)
+ /**
+  * A non-clickable X can still be safely USER-taught when the current
+  * ad screen has distinctive text, a single small upper-right dismiss
+  * node, and no visible gacha/skip-ticket/share controls.
+  *
+  * Unlike automatic close detection this runs only after the user has
+  * manually pointed to this exact button and pressed 登録.
+  */
+ fun userTaughtCornerDismissWithoutSdk(
+  label:String,uniqueTarget:Boolean,
+  left:Int,top:Int,right:Int,bottom:Int,
+  screenWidth:Int,screenHeight:Int,
+  screenLabels:Collection<String>
+ ):Boolean{
+  if(!uniqueTarget || !isDismissLabel(label) ||
+    screenWidth<=0 || screenHeight<=0)return false
+  val width=right-left
+  val height=bottom-top
+  if(width !in 18..220 || height !in 18..180 ||
+    left<screenWidth*66/100 || right>screenWidth ||
+    top<0 || bottom>screenHeight*22/100)return false
+  val prohibited=listOf("カードを1枚選んでください",
+   "ガチャWチャンスに挑戦","友達にシェアする",
+   "動画スキップ券を使いますか","持っている枚数",
+   "ガチャ演出","獲得確定")
+  if(screenLabels.any{item->prohibited.any{item.contains(it)}})return false
+  return true
+ }
  fun isForbiddenTargetId(id:String):Boolean{
   val simple=id.substringAfterLast('/').substringAfterLast(':').lowercase()
   return listOf("install","purchase","subscribe","buy","share","lcec-cta",
