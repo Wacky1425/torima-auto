@@ -994,7 +994,7 @@ class AutoFlow(
        val nextDecision=if(after!=null)choose(after)else null
        val nextButton=nextDecision?.target
        if(nextButton==null || !HomeSwipeRecoveryPolicy.freshlyIdentifiedHome(
-         nextDecision.kind,nextButton.rect.left,nextButton.rect.top,
+         nextDecision?.kind.orEmpty(),nextButton.rect.left,nextButton.rect.top,
          nextButton.rect.right,nextButton.rect.bottom,
          display.widthPixels,display.heightPixels)){
         abort("スワイプ後は${nextDecision?.kind ?: "NO_ROOT"}。古い座標では押さない")
@@ -1015,7 +1015,7 @@ class AutoFlow(
         val latest=if(latestSnapshot!=null)choose(latestSnapshot)else null
         val current=latest?.target
         if(current==null || !HomeSwipeRecoveryPolicy.freshlyIdentifiedHome(
-          latest.kind,current.rect.left,current.rect.top,
+          latest?.kind.orEmpty(),current.rect.left,current.rect.top,
           current.rect.right,current.rect.bottom,
           display.widthPixels,display.heightPixels)){
          abort("タップ直前は${latest?.kind ?: "NO_ROOT"}。再操作を中止")
@@ -1149,6 +1149,12 @@ class AutoFlow(
     return true
    }
    val sinceLast=if(homeLastTrialAt>0L) now-homeLastTrialAt else 0L
+   if(HomeSwipeRecoveryPolicy.shouldTry(
+     HomeRecoveryPolicy.enabled(service),homeRecoveryAttempts,
+     homeSwipeAttempted,decision.kind,decision.target!=null,
+     homeTrialIndex,homeTrialInFlight,sinceLast)){
+    return swipeThenRetapHome(decision,now)
+   }
    if(HomeRecoveryPolicy.shouldRecover(HomeRecoveryPolicy.enabled(service),
      homeTrialIndex,homeRecoveryAttempts,homeTrialInFlight,
      decision.kind=="HOME" && decision.target!=null,sinceLast)){
