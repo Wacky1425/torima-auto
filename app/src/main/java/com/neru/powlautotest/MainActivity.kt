@@ -36,6 +36,16 @@ class MainActivity:AppCompatActivity(){
   homeExperimentInfo=findViewById(R.id.homeExperimentInfo)
   collectionOverview.text=CollectionRunStore.summary(this)
   findViewById<Button>(R.id.checkUpdate).setOnClickListener{ TorimaUpdater(this,findViewById(R.id.updateStatus)).check() }
+  findViewById<Switch>(R.id.fastAdMode).apply{
+   isChecked=FastAdMode.enabled(this@MainActivity)
+   setOnCheckedChangeListener{_,checked->
+    FastAdMode.setEnabled(this@MainActivity,checked)
+    Toast.makeText(this@MainActivity,
+     if(checked)"高速実験ON：広告終了後の固定保護を無効にしました"
+     else "通常モード：広告後4秒保護を有効にしました",
+     Toast.LENGTH_LONG).show()
+   }
+  }
   findViewById<Switch>(R.id.enableHomeRecovery).apply{
    isChecked=HomeRecoveryPolicy.enabled(this@MainActivity)
    setOnCheckedChangeListener{_,checked->
