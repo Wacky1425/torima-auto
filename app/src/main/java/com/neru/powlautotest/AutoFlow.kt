@@ -211,6 +211,7 @@ class AutoFlow(
   visualUnknownSince=0L
   visualLastCaptureAt=0L
   resetLiveVisual()
+  resetStableAdClose()
   lastKind=""
   learnedTextSeenAt=0L
   gachaPhase=GachaSafety.Phase.NONE
@@ -248,6 +249,7 @@ class AutoFlow(
   playRecoveryStep=0
   gachaPhase=GachaSafety.Phase.NONE
   resetLiveVisual()
+  resetStableAdClose()
   cardResultVisibleSince=0L
   verifiedAdKey=""
   verifiedAdSince=0L
@@ -474,7 +476,7 @@ class AutoFlow(
  }
  private fun gachaProtects(decision:Decision,now:Long,snapshot:Snapshot):Boolean{
   if(gachaPhase==GachaSafety.Phase.NONE)return false
-  val adProof=trustedAdEvidence(snapshot)
+  val adProof=adEvidence(decision,snapshot,now)
   val actualAd=GachaSafety.canDismissProvenAdAfterResult(
    gachaPhase,decision.kind,adProof!=null || registeredLearnedCloseTrusted(decision,snapshot),
    now-gachaPhaseSince)
@@ -1322,7 +1324,7 @@ class AutoFlow(
    update("広告終了後のガチャ読み込み保護：${waited/1000L}/4秒。×を押さず待機")
    return true
   }
-  val proof=trustedAdEvidence(snapshot)
+  val proof=adEvidence(decision,snapshot,now)
   val exact=registeredLearnedCloseTrusted(decision,snapshot)
   val current=decision.kind
   val hasTarget=decision.target!=null || decision.touch!=null
@@ -1402,6 +1404,7 @@ class AutoFlow(
     probeLiveOverlay(now)
    }
    val decision=choose(snapshot)
+   observeStableAdClose(decision,snapshot,now)
    // A visual glyph requires independent ad evidence and stable frames.
    // Do not photograph continuously; save at most one difficult screen per 35s.
    if(decision.kind=="UNKNOWN" || decision.kind=="OPAQUE"){
@@ -1454,7 +1457,7 @@ class AutoFlow(
    }
    // Button captions alone are unsafe: distinguish an ad SDK from a gacha.
    if(GachaSafety.requiresAdEvidence(decision.kind)){
-    val proof=trustedAdEvidence(snapshot)
+    val proof=adEvidence(decision,snapshot,now)
     val exactLearned=registeredLearnedCloseTrusted(decision,snapshot)
     if(proof==null && !exactLearned){
      verifiedAdKey=""
