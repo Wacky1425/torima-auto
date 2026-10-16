@@ -108,9 +108,12 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      val pixels=IntArray(width*height)
      small.getPixels(pixels,0,width,0,0,width,height)
      if(small!==image)small.recycle()
-     OverlayIconDetector.detect(pixels,width,height).map{
-      it.copy(x=it.x*image.width/width,y=it.y*image.height/height)
-     }
+     val fromNodesOrComponents=OverlayIconDetector.detect(pixels,width,height)
+     val pixelX=PixelAdCloseDetector.detectWhiteX(pixels,width,height)
+      ?.let{OverlayIconDetector.Marker("X",it.x,it.y,it.score,"top-right")}
+     (fromNodesOrComponents+listOfNotNull(pixelX))
+      .groupBy{it.kind}.values.mapNotNull{group->group.maxByOrNull{it.score}}
+      .map{it.copy(x=it.x*image.width/width,y=it.y*image.height/height)}
     }catch(_:Exception){null}
     finally{image.recycle()}
     service.mainExecutor.execute{busy=false;done(markers)}
