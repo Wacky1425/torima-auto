@@ -67,6 +67,7 @@ class LearnedActions(private val ctx:Context) {
  init{
   try{
    promoteConfirmedImageExamples()
+   promotePreviouslyTaughtPlayCloseExamples()
    compactPendingExamples()
   }catch(_:Exception){}
  }
@@ -147,6 +148,56 @@ class LearnedActions(private val ctx:Context) {
      "以前に登録した画像広告の閉じる位置",true,
      gestureOnly=true,visualIcon=true)
     register(proposal)
+    changed=true
+   }else kept.put(entry)
+  }
+  if(changed)demonstrationFile(ctx).writeText(kept.toString(),Charsets.UTF_8)
+ }
+ /**
+  * Previous versions stored every otherwise-correct close demonstration as
+  * pending when Google Play was foreground at 登録 time.
+  *
+  * Migrate ONLY previously user-registered examples with a distinctive
+  * source signature + exact dismiss-control view ID and sensible geometry.
+  * Leave ordinary CTAs, unnamed image taps and sparse/ambiguous signatures
+  * pending. The new rule still needs a fresh live match before any tap.
+  */
+ private fun promotePreviouslyTaughtPlayCloseExamples(){
+  val pending=demonstrationList(ctx)
+  if(pending.length()==0)return
+  val matches=Regex("""\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]""")
+  val width=ctx.resources.displayMetrics.widthPixels
+  val height=ctx.resources.displayMetrics.heightPixels
+  val kept=JSONArray()
+  var changed=false
+  for(i in 0 until pending.length()){
+   val entry=pending.optJSONObject(i)?:continue
+   val id=entry.optString("viewId")
+   val simple=id.substringAfterLast('/').lowercase()
+   val signature=entry.optString("signature")
+   val reason=entry.optString("reason")
+   val coords=matches.matchEntire(entry.optString("bounds"))
+    ?.groupValues?.drop(1)?.mapNotNull{it.toIntOrNull()}
+   val bounds=if(coords?.size==4)
+    Rect(coords[0],coords[1],coords[2],coords[3]) else Rect()
+   val label=entry.optString("label")
+   val approvedViewId=simple in setOf("dismiss-button","close-button",
+    "close_button","close_btn","btn_close","ad-close","ad_close")
+   val signatureValid=signature.isNotBlank() && signature!="null" &&
+    stableAnchors(signature).size>=2
+   val closeTarget=TeachingOutcomePolicy.isNamedDismissTarget(
+    label,id,bounds.width(),bounds.height(),width,height)
+   val eligible=reason.contains("操作後の前面アプリがトリマではありません") &&
+    entry.optBoolean("screenChanged") && approvedViewId &&
+    signatureValid && closeTarget && bounds.contains(
+     entry.optInt("x",-99999),entry.optInt("y",-99999)) &&
+    entry.optString("class").isNotBlank()
+   if(eligible && read(ctx).length()<32){
+    val rule=Proposal(signature,label,id,entry.optString("class"),bounds,
+     entry.optInt("x"),entry.optInt("y"),
+     "以前に登録した広告の閉じる操作（Play遷移結果を再分類）",
+     true,gestureOnly=true)
+    register(rule,"LEGACY_PENDING_PLAY_CLOSE")
     changed=true
    }else kept.put(entry)
   }
