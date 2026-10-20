@@ -24,6 +24,10 @@ internal class VisualLearnedActions(private val ctx:Context){
    JSONArray(file(ctx).takeIf{it.exists()}?.readText(Charsets.UTF_8)?:"[]")
   }catch(_:Exception){JSONArray()}
   fun count(ctx:Context)=read(ctx).length()
+  fun clear(ctx:Context){
+   val file=file(ctx)
+   if(file.exists())file.delete()
+  }
   fun export(ctx:Context):String{
    val items=read(ctx)
    return JSONObject().put("ruleCount",items.length())
