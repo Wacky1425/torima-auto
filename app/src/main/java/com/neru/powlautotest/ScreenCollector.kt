@@ -285,7 +285,6 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
     orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
    }
    diagnostics.addView(control("手動比較"){updateAutoStatus(service.startManualHomeComparison())})
-   diagnostics.addView(control("旧登録"){updateAutoStatus(service.saveTaughtTap())})
    extras.addView(diagnostics)
    panel.addView(extras)
    bindDrag(panel)
