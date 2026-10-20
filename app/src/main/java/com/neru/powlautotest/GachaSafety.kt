@@ -34,7 +34,7 @@ internal object GachaSafety {
   */
  fun exactLearnedCloseAllowed(kind:String,exact:Boolean,gachaUiVisible:Boolean):Boolean =
   exact && !gachaUiVisible &&
-   kind in listOf("LEARNED","LEARNED_TEXT","LEARNED_ICON")
+   kind in listOf("LEARNED","LEARNED_TEXT","LEARNED_ICON","LEARNED_VISUAL")
 
  fun newPhaseAfter(kind:String):Phase?=when(kind){
   "W_CHANCE"->Phase.AWAIT_CARDS
