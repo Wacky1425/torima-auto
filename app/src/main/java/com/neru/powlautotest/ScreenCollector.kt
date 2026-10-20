@@ -150,6 +150,16 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    try{wm?.updateViewLayout(panel,p)}catch(_:Exception){}
   }
  }
+ private var teachingSuspend=false
+ fun suspendForTeaching(){
+  teachingSuspend=true
+  bar?.visibility=View.INVISIBLE
+ }
+ fun resumeAfterTeaching(){
+  if(!teachingSuspend)return
+  teachingSuspend=false
+  bar?.visibility=View.VISIBLE
+ }
  private var autoStatus="停止中"
  fun isVisible():Boolean=bar!=null
  fun updateAutoStatus(text:String){
