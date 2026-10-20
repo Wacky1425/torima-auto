@@ -1806,7 +1806,10 @@ class AutoFlow(
    // The old unconditional extra 4s delay made learning ineffective.
    if(decision.target==null &&
      decision.kind in listOf("AD_VISUAL_X","AD_VISUAL_NEXT","LEARNED_VISUAL")){
-    val point=decision.touch
+    val point=decision.touch?:run{
+     stopWithReason("画像学習候補にタップ座標がないため停止")
+     return
+    }
     val width=service.resources.displayMetrics.widthPixels
     val height=service.resources.displayMetrics.heightPixels
     val permitted=if(decision.kind=="LEARNED_VISUAL"){
