@@ -177,7 +177,11 @@ class AutoFlow(
   val now=SystemClock.elapsedRealtime()
   if(now-visualLearnedAt>3_000L || visualLearnedCount<2 ||
    now-visualLearnedSince<850L)return null
-  if(!videoAdSessionActive && trustedAdEvidence(snap)==null)return null
+  // Starting automation on an already-open advertisement has no remembered
+  // entry path. In that case allow only a very strong user-taught match.
+  val standaloneAd=hit.confidence>=1_750
+  if(!videoAdSessionActive && trustedAdEvidence(snap)==null &&
+   !standaloneAd)return null
   val labels=snap.nodes.filter{it.node.isVisibleToUser}
    .flatMap{listOf(it.text,it.desc)}
   if(StableAdClosePolicy.hasGachaOrLoadingText(labels) ||
@@ -544,7 +548,8 @@ class AutoFlow(
  }
  private fun adEvidence(decision:Decision,snap:Snapshot,now:Long):String? =
   trustedAdEvidence(snap)?:stableAdCloseEvidence(decision,snap,now)?:
-   if(decision.kind=="LEARNED_VISUAL" && videoAdSessionActive &&
+   if(decision.kind=="LEARNED_VISUAL" &&
+    (videoAdSessionActive || (visualLearned?.confidence?:0)>=1_750) &&
     visualLearnedCount>=2 && visualLearned?.id!=null &&
     SystemClock.elapsedRealtime()-visualLearnedAt<3_000L)
     "USER_TAUGHT_VISUAL_AD_BUTTON" else
@@ -1641,7 +1646,9 @@ class AutoFlow(
    val initial=choose(snapshot)
    if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD ||
     initial.kind in listOf("UNKNOWN","OPAQUE","AD_VISUAL_X","AD_VISUAL_NEXT") ||
-   (videoAdSessionActive && VisualLearnedActions.count(service)>0)){
+   (VisualLearnedActions.count(service)>0 &&
+     (videoAdSessionActive || initial.kind in listOf("AD_CLOSE","AD_SKIP",
+      "AD_VISUAL_X","AD_VISUAL_NEXT")))){
     probeLiveOverlay(now)
    }
    val decision=choose(snapshot)
