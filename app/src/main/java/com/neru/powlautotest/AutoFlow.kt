@@ -71,6 +71,10 @@ class AutoFlow(
  private var liveVisualSince=0L
  private var liveVisualCount=0
  private var liveVisual:OverlayIconDetector.Marker?=null
+ private var visualLearned:VisualLearnedActions.Match?=null
+ private var visualLearnedSince=0L
+ private var visualLearnedCount=0
+ private var visualLearnedAt=0L
  private var visualProbePending=false
  private var visualProbeLast=0L
  // A visual X with no SDK metadata needs a known video-ad entry path.
@@ -123,6 +127,8 @@ class AutoFlow(
  private fun resetLiveVisual(){
   liveVisualAt=0L;liveVisualSince=0L;liveVisualCount=0
   liveVisual=null;visualProbePending=false;visualProbeLast=0L
+  visualLearned=null;visualLearnedSince=0L
+  visualLearnedCount=0;visualLearnedAt=0L
  }
  /**
   * Sample transient overlay glyphs, not screenshots of entire advertisers.
@@ -132,10 +138,24 @@ class AutoFlow(
   if(visualProbePending || now-visualProbeLast<1_350L)return
   visualProbePending=true;visualProbeLast=now
   val expectedGeneration=generation
-  service.probeOverlayIcons { markers ->
+  service.probeOverlayIcons { markers,learnedMatch ->
    visualProbePending=false
-   if(!running || generation!=expectedGeneration || markers==null)return@probeOverlayIcons
-   val candidate=markers.filter{it.score>=85 && it.region=="top-right"}
+   if(!running || generation!=expectedGeneration ||
+     (markers==null && learnedMatch==null))return@probeOverlayIcons
+   val previous=visualLearned
+   val stamp=SystemClock.elapsedRealtime()
+   if(learnedMatch!=null && previous!=null &&
+    previous.id==learnedMatch.id &&
+    kotlin.math.abs(previous.x-learnedMatch.x)<=32 &&
+    kotlin.math.abs(previous.y-learnedMatch.y)<=32){
+    visualLearnedCount++
+   }else{
+    visualLearnedCount=if(learnedMatch==null)0 else 1
+    visualLearnedSince=stamp
+   }
+   visualLearned=learnedMatch
+   visualLearnedAt=stamp
+   val candidate=markers.orEmpty().filter{it.score>=85 && it.region=="top-right"}
     .maxByOrNull{it.score}
    val old=liveVisual
    if(candidate!=null && old!=null && candidate.kind==old.kind &&
