@@ -30,6 +30,9 @@ class LearnedActions(private val ctx:Context) {
    file(ctx).writeText("[]",Charsets.UTF_8)
    demonstrationFile(ctx).writeText("[]",Charsets.UTF_8)
   }
+  fun clearOldUnresolvedExamples(ctx:Context){
+   demonstrationFile(ctx).writeText("[]",Charsets.UTF_8)
+  }
   fun export(ctx:Context):String{
    val list=read(ctx)
    val pending=demonstrationList(ctx)
