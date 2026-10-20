@@ -102,8 +102,7 @@ internal class VisualLearnedActions(private val ctx:Context){
  }
  fun matchCanonical(pixels:IntArray,width:Int,height:Int):Match?{
   val rules=read(ctx)
-  var chosen:Match?=null
-  var runnerUp=0
+  val candidates=ArrayList<Match>()
   for(i in 0 until rules.length()){
    val item=rules.optJSONObject(i)?:continue
    val near=array(item.optJSONArray("near"),
@@ -125,15 +124,18 @@ internal class VisualLearnedActions(private val ctx:Context){
    val candidate=Match(item.optString("id"),hit.x,hit.y,hit.score,
     hit.nearScore,hit.contextScore,kind,
     item.optString("sourceLabel").ifBlank{"画像で学習した×／スキップ"})
-   if(chosen==null || candidate.confidence>chosen.confidence){
-    runnerUp=chosen?.confidence?:0
-    chosen=candidate
-   }else runnerUp=maxOf(runnerUp,candidate.confidence)
+   candidates.add(candidate)
   }
-  // Competing learned templates for distinctly different positions are not
-  // safe to choose unless one is materially more similar.
-  val best=chosen?:return null
-  if(runnerUp>0 && best.confidence-runnerUp<90)return null
+  // Multiple creatives can teach the SAME corner X. A close-score tie
+  // at the same touch position is fine; reject only a close-score conflict
+  // between physically different targets on this very screen.
+  val sorted=candidates.sortedByDescending{it.confidence}
+  val best=sorted.firstOrNull()?:return null
+  if(sorted.drop(1).any{
+    best.confidence-it.confidence<90 &&
+     (kotlin.math.abs(best.x-it.x)>22 ||
+      kotlin.math.abs(best.y-it.y)>22)
+   })return null
   return best
  }
 }
