@@ -168,6 +168,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  }
  private fun dp(n:Int)=(n*service.resources.displayMetrics.density+0.5f).toInt()
  private fun bindDrag(view:View){
+  view.isClickable=true
   var downX=0f;var downY=0f;var downAt=0L
   var dragging=false
   var baseX=0;var baseY=0
