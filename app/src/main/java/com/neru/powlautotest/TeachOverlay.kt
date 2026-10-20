@@ -378,42 +378,34 @@ class TeachOverlay(
    })
   }catch(_:Exception){}
   outcomeReady=true
-  status(when{
-   outcomeKind=="PLAY_AFTER_TAUGHT_DISMISS"->
-    "学習した閉じる操作でGoogle Playへ移動したことを確認。『登録』で自動操作ルールに保存できます（Playからの復帰は別処理）。"
-   outcomeEligible || homeTeachSucceeded->
-    "学習元の画面・操作対象・画面変化を確認。『登録』で自動操作ルールに保存できます。"
-   !p.safe->
-    "学習操作の画面変化は記録できたが、学習元の対象を特定できず保留：${p.message}"
-   else->
-    "操作後の画面変化は記録。ただし閉じる操作と確認できない外部遷移のため、自動実行は保留。"
-  })
+  // One-tap teaching: SAVE immediately after the observed outcome.
+  // No hidden second 登録 action, and no growing pending-only examples.
+  val learnedMessage=confirm()
+  status(learnedMessage)
  }
  fun confirm():String {
-  val p=proposed?:return "保存できる操作がありません。先に『学習』してください。"
+  val p=proposed?:return "学習する操作がありません。『学習』からもう一度選んでください"
   if(!outcomeReady)
-   return "まだタップ後の画面判定中です。2秒ほど待って『登録』を押してください。"
-  // Use the recorded teaching result, not foreground app at registration time.
-  val msg=when{
+   return "画面変化の確認中です。数秒待ってください"
+  val visual=visualCapture
+  val result=when{
    homeTeachSucceeded && changed->
     HomeTouchProfile.register(service,p.x,p.y)
-   outcomeEligible && changed->
-    memory.register(p,outcomeKind)
-   else->memory.saveDemonstration(p,changed,
-    when{
-     !changed->"学習操作後の画面変化を確認できませんでした"
-     !p.safe->"学習元の対象の識別情報が不足：${p.message}"
-     outcomePackage!="jp.co.incrementp.milemobile"->
-      "別アプリへの遷移は確認したが、閉じる操作とは確定できない: $outcomePackage"
-     else->p.message
-    })
+   // Even if Android cannot find a named target node, save the user's
+   // BEFORE-tap image descriptor as a live-action rule, not a pending example.
+   visual!=null->
+    service.visualLearnedActions.register(visual,changed,outcomePackage)
+   p.safe && (outcomePackage==APP ||
+    TeachingOutcomePolicy.isPlayDestination(outcomePackage,
+     outcomePackage=="com.google.android.gms"))->
+    memory.register(p,if(changed)outcomeKind else "TAUGHT_EFFECT_NOT_VERIFIED")
+   else->"学習を登録できませんでした：ノードが特定できず、画像特徴も取得できません。$sourceNodeDescription"
   }
-  if(outcomeKind=="PLAY_AFTER_TAUGHT_DISMISS" && outcomeEligible){
-   status("$msg。Play画面へ変わったことだけ確認済み。次回はPlayからトリマへ戻す処理を使用します。")
-  }else status(msg)
   proposed=null
+  visualCapture=null
   outcomeEligible=false
-  return msg
+  outcomeKind="PENDING"
+  return result
  }
  fun observedClick(event:AccessibilityEvent){
   if(event.packageName?.toString()!=APP || event.eventType!=AccessibilityEvent.TYPE_VIEW_CLICKED)return
