@@ -248,7 +248,6 @@ class TeachOverlay(
   outcomeKind="PENDING"
   outcomePackage=""
   visualCapture=null
-  sourceNodeDescription=""
   outcomeReady=false
   homeTeachSucceeded=false
   val selectedName=p.label.lowercase()
