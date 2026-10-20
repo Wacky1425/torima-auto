@@ -173,10 +173,10 @@ class MainActivity:AppCompatActivity(){
    Toast.makeText(this,"操作履歴をコピーしました（${data.length}文字）",Toast.LENGTH_LONG).show()
   }
   findViewById<Button>(R.id.copyLearnedRules).setOnClickListener{
-   val data=LearnedActions.export(this)
+   val data=LearnedActions.export(this)+"\n"+VisualLearnedActions.export(this)
    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
     .setPrimaryClip(ClipData.newPlainText("Torima 学習済み操作",data))
-   Toast.makeText(this,"学習済み操作をコピーしました（${LearnedActions.count(this)}件）",Toast.LENGTH_LONG).show()
+   Toast.makeText(this,"学習済み操作をコピー（ノード${LearnedActions.count(this)}件＋画像${VisualLearnedActions.count(this)}件）",Toast.LENGTH_LONG).show()
   }
   findViewById<Button>(R.id.clearLearnedRules).setOnClickListener{
    AlertDialog.Builder(this)
@@ -186,7 +186,18 @@ class MainActivity:AppCompatActivity(){
     .setPositiveButton("削除"){_,_->
      PowlAccessibilityService.instance?.stopAutomaticOperation()
      LearnedActions.clear(this)
-     Toast.makeText(this,"学習した操作ルールを削除しました",Toast.LENGTH_SHORT).show()
+     VisualLearnedActions.clear(this)
+     Toast.makeText(this,"ノードと画像の学習ルールを削除しました",Toast.LENGTH_SHORT).show()
+    }.show()
+  }
+  findViewById<Button>(R.id.clearLegacyPending).setOnClickListener{
+   AlertDialog.Builder(this)
+    .setTitle("古い未採用の学習例だけ削除？")
+    .setMessage("過去の保留記録だけ削除します。現在の画像・ノード学習ルールは残ります。")
+    .setNegativeButton("キャンセル",null)
+    .setPositiveButton("削除"){_,_->
+     LearnedActions.clearOldUnresolvedExamples(this)
+     Toast.makeText(this,"過去の未採用記録のみ削除しました",Toast.LENGTH_SHORT).show()
     }.show()
   }
   findViewById<Button>(R.id.scanAd).setOnClickListener{runAdScan(false)}
