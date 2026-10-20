@@ -135,7 +135,10 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      override fun onFailure(errorCode:Int){finish(null)}
     })}catch(_:Exception){finish(null)}
   }
-  if(Build.VERSION.SDK_INT>=34 && windowId>=0){
+  // Teaching source uses full-display screenshots. Keep the same coordinate
+  // system when matching a taught visual rule, including system-bar offsets.
+  if(VisualLearnedActions.count(service)>0)display()
+  else if(Build.VERSION.SDK_INT>=34 && windowId>=0){
    try{service.takeScreenshotOfWindow(windowId,service.mainExecutor,
     object:AccessibilityService.TakeScreenshotCallback{
      override fun onSuccess(result:AccessibilityService.ScreenshotResult){
