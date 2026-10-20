@@ -14,7 +14,10 @@ class PowlAccessibilityService:AccessibilityService(){
  private val h=Handler(Looper.getMainLooper())
  private val screenCollector by lazy { ScreenCollector(this) }
  private val learnedActions by lazy { LearnedActions(this) }
- private val teachOverlay by lazy { TeachOverlay(this,learnedActions){msg->screenCollector.updateAutoStatus(msg)} }
+ internal val visualLearnedActions by lazy { VisualLearnedActions(this) }
+ private val teachOverlay by lazy {
+  TeachOverlay(this,learnedActions){msg->screenCollector.updateAutoStatus(msg)}
+ }
  private val autoFlow by lazy { AutoFlow(this){ message -> screenCollector.updateAutoStatus(message) } }
  private val imageDiagnostics by lazy{ScreenshotDiagnostics(this)}
  private val manualHomeComparison by lazy{
@@ -26,8 +29,21 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun runHomeRecovery(done:(Boolean,Boolean,String)->Unit):Boolean=
   homeRecovery.start(done)
  internal fun cancelHomeRecovery(){homeRecovery.cancel()}
- internal fun probeOverlayIcons(onDone:(List<OverlayIconDetector.Marker>?)->Unit){
+ internal fun probeOverlayIcons(
+  onDone:(List<OverlayIconDetector.Marker>?,VisualLearnedActions.Match?)->Unit){
   imageDiagnostics.probeOverlay(onDone)
+ }
+ internal fun matchVisualLearning(pixels:IntArray,width:Int,height:Int):
+  VisualLearnedActions.Match? =
+  visualLearnedActions.matchCanonical(pixels,width,height)
+ internal fun captureVisualTeaching(onDone:(android.graphics.Bitmap?,String)->Unit){
+  screenCollector.suspendForTeaching()
+  h.postDelayed({
+   imageDiagnostics.captureForVisualTeaching {bitmap,note->
+    screenCollector.resumeAfterTeaching()
+    onDone(bitmap,note)
+   }
+  },200L)
  }
  internal fun prepareHomeTouch(x:Int,y:Int,onReady:(Boolean,String)->Unit){
   screenCollector.prepareHomeTouch(x,y,onReady)
