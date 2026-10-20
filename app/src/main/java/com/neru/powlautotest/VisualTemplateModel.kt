@@ -73,7 +73,7 @@ internal object VisualTemplateModel {
   val cx=(rule.x.toDouble()/rule.width*width).toInt()
   val cy=(rule.y.toDouble()/rule.height*height).toInt()
   var best:Hit?=null
-  for(dy in -22..22 step 5)for(dx in -22..22 step 5){
+  for(dy in -24..24 step 4)for(dx in -24..24 step 4){
    val px=cx+dx;val py=cy+dy
    val local=patch(pixels,width,height,px,py,NEAR_RADIUS,NEAR_GRID)
     ?:continue
