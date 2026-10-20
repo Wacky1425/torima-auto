@@ -9,6 +9,9 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
+import android.view.MotionEvent
+import android.os.SystemClock
+import kotlin.math.abs
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.LinearLayout
@@ -79,6 +82,9 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  private var lp:WindowManager.LayoutParams?=null
  private var index=0
  private var top=false
+ private var lastDraggedAt=0L
+ private var expanded=false
+ private var detailsPanel:LinearLayout?=null
  private var title:TextView?=null
  private var info:TextView?=null
  private val homeHandler=Handler(Looper.getMainLooper())
@@ -148,15 +154,65 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  fun isVisible():Boolean=bar!=null
  fun updateAutoStatus(text:String){
   autoStatus=text
-  info?.text="自動: $autoStatus\n画面記録 ${count(service)}件 / 自動学習 ${LearnedActions.count(service)}件 / 学習例（保留） ${LearnedActions.demonstrationCount(service)}件"
+  info?.text="状態: ${autoStatus.take(115)}"
  }
  private fun dp(n:Int)=(n*service.resources.displayMetrics.density+0.5f).toInt()
+ private fun bindDrag(view:View){
+  var downX=0f;var downY=0f;var downAt=0L
+  var dragging=false
+  var baseX=0;var baseY=0
+  view.setOnTouchListener{_,event->
+   when(event.actionMasked){
+    MotionEvent.ACTION_DOWN->{
+     downX=event.rawX;downY=event.rawY
+     downAt=SystemClock.elapsedRealtime();dragging=false
+     false
+    }
+    MotionEvent.ACTION_MOVE->{
+     val manager=wm;val p=lp;val panel=bar
+     if(manager==null || p==null || panel==null)return@setOnTouchListener false
+     val age=SystemClock.elapsedRealtime()-downAt
+     val distance=abs(event.rawX-downX)+abs(event.rawY-downY)
+     if(!dragging && age>=440L && distance<dp(115)){
+      val loc=IntArray(2);panel.getLocationOnScreen(loc)
+      p.gravity=Gravity.TOP or Gravity.LEFT
+      p.x=loc[0];p.y=loc[1]
+      baseX=p.x;baseY=p.y
+      dragging=true
+      lastDraggedAt=SystemClock.elapsedRealtime()
+     }
+     if(dragging){
+      val screen=service.resources.displayMetrics
+      p.x=(baseX+(event.rawX-downX).toInt()).coerceIn(0,
+       maxOf(0,screen.widthPixels-panel.width))
+      p.y=(baseY+(event.rawY-downY).toInt()).coerceIn(0,
+       maxOf(0,screen.heightPixels-panel.height))
+      try{manager.updateViewLayout(panel,p)}catch(_:Exception){}
+      lastDraggedAt=SystemClock.elapsedRealtime()
+      true
+     }else false
+    }
+    MotionEvent.ACTION_CANCEL,MotionEvent.ACTION_UP->{
+     if(dragging){
+      lastDraggedAt=SystemClock.elapsedRealtime()
+      dragging=false
+      true
+     }else false
+    }
+    else->false
+   }
+  }
+ }
  private fun control(label:String,action:()->Unit)=TextView(service).apply{
   text=label
   textSize=14f
   setTextColor(Color.WHITE)
-  setPadding(dp(12),dp(8),dp(12),dp(8))
-  setOnClickListener{action()}
+  gravity=Gravity.CENTER
+  setPadding(dp(11),dp(9),dp(11),dp(9))
+  setOnClickListener{
+   if(SystemClock.elapsedRealtime()-lastDraggedAt>700L)action()
+  }
+  bindDrag(this)
  }
  fun show():String{
   if(bar!=null)return "画面記録バーはすでに表示されています。"
@@ -171,40 +227,57 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
     }
    }
    val heading=TextView(service).apply{
-    textSize=11f;setTextColor(Color.WHITE);maxLines=2
+    text="⠿ 長押しで移動   |   Torima Auto"
+    textSize=12f
+    setTextColor(Color.rgb(200,220,242))
+    setPadding(dp(9),dp(7),dp(9),dp(9))
    }
    panel.addView(heading);title=heading
-   val controls=LinearLayout(service).apply{
-    orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
-   }
-   controls.addView(control("◀"){index=(index+stages.size-1)%stages.size;refresh()})
-   controls.addView(control("記録"){capture()})
-   controls.addView(control("画像"){saveImage()})
-   controls.addView(control("▶"){index=(index+1)%stages.size;refresh()})
-   controls.addView(control("上下"){top=!top;position()})
-   controls.addView(control("終了"){hide()})
-   panel.addView(controls)
-   val autoControls=LinearLayout(service).apply{
+   bindDrag(heading)
+   val primary=LinearLayout(service).apply{
     orientation=LinearLayout.HORIZONTAL
     gravity=Gravity.CENTER_VERTICAL
    }
-   autoControls.addView(control("▶ 開始"){updateAutoStatus(service.startAutomaticOperation())})
-   autoControls.addView(control("■ 停止"){updateAutoStatus(service.stopAutomaticOperation())})
-   autoControls.addView(control("学習"){updateAutoStatus(service.beginTeachTap())})
-   autoControls.addView(control("登録"){updateAutoStatus(service.saveTaughtTap())})
-   panel.addView(autoControls)
-   val manualControls=LinearLayout(service).apply{
-    orientation=LinearLayout.HORIZONTAL
-    gravity=Gravity.CENTER_VERTICAL
-   }
-   manualControls.addView(control("指で押す比較（18秒）"){
-    updateAutoStatus(service.startManualHomeComparison())
-   })
-   panel.addView(manualControls)
+   primary.addView(control("▶ 開始"){updateAutoStatus(service.startAutomaticOperation())},
+    LinearLayout.LayoutParams(0,dp(49),1f))
+   primary.addView(control("■ 停止"){updateAutoStatus(service.stopAutomaticOperation())},
+    LinearLayout.LayoutParams(0,dp(49),1f))
+   primary.addView(control("✦ 学習"){updateAutoStatus(service.beginTeachTap())},
+    LinearLayout.LayoutParams(0,dp(49),1f))
+   panel.addView(primary)
    val status=TextView(service).apply{
-    textSize=11f;setTextColor(Color.rgb(210,225,240));maxLines=4
+    textSize=11f;setTextColor(Color.rgb(215,228,242));maxLines=2
+    setPadding(dp(8),dp(4),dp(8),dp(4))
    }
    panel.addView(status);info=status
+   bindDrag(status)
+   val detail=control("▾ 詳細・診断"){
+    expanded=!expanded
+    detailsPanel?.visibility=if(expanded)View.VISIBLE else View.GONE
+   }.apply{textSize=11f}
+   panel.addView(detail)
+   val extras=LinearLayout(service).apply{
+    orientation=LinearLayout.VERTICAL;visibility=View.GONE
+   }
+   detailsPanel=extras
+   val tools=LinearLayout(service).apply{
+    orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
+   }
+   tools.addView(control("◀"){index=(index+stages.size-1)%stages.size;refresh()})
+   tools.addView(control("記録"){capture()})
+   tools.addView(control("画像"){saveImage()})
+   tools.addView(control("▶"){index=(index+1)%stages.size;refresh()})
+   tools.addView(control("上下"){top=!top;position()})
+   tools.addView(control("閉じる"){hide()})
+   extras.addView(tools)
+   val diagnostics=LinearLayout(service).apply{
+    orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
+   }
+   diagnostics.addView(control("手動比較"){updateAutoStatus(service.startManualHomeComparison())})
+   diagnostics.addView(control("旧登録"){updateAutoStatus(service.saveTaughtTap())})
+   extras.addView(diagnostics)
+   panel.addView(extras)
+   bindDrag(panel)
    val params=WindowManager.LayoutParams(
     WindowManager.LayoutParams.WRAP_CONTENT,
     WindowManager.LayoutParams.WRAP_CONTENT,
@@ -217,6 +290,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    }
    win.addView(panel,params)
    wm=win;bar=panel;lp=params
+   expanded=false
    refresh()
    "画面収集バーを表示。トリマへ移動して画面ごとに記録してな。"
   }catch(e:Exception){
@@ -228,7 +302,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   service.stopAutomaticOperation()
   restoreHomeTouch()
   val view=bar
-  bar=null;lp=null;title=null;info=null
+  bar=null;lp=null;title=null;info=null;detailsPanel=null
   if(view!=null)try{wm?.removeView(view)}catch(_:Exception){}
   wm=null
  }
@@ -239,8 +313,8 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   bar?.let{try{wm?.updateViewLayout(it,p)}catch(_:Exception){}}
  }
  private fun refresh(){
-  title?.text="${stages[index].first} → ${stages[index].second}"
-  info?.text="自動: $autoStatus\n画面記録 ${count(service)}件 / 学習済み ${LearnedActions.count(service)}件"
+  title?.text="⠿ 長押し移動 | ${stages[index].first}"
+  info?.text="状態: ${autoStatus.take(115)}"
  }
  private fun sanitized(value:CharSequence?):String{
   return (value?.toString()?:"")
