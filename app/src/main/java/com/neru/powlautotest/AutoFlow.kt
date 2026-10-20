@@ -169,6 +169,27 @@ class AutoFlow(
    liveVisual=candidate;liveVisualAt=SystemClock.elapsedRealtime()
   }
  }
+ /** TWO consecutive screenshots, local icon + surrounding scene, and
+  * a known video-ad path. This is a LIVE learned action, not a saved photo.
+  */
+ private fun visualLearnedDecision(snap:Snapshot):Decision?{
+  val hit=visualLearned?:return null
+  val now=SystemClock.elapsedRealtime()
+  if(now-visualLearnedAt>3_000L || visualLearnedCount<2 ||
+   now-visualLearnedSince<850L)return null
+  if(!videoAdSessionActive && trustedAdEvidence(snap)==null)return null
+  val labels=snap.nodes.filter{it.node.isVisibleToUser}
+   .flatMap{listOf(it.text,it.desc)}
+  if(StableAdClosePolicy.hasGachaOrLoadingText(labels) ||
+   snap.has("カードを1枚選んでください") ||
+   snap.has("友達にシェアする") ||
+   snap.has("動画スキップ券を使いますか"))return null
+  if(hit.confidence<VisualTemplateModel.MIN_TOTAL_SCORE)return null
+  return Decision("LEARNED_VISUAL","画像学習済み：${hit.title.take(26)}",
+   "LEARNED_VISUAL:${hit.id}",null,
+   "画像一致 ${hit.confidence}/2000、近傍=${hit.near} 周囲=${hit.context} kind=${hit.type}",
+   Point(hit.x,hit.y),false,true)
+ }
  private fun visualOverlayDecision(snap:Snapshot):Decision?{
   val marker=liveVisual?:return null
   val now=SystemClock.elapsedRealtime()
@@ -787,6 +808,7 @@ class AutoFlow(
     "AD_CLOSE:$counter:${close.first().desc.trim()}:${close.first().rect.toShortString()}",
     close.singleOrNull(),"閉じる候補=${close.size}")
   }
+  visualLearnedDecision(snap)?.let{return it}
   visualOverlayDecision(snap)?.let{return it}
   if(snap.count<=2){
    return Decision("OPAQUE","広告または不明画面（UIが${snap.count}件）","OPAQUE",null,
@@ -1614,7 +1636,8 @@ class AutoFlow(
    if(monitorCollection(snapshot,now))return
    val initial=choose(snapshot)
    if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD ||
-    initial.kind in listOf("UNKNOWN","OPAQUE","AD_VISUAL_X","AD_VISUAL_NEXT")){
+    initial.kind in listOf("UNKNOWN","OPAQUE","AD_VISUAL_X","AD_VISUAL_NEXT") ||
+   (videoAdSessionActive && VisualLearnedActions.count(service)>0)){
     probeLiveOverlay(now)
    }
    val decision=choose(snapshot)
