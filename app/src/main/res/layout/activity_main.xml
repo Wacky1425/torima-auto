@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.11" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.12" android:textSize="23sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:layout_marginTop="10dp" android:text="診断を送るなら、このボタン1つだけでOK。"
  android:textStyle="bold" android:textSize="16sp"/>
@@ -9,7 +9,7 @@
  android:layout_height="wrap_content" android:minHeight="58dp"
  android:text="診断をまとめて共有（ZIP 1個）"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="トリマHOMEの自動試行後、操作バーの『指で押す比較（18秒）』を使います。指と自動の違い、CLICKイベント、画像をZIP1個にまとめます。自動→指→共有の順で操作してください。"
+ android:text="不具合調査が必要なときだけZIPを1個共有してください。操作バーには「開始・停止・学習」の3つを表示します。長押しでバーを移動でき、詳しい記録やテストは「詳細」にまとめました。"
  android:paddingBottom="8dp"/>
 <Switch android:id="@+id/fastAdMode"
  android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -42,14 +42,14 @@
  android:layout_height="wrap_content" android:text="回収タスク・所要時間の履歴をコピー"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="トリマ画面上のバーから自動開始・停止。Google Playが前面に出たら自動でトリマに復帰します。HOME紫ボタンは実画面の高さと「または」の位置から探し、学習座標・ボタン／親ACTION_CLICK・中央タップなど最大7方式を比較。HOMEからの広告遷移は入力実行とは別に確認し、結果を一括診断ZIPに記録します。広告終了後の固定4秒保護は画面上部の高速実験スイッチでON/OFFできます。OFFなら従来どおり待機。ONなら待機をスキップしますが、ガチャの誤キャンセルに注意してください。"/>
-<Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="記録・自動操作バーを表示（指タップ比較もここ）"/>
+ android:text="画面上のコンパクトなバーで「開始・停止・学習」を操作。バーを長押しして動かせます。「詳細」を開くと画面記録・画像・手動比較などの機能が表示されます。HOMEで紫ボタンが進まなければ短い下スワイプを一度試し、それでもだめなら再起動復旧します。"/>
+<Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作バーを表示（開始・停止・学習）"/>
 <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
 <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:layout_marginTop="12dp" android:text="個別の画像診断（通常は上の一括共有だけでOK）" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="トリマ画面の操作バーから「画像」を押すと、ノードのない広告も画像で記録できます。自動実行中に6秒以上不明だった画面も間隔を空けて撮影。画面内の×を端末内の画像認識で検出します。ノードが無い広告も、動画広告の入場経路と画像の×が複数回一致すれば自動操作に使用します。保存画像は端末内のみ・最新24枚まで。内容を確認してからZIPを共有してください。"/>
+ android:text="ノードがない広告も、学習時に押した近くの画像と周囲の特徴を登録できます。次回は連続2枚の現在画像を照合し、合致すれば登録位置をタップします。通常の診断画像は端末内のみ・最新24枚までです。"/>
 <TextView android:id="@+id/visualDiagnosticsCount" android:layout_width="match_parent"
  android:layout_height="wrap_content" android:text="画像記録：0枚"/>
 <Button android:id="@+id/shareVisualDiagnostics" android:layout_width="match_parent"
@@ -62,10 +62,11 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="学習操作・復帰ログ" android:textSize="18sp" android:layout_marginTop="12dp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="広告で止まったら『停止』→『学習』→閉じたい位置を指定→画面の変化を確認して『登録』。閉じる文字がクリック不可でも、広告固有の親ボタンと座標を学習できます。登録操作は必ず保存し、自動使用できる場合は『自動操作ルール』、画面の特徴が不足する場合は『学習例（保留）』として分けて表示します。学習例は原則として自動では押しません。同じ未識別の操作は1グループに集約して回数と画面の例を記録します。何度も同じ操作を教える必要はありません。ただし、以前ユーザーが登録した右上の無記名画像×について、広告の固有文字・位置・画面一致を十分確認できたものだけ自動ルールに昇格します。Google Oneの閉じるは広告SDKと表示領域を優先して照合します。ガチャ演出中の×は引き続き押さず、カード結果後の広告も識別できた場合のみ操作します。"/>
+ android:text="学習は1回タップするだけ。ボタンのノードが判別できた場合はノード操作を、ノードがない・候補が曖昧な場合はタップ前の画像を端末内で覚えます。元画面の特徴が取得できた操作は自動登録し、新しい保留データを蓄積しません。画像取得や画面識別に失敗した場合は理由を表示し、登録数を増やしません。以前の未採用記録は下の専用ボタンから削除できます。"/>
 <Button android:id="@+id/copyActionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作履歴をコピー"/>
 <Button android:id="@+id/copyLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習済み操作をコピー"/>
 <Button android:id="@+id/clearLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作をすべて削除"/>
+ <Button android:id="@+id/clearLegacyPending" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="古い保留例だけ削除（学習済みは残す）"/>
 
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp"
  android:text="個別のHOME・広告テスト（従来版）" android:textSize="18sp"/>
