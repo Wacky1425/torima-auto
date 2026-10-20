@@ -544,6 +544,10 @@ class AutoFlow(
  }
  private fun adEvidence(decision:Decision,snap:Snapshot,now:Long):String? =
   trustedAdEvidence(snap)?:stableAdCloseEvidence(decision,snap,now)?:
+   if(decision.kind=="LEARNED_VISUAL" && videoAdSessionActive &&
+    visualLearnedCount>=2 && visualLearned?.id!=null &&
+    SystemClock.elapsedRealtime()-visualLearnedAt<3_000L)
+    "USER_TAUGHT_VISUAL_AD_BUTTON" else
    if(decision.kind=="AD_VISUAL_X" && videoAdSessionActive &&
     liveVisual?.score?.let{it>=445}==true && liveVisualCount>=2 &&
     !StableAdClosePolicy.hasGachaOrLoadingText(
@@ -1801,17 +1805,26 @@ class AutoFlow(
    // Registered rules already had a short stable-screen check above.
    // The old unconditional extra 4s delay made learning ineffective.
    if(decision.target==null &&
-     decision.kind in listOf("AD_VISUAL_X","AD_VISUAL_NEXT")){
+     decision.kind in listOf("AD_VISUAL_X","AD_VISUAL_NEXT","LEARNED_VISUAL")){
     val point=decision.touch
     val width=service.resources.displayMetrics.widthPixels
     val height=service.resources.displayMetrics.heightPixels
-    if(point==null || point.x !in (width*72/100)..width ||
-     point.y !in 0..(height*18/100)){
+    val permitted=if(decision.kind=="LEARNED_VISUAL"){
+     val kind=visualLearned?.type.orEmpty()
+     if(kind=="TOP_CLOSE_OR_SKIP")point!=null &&
+      point.y in 0..(height*34/100) &&
+      (point.x>=width*57/100 || point.x<=width*21/100)
+     else kind=="BOTTOM_AD_CLOSE" && point!=null &&
+      point.y in (height*72/100)..(height*96/100)
+    }else point!=null && point.x in (width*72/100)..width &&
+     point.y in 0..(height*18/100)
+    if(!permitted){
      stopWithReason("画像候補が画面上部の許可領域外。停止")
      return
     }
     val previous=recentActions[decision.key]?:0L
-    if(previous>0L && now-previous<6_000L){
+    val quiet=if(decision.kind=="LEARNED_VISUAL")3_500L else 6_000L
+    if(previous>0L && now-previous<quiet){
      update("画像マークの連続タップを抑制。再判定中")
      next()
      return
@@ -1835,7 +1848,9 @@ class AutoFlow(
     liveVisual=null
     liveVisualCount=0
     val safeBounds=Rect(point.x-30,point.y-30,point.x+31,point.y+31)
-    update("${decision.display}：確定した画面右上のマークを操作")
+    update(if(decision.kind=="LEARNED_VISUAL")
+     "${decision.display}：現在の画面と画像学習が一致、教えた位置を操作"
+     else "${decision.display}：確定した画面右上のマークを操作")
     gestureTap(safeBounds,decision.display,120L,point)
     next()
     return
