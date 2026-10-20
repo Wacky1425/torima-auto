@@ -116,7 +116,7 @@ internal class VisualLearnedActions(private val ctx:Context){
    val kind=item.optString("kind")
    val legal=if(kind=="TOP_CLOSE_OR_SKIP")
     py<=.34 && (px>=.57 || px<=.21)
-   else kind=="BOTTOM_AD_CLOSE" && py in .72.. .96
+   else kind=="BOTTOM_AD_CLOSE" && py in 0.72..0.96
    if(!legal)continue
    val candidate=Match(item.optString("id"),hit.x,hit.y,hit.score,
     hit.nearScore,hit.contextScore,kind,
