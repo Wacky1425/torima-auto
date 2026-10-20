@@ -90,18 +90,18 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  private var lastProbeRequest=0L
 
  /** Scan overlay marks in RAM. No screenshots are persisted by this path. */
- fun probeOverlay(done:(List<OverlayIconDetector.Marker>?)->Unit){
+ fun probeOverlay(done:(List<OverlayIconDetector.Marker>?,VisualLearnedActions.Match?)->Unit){
   val root=service.rootInActiveWindow
-  if(root?.packageName?.toString()!=TARGET || Build.VERSION.SDK_INT<30){done(null);return}
+  if(root?.packageName?.toString()!=TARGET || Build.VERSION.SDK_INT<30){done(null,null);return}
   val now=SystemClock.elapsedRealtime()
   if(busy || now-lastProbeRequest<1_300L ||
-   (lastRequest>0 && now-lastRequest<1_300L)){done(null);return}
+   (lastRequest>0 && now-lastRequest<1_300L)){done(null,null);return}
   busy=true;lastProbeRequest=now
   val windowId=root.windowId
   fun finish(image:Bitmap?){
-   if(image==null){busy=false;done(null);return}
+   if(image==null){busy=false;done(null,null);return}
    io.execute{
-    val markers=try{
+    val analysis=try{
      val width=540
      val height=(image.height.toLong()*width/image.width).toInt()
      val small=Bitmap.createScaledBitmap(image,width,height,true)
@@ -111,12 +111,19 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      val fromNodesOrComponents=OverlayIconDetector.detect(pixels,width,height)
      val pixelX=PixelAdCloseDetector.detectWhiteX(pixels,width,height)
       ?.let{OverlayIconDetector.Marker("X",it.x,it.y,it.score,"top-right")}
-     (fromNodesOrComponents+listOfNotNull(pixelX))
+     val markers=(fromNodesOrComponents+listOfNotNull(pixelX))
       .groupBy{it.kind}.values.mapNotNull{group->group.maxByOrNull{it.score}}
       .map{it.copy(x=it.x*image.width/width,y=it.y*image.height/height)}
+     val learned=service.matchVisualLearning(pixels,width,height)?.let{
+      it.copy(x=it.x*image.width/width,y=it.y*image.height/height)
+     }
+     Pair(markers,learned)
     }catch(_:Exception){null}
     finally{image.recycle()}
-    service.mainExecutor.execute{busy=false;done(markers)}
+    service.mainExecutor.execute{
+     busy=false
+     done(analysis?.first,analysis?.second)
+    }
    }
   }
   fun display(){
@@ -142,6 +149,43 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   }else display()
  }
 
+
+ /**
+  * Teaching uses the live source frame *before* its touch is injected.
+  * This is independent of ordinary diagnostic screenshot rate limits.
+  * The caller must hide its teaching overlay and collector panel first.
+  */
+ fun captureForVisualTeaching(done:(Bitmap?,String)->Unit){
+  val root=service.rootInActiveWindow
+  if(root?.packageName?.toString()!=TARGET){
+   done(null,"学習元がトリマではないため画像を取得できません");return
+  }
+  if(Build.VERSION.SDK_INT<30){
+   done(null,"端末のAndroidが画像取得APIに非対応");return
+  }
+  val now=SystemClock.elapsedRealtime()
+  if(busy){
+   done(null,"ほかの画像解析中。数秒後にもう一度学習してください");return
+  }
+  busy=true
+  try{
+   service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
+    object:AccessibilityService.TakeScreenshotCallback{
+     override fun onSuccess(screenshot:AccessibilityService.ScreenshotResult){
+      busy=false
+      val image=toSoftwareBitmap(screenshot)
+      done(image,if(image==null)"画像バッファ取得失敗" else "タップ前の画面画像を取得")
+     }
+     override fun onFailure(errorCode:Int){
+      busy=false
+      done(null,"画面取得が拒否されました(code=$errorCode)")
+     }
+    })
+  }catch(e:Exception){
+   busy=false
+   done(null,"画像取得例外：${e.javaClass.simpleName}")
+  }
+ }
 
  fun capture(stage:String,nodeCount:Int,manual:Boolean,done:(String)->Unit){
   val root=service.rootInActiveWindow
