@@ -14,7 +14,8 @@ internal object LearnedClosePolicy {
  const val AFTER_TAP_GIVE_UP_MS=12_000L
  const val REPEAT_COOLDOWN_MS=6_500L
  fun isLearnedKind(kind:String):Boolean =
-  kind=="LEARNED" || kind=="LEARNED_TEXT" || kind=="LEARNED_ICON"
+  kind=="LEARNED" || kind=="LEARNED_TEXT" ||
+  kind=="LEARNED_ICON" || kind=="LEARNED_VISUAL"
  fun approvedOnCurrentScreen(kind:String,registered:Boolean,
   forbiddenUiVisible:Boolean):Boolean =
   isLearnedKind(kind) && registered && !forbiddenUiVisible
