@@ -125,6 +125,8 @@ class TeachOverlay(
  private var outcomeEligible=false
  private var outcomeKind="PENDING"
  private var outcomePackage=""
+ private var visualCapture:VisualLearnedActions.Captured?=null
+ private var sourceNodeDescription=""
  private var teachId=0
  private var active=false
  private fun dp(n:Int)=(n*service.resources.displayMetrics.density+0.5f).toInt()
@@ -145,6 +147,8 @@ class TeachOverlay(
   outcomeEligible=false
   outcomeKind="PENDING"
   outcomePackage=""
+  visualCapture=null
+  sourceNodeDescription=""
   outcomeReady=false
   homeTeachSucceeded=false
   teachId++
@@ -226,11 +230,25 @@ class TeachOverlay(
   // Do not send a gesture through Google Play or a different app.
   val root=before
   val p=memory.propose(root,x,y)
+  val touching=memory.scan(root)?.items?.filter{
+   it.bounds.contains(x,y) && it.node.isVisibleToUser
+  }.orEmpty()
+  val smallNodes=touching.filter{
+   it.bounds.width() in 16..430 && it.bounds.height() in 16..310
+  }
+  sourceNodeDescription=when{
+   touching.isEmpty()->"位置付近にノードがないため画像学習へ"
+   smallNodes.size>1->"ノード候補が${smallNodes.size}件。操作対象が一意ではないため画像学習へ"
+   smallNodes.isEmpty()->"ノードはあるが全画面領域しか取得できず画像学習へ"
+   else->"ノードはあるがボタン名／IDを特定できず画像学習へ"
+  }
   proposed=p
   changed=false
   outcomeEligible=false
   outcomeKind="PENDING"
   outcomePackage=""
+  visualCapture=null
+  sourceNodeDescription=""
   outcomeReady=false
   homeTeachSucceeded=false
   val selectedName=p.label.lowercase()
@@ -240,34 +258,77 @@ class TeachOverlay(
    status("購入・インストール・シェア対象は学習モードで押しません")
    return
   }
+  val isUnsafeScreen=memory.scan(root)?.items?.any{
+   val name=it.label
+   it.node.isVisibleToUser &&
+    (name.contains("友達にシェアする") ||
+     name.contains("動画スキップ券を使いますか") ||
+     name.contains("カードを1枚選んでください") ||
+     name.contains("持っている枚数"))
+  }==true
+  if(isUnsafeScreen && !p.safe){
+   removeLayer()
+   proposed=null
+   status("この画面はガチャ・シェア・スキップ券の可能性があるため、広告の画像学習を登録しません")
+   return
+  }
   removeLayer()
-  status("タップ位置 ($x,$y) を取得。実際の画面遷移を記録中")
-  h.postDelayed({
-   if(teachId!=id)return@postDelayed
-   if(service.rootInActiveWindow?.packageName?.toString()!=APP){
-    proposed=null
-    status("対象がトリマ以外になったため操作をキャンセルしました。")
-    return@postDelayed
-   }
-   val path=Path().apply{moveTo(x.toFloat(),y.toFloat())}
-   val gesture=GestureDescription.Builder()
-    .addStroke(GestureDescription.StrokeDescription(path,0,110)).build()
-   val accepted=service.dispatchGesture(gesture,object:AccessibilityService.GestureResultCallback(){
-    override fun onCompleted(g:GestureDescription?){
-     if(teachId!=id)return
-     h.postDelayed({if(teachId==id)recordOutcome(p)},1800)
-    }
-    override fun onCancelled(g:GestureDescription?){
-     if(teachId!=id)return
+  status(if(p.safe)"ノードを確認。1回の操作で自動登録します"
+   else "$sourceNodeDescription。タップ前の画像を取得中")
+  fun replay(){
+   h.postDelayed({
+    if(teachId!=id)return@postDelayed
+    if(service.rootInActiveWindow?.packageName?.toString()!=APP){
      proposed=null
-     status("操作の再現がキャンセルされました。保存していません")
+     status("学習元が別アプリになったため操作を中止。再度学習してください")
+     return@postDelayed
     }
-   },null)
-   if(!accepted){
-    proposed=null
-    status("操作の再現が拒否されました。保存していません")
+    val path=Path().apply{moveTo(x.toFloat(),y.toFloat())}
+    val gesture=GestureDescription.Builder()
+     .addStroke(GestureDescription.StrokeDescription(path,0,110)).build()
+    val accepted=service.dispatchGesture(gesture,
+     object:AccessibilityService.GestureResultCallback(){
+      override fun onCompleted(g:GestureDescription?){
+       if(teachId!=id)return
+       h.postDelayed({if(teachId==id)recordOutcome(p)},1_800L)
+      }
+      override fun onCancelled(g:GestureDescription?){
+       if(teachId!=id)return
+       proposed=null
+       status("学習タップがキャンセル。ルール未保存です")
+      }
+     },null)
+    if(!accepted){
+     proposed=null
+     status("学習タップが拒否されました。ルール未保存です")
+    }
+   },180L)
+  }
+  if(p.safe){
+   replay()
+  }else{
+   // The teaching overlay has already been removed: capture BEFORE touch.
+   service.captureVisualTeaching {bitmap,note->
+    if(teachId!=id){
+     bitmap?.recycle()
+     return@captureVisualTeaching
+    }
+    visualCapture=try{
+     if(bitmap==null)null else service.visualLearnedActions.capture(
+      bitmap,x,y,beforeCount,p.label)
+    }catch(_:Exception){null}
+    finally{bitmap?.recycle()}
+    if(visualCapture==null){
+     val reason=if(bitmap==null)note
+      else "押した付近に識別可能な模様がない、または×／スキップの許可領域外"
+     proposed=null
+     status("$sourceNodeDescription。画像学習不可：$reason。保留記録は増やしません")
+    }else{
+     status("$sourceNodeDescription。画像特徴取得成功、教えた操作を確認中")
+     replay()
+    }
    }
-  },220)
+  }
  }
  private fun recordOutcome(p:LearnedActions.Proposal){
   val afterRoot=service.rootInActiveWindow
