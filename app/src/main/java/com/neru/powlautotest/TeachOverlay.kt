@@ -313,6 +313,83 @@ class TeachOverlay(
    }
   }
  }
+ /**
+  * Stage 2 is intentionally PASSIVE. The selection overlay has been removed,
+  * and no AccessibilityService dispatchGesture/ACTION_CLICK is used. Only the
+  * user's own touch can advance the target app during this stage.
+  *
+  * Accessibility does not expose arbitrary raw touches to other apps, so
+  * observe a real VIEW_CLICKED (when present) or the resulting screen change.
+  */
+ private fun startPhysicalObservation(p:LearnedActions.Proposal,id:Int){
+  if(teachId!=id || proposed==null)return
+  if(service.rootInActiveWindow?.packageName?.toString()!=APP){
+   failPhysicalObservation("画面がトリマ以外に切り替わったため学習を中止しました")
+   return
+  }
+  awaitingPhysicalTap=true
+  physicalTapStartedAt=SystemClock.elapsedRealtime()
+  physicalClickAt=0L
+  changedSince=0L
+  service.suspendTeachingBar()
+  status("学習 2/2：膜と操作バーを消しました。選んだ場所を指で直接押してください（14秒以内）")
+  Toast.makeText(service,
+   "学習 2/2：もう一度、同じ×／スキップを指で押してください",
+   Toast.LENGTH_LONG).show()
+  h.postDelayed({observePhysicalTap(p,id)},380L)
+ }
+ private fun observePhysicalTap(p:LearnedActions.Proposal,id:Int){
+  if(teachId!=id || !awaitingPhysicalTap)return
+  val now=SystemClock.elapsedRealtime()
+  val pkg=service.rootInActiveWindow?.packageName?.toString().orEmpty()
+  val current=memory.scan(service.rootInActiveWindow)
+  val isChanged=(pkg.isNotBlank() && pkg!=APP) ||
+   (pkg==APP && current!=null &&
+    (current.rootCount!=beforeCount ||
+     (beforeSignature!=null && current.signature!=beforeSignature)))
+  // Moving visuals can alter a label temporarily; do not register from a
+  // single transient scan. Only accept a stable observation.
+  if(isChanged && now-physicalTapStartedAt>=600L){
+   if(changedSince==0L)changedSince=now
+   if(now-changedSince>=650L){
+    finishPhysicalObservation(p,id,
+     "本人のタップ後の画面遷移を確認")
+    return
+   }
+  }else changedSince=0L
+  // A genuine TYPE_VIEW_CLICKED with a matching small source can also
+  // confirm input even when an ad SDK does not navigate on the first touch.
+  if(physicalClickAt>0L && now-physicalClickAt>=1_000L){
+   finishPhysicalObservation(p,id,
+    "押した位置のクリックイベントを確認（画面変化は別途記録）")
+   return
+  }
+  if(now-physicalTapStartedAt>=14_000L){
+   failPhysicalObservation(
+    "14秒以内に指タップによるクリック・画面変化を確認できませんでした。ルール未登録。学習し直してください")
+   return
+  }
+  h.postDelayed({observePhysicalTap(p,id)},350L)
+ }
+ private fun finishPhysicalObservation(p:LearnedActions.Proposal,id:Int,detail:String){
+  if(teachId!=id || !awaitingPhysicalTap)return
+  awaitingPhysicalTap=false
+  service.resumeTeachingBar()
+  status("指の操作を確認：$detail。学習を登録中")
+  recordOutcome(p)
+  before=null
+ }
+ private fun failPhysicalObservation(detail:String){
+  awaitingPhysicalTap=false
+  physicalTapStartedAt=0L
+  physicalClickAt=0L
+  changedSince=0L
+  proposed=null
+  visualCapture=null
+  before=null
+  service.resumeTeachingBar()
+  status(detail)
+ }
  private fun recordOutcome(p:LearnedActions.Proposal){
   val afterRoot=service.rootInActiveWindow
   val afterPkg=afterRoot?.packageName?.toString().orEmpty()
@@ -395,6 +472,12 @@ class TeachOverlay(
   try{
    val source=event.source
    val rect=android.graphics.Rect();source?.getBoundsInScreen(rect)
+   val p=proposed
+   if(awaitingPhysicalTap && p!=null &&
+    source!=null && rect.contains(p.x,p.y) &&
+    rect.width() in 15..700 && rect.height() in 15..390){
+    physicalClickAt=SystemClock.elapsedRealtime()
+   }
    val detail=source?.contentDescription?.toString()?.take(80)
     ?:source?.text?.toString()?.take(80)?:event.text.joinToString(" ").take(80)
    record(service,JSONObject().apply{
