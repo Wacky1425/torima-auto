@@ -2,7 +2,7 @@ package com.neru.powlautotest
 
 /**
  * In-place HOME refresh: immediately after ONE failed purple video-button input,
- * gently drag the content DOWN away from the button (not on the button),
+ * gently swipe UP above the button (not on the button),
  * reread the fresh HOME position, then tap once.
  *
  * One failed HOME tap is the entry point. A failed retry then falls
@@ -36,8 +36,10 @@ internal object HomeSwipeRecoveryPolicy {
    buttonTop>screenHeight*83/100)return null
   val fromY=buttonTop-maxOf(190,screenHeight*9/100)
   val travel=maxOf(85,minOf(140,screenHeight*5/100))
-  val toY=fromY+travel
-  if(fromY<screenHeight*17/100 || toY>=buttonTop-45)return null
+  val toY=fromY-travel
+  // Both endpoints must remain in the non-button content above the purple
+  // target. A finger-up swipe is an upward scroll (not downward).
+  if(toY<screenHeight*17/100 || fromY>=buttonTop-45)return null
   return Stroke((buttonLeft+buttonRight)/2,fromY,toY)
  }
 
