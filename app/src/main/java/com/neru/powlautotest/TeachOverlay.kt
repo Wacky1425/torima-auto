@@ -286,7 +286,10 @@ class TeachOverlay(
   // app did not receive it. For stage 2 fully remove the selection window and
   // hide the collector, then let the actual finger touch Torima directly.
   removeLayer()
-  service.suspendTeachingBar()
+  if(!service.suspendTeachingBar()){
+   failPhysicalObservation("操作バーのタッチ透過に失敗。指タップを安全に通せないため学習を中止")
+   return
+  }
   status(if(p.safe)
    "学習 1/2：ノードは取得済み。次は実際の指で同じ位置を押してください"
    else "$sourceNodeDescription。タップ前の画面を画像学習中")
@@ -331,7 +334,10 @@ class TeachOverlay(
   physicalTapStartedAt=SystemClock.elapsedRealtime()
   physicalClickAt=0L
   changedSince=0L
-  service.suspendTeachingBar()
+  if(!service.suspendTeachingBar()){
+   failPhysicalObservation("操作バーのタッチ透過を確認できず、指タップ学習を中止")
+   return
+  }
   status("学習 2/2：膜と操作バーを消しました。選んだ場所を指で直接押してください（14秒以内）")
   Toast.makeText(service,
    "学習 2/2：もう一度、同じ×／スキップを指で押してください",
