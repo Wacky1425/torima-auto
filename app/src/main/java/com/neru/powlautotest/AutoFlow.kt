@@ -29,6 +29,16 @@ class AutoFlow(
  private val h=Handler(Looper.getMainLooper())
  private val learned by lazy{LearnedActions(service)}
  private val collection by lazy{CollectionRunStore(service)}
+ private var rewardPhase=RewardTabPolicy.Phase.MOVE
+ private var runStartedElapsed=0L
+ private var emptyHomeSince=0L
+ private var emptyHomeReads=0
+ private var tabSwitchStartedAt=0L
+ private var tabSwitchLastTapAt=0L
+ private var tabSwitchAttempts=0
+ private var tabSwitchConfirmedSince=0L
+ private var tabSwitchConfirmedReads=0
+ private var tabSwitchInFlight=false
  fun collectionStatus():String=CollectionRunStore.summary(service)
  private var playRecoveryStep=0
  private var playRecoveryAt=0L
@@ -290,10 +300,15 @@ class AutoFlow(
   playRecoveryAttempts=0
   homeRecoveryAttempts=0
   homeRecoveryActive=false
+  rewardPhase=RewardTabPolicy.Phase.MOVE
+  runStartedElapsed=SystemClock.elapsedRealtime()
+  emptyHomeSince=0L
+  emptyHomeReads=0
+  resetTabSwitch()
   HomeRecoveryJournal.begin(service)
   HomeTrialJournal.beginRun(service)
   collection.begin()
-  update("起動中：タンク動画回収を開始（上限3時間）。学習ルール${LearnedActions.count(service)}件も照合")
+  update("起動中：移動タンク→歩数の順に動画回収（全体上限3時間）。学習ルール${LearnedActions.count(service)}件も照合")
   h.postDelayed(poll,450)
   return "自動操作を開始しました。不明な画面では一切タップしません。"
  }
@@ -306,6 +321,7 @@ class AutoFlow(
   homeRecoveryActive=false
   service.restoreHomeTouch()
   resetHomeExperiment()
+  resetTabSwitch()
   playRecoveryStep=0
   gachaPhase=GachaSafety.Phase.NONE
   resetLiveVisual()
@@ -1631,8 +1647,10 @@ class AutoFlow(
   if(!running)return
   try {
    val now=SystemClock.elapsedRealtime()
-   if(collection.budgetExceeded()){
-    stopWithReason("実行時間が3時間に達したため未完了として停止")
+   if(collection.budgetExceeded() ||
+    (runStartedElapsed>0L &&
+     now-runStartedElapsed>=CollectionTaskPolicy.BUDGET_MS)){
+    stopWithReason("移動＋歩数の実行時間が合計3時間に達したため未完了として停止")
     return
    }
    if(homeRecoveryActive){
