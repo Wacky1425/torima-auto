@@ -33,6 +33,9 @@ class PowlAccessibilityService:AccessibilityService(){
   onDone:(List<OverlayIconDetector.Marker>?,VisualLearnedActions.Match?)->Unit){
   imageDiagnostics.probeOverlay(onDone)
  }
+ internal fun probeRewardBadges(onDone:(RewardBadgeDetector.Result?)->Unit){
+  imageDiagnostics.probeRewardBadges(onDone)
+ }
  internal fun matchVisualLearning(pixels:IntArray,width:Int,height:Int):
   VisualLearnedActions.Match? =
   visualLearnedActions.matchCanonical(pixels,width,height)
