@@ -967,7 +967,8 @@ class AutoFlow(
   }
   // Identify the top reward-video button from its position above the "または"
   // separator, not fixed vertical pixels. The two large buttons must be distinct.
-  val move=n.any{it.canPress && it.desc=="move"}
+  val activeTab=selectedRewardTab(snap)
+  val recognizedHome=activeTab!=RewardTabPolicy.Tab.UNKNOWN
   val tank=snap.has("タンクが満タン")
   val remaining=n.firstOrNull{
    it.node.isVisibleToUser && Regex("あと\\s*[0-9０-９]+\\s*回獲得できます")
@@ -1002,18 +1003,23 @@ class AutoFlow(
    gap in 0..maxOf(100,height*5/100) &&
     it.rect.centerY()>separator.rect.bottom
   }else emptyList()
-  val confirmedHome=move && remaining.isNotBlank() &&
+  val confirmedHome=recognizedHome && remaining.isNotBlank() &&
    (tank || (separator!=null && above.size==1 && below.size==1))
+  val tabName=if(activeTab==RewardTabPolicy.Tab.STEPS)"歩数" else "移動"
   if(confirmedHome){
    val button=above.singleOrNull()
-   return Decision("HOME","HOME／紫ボタン","HOME:$remaining",button,
-    "動画ボタン候補=${above.size} / 下のボタン=${below.size} / " +
-     "または=${separator!=null} / タンク=$tank / $remaining")
+   return Decision("HOME","$tabName／紫ボタン",
+    "HOME:${activeTab.name}:$remaining",button,
+    "現在タブ=${activeTab.name} / 動画ボタン候補=${above.size} / " +
+     "下のボタン=${below.size} / または=${separator!=null} / " +
+     "タンク=$tank / $remaining")
   }
-  if(move && remaining.isNotBlank() && (tank || separator!=null)){
-   return Decision("HOME_WAIT","HOME／紫ボタンが未特定","HOME_WAIT",null,
-    "ボタン候補=${above.size} / 幅広ボタン=${wideButtons.size} / " +
-     "下のボタン=${below.size} / または=${separator!=null} / タンク=$tank")
+  if(recognizedHome && remaining.isNotBlank() && (tank || separator!=null)){
+   return Decision("HOME_WAIT","$tabName／紫ボタンが未特定",
+    "HOME_WAIT:${activeTab.name}",null,
+    "現在タブ=${activeTab.name} / ボタン候補=${above.size} / " +
+     "幅広ボタン=${wideButtons.size} / 下のボタン=${below.size} / " +
+     "または=${separator!=null} / タンク=$tank")
   }
   // A registered rule is more specific than the generic close-button guess.
   // Its target is already matched by screen features, ID/class and bounds.
@@ -1285,7 +1291,7 @@ class AutoFlow(
      override fun onCompleted(gestureDescription:GestureDescription?){
       if(!stillActive())return
       homeTrace("swipe_completed",HomeSwipeRecoveryPolicy.ID,
-       "downBy=${sw.toY-sw.fromY}px complete != content moved")
+       "verticalFingerMove=${sw.toY-sw.fromY}px complete != content moved")
       h.postDelayed({
        if(!stillActive())return@postDelayed
        val after=readCurrent()
@@ -1448,7 +1454,7 @@ class AutoFlow(
     return true
    }
    val sinceLast=if(homeLastTrialAt>0L) now-homeLastTrialAt else 0L
-   // One failed HOME tap -> a small pull-down before *any* second button
+   // One failed HOME tap -> a short swipe-up before *any* second button
    // hypothesis or force-stop. Do not count a mere gesture callback as success.
    if(HomeSwipeRecoveryPolicy.shouldTry(
      HomeRecoveryPolicy.enabled(service),homeRecoveryAttempts,
