@@ -27,10 +27,11 @@ class HomeSwipeRecoveryPolicyTest {
   val stroke=HomeSwipeRecoveryPolicy.strokeFor(90,1175,990,1080,2412)
   assertNotNull(stroke)
   assertEquals(540,stroke!!.x)
-  assertTrue(stroke.toY>stroke.fromY)
-  assertTrue(stroke.toY-stroke.fromY in 85..140)
-  assertTrue(stroke.toY<1175-45)
-  assertTrue(stroke.fromY>2412*17/100)
+  assertTrue("Finger must move upward, not downward",stroke.toY<stroke.fromY)
+  assertTrue(stroke.fromY-stroke.toY in 85..140)
+  assertTrue("The gesture starts above purple button",stroke.fromY<1175-45)
+  assertTrue("The gesture ends above purple button",stroke.toY<1175-45)
+  assertTrue(stroke.toY>2412*17/100)
   assertEquals(340L,HomeSwipeRecoveryPolicy.SWIPE_DURATION_MS)
  }
  @Test fun noGestureIfButtonNearTopOrScreenInvalid(){
