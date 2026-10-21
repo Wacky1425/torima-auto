@@ -36,11 +36,15 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun matchVisualLearning(pixels:IntArray,width:Int,height:Int):
   VisualLearnedActions.Match? =
   visualLearnedActions.matchCanonical(pixels,width,height)
+ internal fun suspendTeachingBar(){screenCollector.suspendForTeaching()}
+ internal fun resumeTeachingBar(){screenCollector.resumeAfterTeaching()}
  internal fun captureVisualTeaching(onDone:(android.graphics.Bitmap?,String)->Unit){
+  // Keep the collector invisible until the PERSON completes the next tap.
+  // The old implementation exposed the bar immediately after capture,
+  // allowing it to intercept a real finger tap.
   screenCollector.suspendForTeaching()
   h.postDelayed({
    imageDiagnostics.captureForVisualTeaching {bitmap,note->
-    screenCollector.resumeAfterTeaching()
     onDone(bitmap,note)
    }
   },200L)
