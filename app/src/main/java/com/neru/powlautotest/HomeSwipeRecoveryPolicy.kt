@@ -25,8 +25,8 @@ internal object HomeSwipeRecoveryPolicy {
   elapsedAfterLastMs:Long):Boolean =
   enabled && priorRecoveries==0 && !priorSwipe && !inFlight &&
    homeKind=="HOME" && buttonPresent &&
-   attempts>=HomeRecoveryPolicy.PRE_RESTART_TRIALS &&
-   elapsedAfterLastMs>=HomeTouchTrials.DELAY_BETWEEN_TRIALS_MS
+   attempts>=1 &&
+   elapsedAfterLastMs>=FIRST_FAILURE_WAIT_MS
 
  fun strokeFor(buttonLeft:Int,buttonTop:Int,buttonRight:Int,
   screenWidth:Int,screenHeight:Int):Stroke? {
