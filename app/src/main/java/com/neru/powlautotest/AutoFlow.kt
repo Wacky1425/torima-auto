@@ -673,6 +673,237 @@ class AutoFlow(
    false
   }.distinctBy{"${it.node.windowId}/${it.rect.toShortString()}"}
  }
+ private fun resetTabSwitch(){
+  tabSwitchStartedAt=0L
+  tabSwitchLastTapAt=0L
+  tabSwitchAttempts=0
+  tabSwitchConfirmedSince=0L
+  tabSwitchConfirmedReads=0
+  tabSwitchInFlight=false
+ }
+
+ private fun selectedRewardTab(snap:Snapshot):RewardTabPolicy.Tab{
+  val top=snap.nodes.filter{it.node.isVisibleToUser}
+  val selectedMove=top.any{
+   it.node.isSelected &&
+    (it.desc.trim().equals("move",true) || it.text.trim()=="移動")
+  }
+  val selectedSteps=top.any{
+   it.node.isSelected && (it.text.trim()=="歩数" ||
+    it.desc.trim().lowercase() in setOf("walk","step","steps","stepscount","歩数"))
+  }
+  val stepHero=snap.has("今日の歩数") ||
+   (snap.has("今日の") && snap.has("歩数") && !snap.has("タンクが満タン"))
+  val emptyMove=snap.has("たくさん移動してマイルを獲得しよう")
+  return RewardTabPolicy.selectedTab(selectedMove,selectedSteps,stepHero,emptyMove)
+ }
+
+ private fun rewardSeparator(snap:Snapshot):Item?=
+  snap.nodes.filter{it.node.isVisibleToUser &&
+   it.text.trim()=="または" && it.rect.width()>0 &&
+   it.rect.height()>0}
+   .distinctBy{it.rect.toShortString()}.singleOrNull()
+
+ private fun upperVideoButtonEnabled(snap:Snapshot,sep:Item):Boolean{
+  val screen=service.resources.displayMetrics
+  val w=screen.widthPixels
+  val h=screen.heightPixels
+  if(w<=0||h<=0)return false
+  return snap.nodes.any{v->
+   val r=v.rect
+   v.canPress && r.left>=0 && r.right<=w &&
+    r.width() in (w*65/100)..(w*96/100) &&
+    r.height() in (h*3/100)..(h*12/100) &&
+    r.centerX() in (w*37/100)..(w*63/100) &&
+    sep.rect.top-r.bottom in 0..maxOf(120,h*6/100)
+  }
+ }
+
+ private fun currentRemaining(snap:Snapshot):Int? =
+  snap.nodes.asSequence().filter{it.node.isVisibleToUser}
+   .mapNotNull{CollectionTaskPolicy.remaining(it.text)}.firstOrNull()
+
+ private fun blockedRewardObservation(snap:Snapshot):Boolean=
+  gachaPhase!=GachaSafety.Phase.NONE ||
+   snap.has("友達にシェアする") ||
+   snap.has("カードを1枚選んでください") ||
+   snap.has("持っている枚数") ||
+   snap.has("ガチャWチャンスに挑戦") ||
+   snap.has("動画を見て再チャレンジ") ||
+   snap.has("動画スキップ券を使いますか") ||
+   snap.has("読み込み中")
+
+ /**
+  * Locate the actual top navigation label first. Only when the user supplied
+  * fixed-layout HOME header is verified may the known fractional position be
+  * used as fallback; never guess coordinates on an unknown screen.
+  */
+ private fun rewardTabTarget(snap:Snapshot,tab:RewardTabPolicy.Tab):Pair<Item?,Point>?{
+  if(tab==RewardTabPolicy.Tab.UNKNOWN)return null
+  val d=service.resources.displayMetrics
+  val w=d.widthPixels;val h=d.heightPixels
+  if(w<350 || h<650)return null
+  val labels=if(tab==RewardTabPolicy.Tab.STEPS)
+   setOf("歩数","walk","step","steps") else setOf("移動","move")
+  fun allowed(r:Rect):Boolean=RewardTabPolicy.tabPointAllowed(
+   r.centerX(),r.centerY(),w,h,tab) &&
+   r.width() in 16..(w*23/100) && r.height() in 16..(h*15/100)
+  val nodes=snap.nodes.filter{n->
+   n.node.isVisibleToUser &&
+    (n.text.trim().lowercase() in labels ||
+     n.desc.trim().lowercase() in labels) &&
+    allowed(n.rect)
+  }
+  val chosen=nodes.sortedWith(compareByDescending<Item>{it.canPress}
+   .thenBy{it.rect.width()*it.rect.height()}).firstOrNull()
+  if(chosen!=null){
+   var candidate=chosen
+   var parent=chosen.node.parent
+   var depth=0
+   while(parent!=null && depth<3){
+    val rect=Rect();parent.getBoundsInScreen(rect)
+    if(allowed(rect) && parent.isVisibleToUser && parent.isClickable &&
+      parent.isEnabled){
+     candidate=Item(parent,parent.text?.toString().orEmpty(),
+      parent.contentDescription?.toString().orEmpty(),rect)
+     break
+    }
+    parent=parent.parent;depth++
+   }
+   return Pair(candidate,Point(candidate.rect.centerX(),candidate.rect.centerY()))
+  }
+  // Fallback is only reachable once the current HOME tab and divider are
+  // independently verified by monitorCollection, not on opaque ad/gacha UI.
+  val fx=if(tab==RewardTabPolicy.Tab.STEPS)RewardTabPolicy.TAB_RELATIVE_X else 0.07f
+  val x=(w*fx).toInt();val y=(h*RewardTabPolicy.TAB_RELATIVE_Y).toInt()
+  return if(RewardTabPolicy.tabPointAllowed(x,y,w,h,tab))Pair(null,Point(x,y))
+   else null
+ }
+
+ private fun clickRewardTab(snap:Snapshot,desired:RewardTabPolicy.Tab,now:Long):Boolean{
+  val target=rewardTabTarget(snap,desired)?:run{
+   stopWithReason("${desired.name}タブの安全な位置を特定できないため停止")
+   return true
+  }
+  if(tabSwitchInFlight)return true
+  val previous=selectedRewardTab(snap)
+  if(previous==RewardTabPolicy.Tab.UNKNOWN || previous==desired ||
+   rewardSeparator(snap)==null || blockedRewardObservation(snap))return false
+  if(tabSwitchAttempts>=RewardTabPolicy.MAX_STEP_SWITCH_TAPS){
+   update("${desired.name}タブへの切り替え確認中。連打せず待機")
+   return true
+  }
+  if(tabSwitchLastTapAt>0L &&
+   now-tabSwitchLastTapAt<RewardTabPolicy.STEP_SWITCH_RETRY_MS){
+   return true
+  }
+  tabSwitchInFlight=true
+  tabSwitchAttempts++
+  tabSwitchLastTapAt=now
+  val requestGeneration=generation
+  update(if(desired==RewardTabPolicy.Tab.STEPS)
+   "移動回収が完了。上の「歩数」タブへ切り替え（${tabSwitchAttempts}回目）"
+   else "移動を先に回収するため、上の「移動」タブへ戻る")
+  service.prepareHomeTouch(target.second.x,target.second.y){ready,note->
+   if(!running || generation!=requestGeneration)return@prepareHomeTouch
+   if(!ready){
+    tabSwitchInFlight=false
+    stopWithReason("タブ切替時の操作バー透過に失敗：$note")
+    return@prepareHomeTouch
+   }
+   val fresh=readCurrent()
+   if(fresh==null || selectedRewardTab(fresh)!=previous ||
+    rewardSeparator(fresh)==null || blockedRewardObservation(fresh)){
+    tabSwitchInFlight=false
+    update("タブ操作前に画面が変わったので旧位置を押さず再判定")
+    next(850)
+    return@prepareHomeTouch
+   }
+   val latest=rewardTabTarget(fresh,desired)
+   if(latest==null){
+    tabSwitchInFlight=false
+    update("タブの位置が変わったため一旦操作を中止して再判定")
+    next()
+    return@prepareHomeTouch
+   }
+   val node=latest.first
+   val clicked=if(node!=null && node.canPress)
+    node.node.performAction(AccessibilityNodeInfo.ACTION_CLICK) else false
+   if(!clicked){
+    val xy=latest.second
+    val rect=Rect(xy.x-28,xy.y-28,xy.x+28,xy.y+28)
+    gestureTap(rect,"タブ切替 ${desired.name}",110L,xy)
+   }
+   update("${desired.name}タブ切替を試行。画面が実際に変わったか再確認")
+   tabSwitchInFlight=false
+   next(850L)
+  }
+  return true
+ }
+
+ private fun observeEmptyHome(now:Long,reason:String):Boolean{
+  if(emptyHomeSince==0L)emptyHomeSince=now
+  emptyHomeReads++
+  if(!RewardTabPolicy.shouldFinishEmpty(emptyHomeSince,emptyHomeReads,now)){
+   update("$reason。ボタン無効の状態を複数回再確認中")
+   next(900L)
+   return false
+  }
+  emptyHomeSince=0L;emptyHomeReads=0
+  return true
+ }
+ private fun clearEmptyObservation(){
+  emptyHomeSince=0L;emptyHomeReads=0
+ }
+
+ private fun beginStepTabSwitch(reason:String){
+  if(collection.isActive())collection.finish("COMPLETED",reason)
+  rewardPhase=RewardTabPolicy.Phase.SWITCHING_TO_STEPS
+  resetTabSwitch()
+  tabSwitchStartedAt=SystemClock.elapsedRealtime()
+  clearEmptyObservation()
+  resetHomeExperiment()
+  waitingKey=null
+  fallbackAttempted=false
+  resetLiveVisual()
+  clearDeferredHome()
+  update("移動タンクを回収済み。続けてHOME上部の歩数タブへ移動")
+  next(850)
+ }
+
+ private fun switchToSteps(snap:Snapshot,now:Long):Boolean{
+  val tab=selectedRewardTab(snap)
+  if(blockedRewardObservation(snap))return false
+  if(tab==RewardTabPolicy.Tab.STEPS){
+   if(tabSwitchConfirmedSince==0L)tabSwitchConfirmedSince=now
+   tabSwitchConfirmedReads++
+   if(RewardTabPolicy.confirmedStepSwitch(
+    tabSwitchConfirmedSince,tabSwitchConfirmedReads,now)){
+    rewardPhase=RewardTabPolicy.Phase.STEPS
+    collection.begin("torima.steps_video","トリマ：歩数動画回収",
+     "歩数タブの残回数と報酬取得確認")
+    resetTabSwitch()
+    clearEmptyObservation()
+    resetHomeExperiment()
+    waitingKey=null
+    recentActions.clear()
+    update("歩数タブへの切り替え完了。紫ボタンから残りを回収")
+    next(750)
+   }else{
+    update("歩数タブに切り替わったことを確認中")
+    next(750)
+   }
+   return true
+  }
+  tabSwitchConfirmedSince=0L;tabSwitchConfirmedReads=0
+  if(tabSwitchStartedAt>0L &&
+   now-tabSwitchStartedAt>=RewardTabPolicy.STEP_SWITCH_TIMEOUT_MS){
+   stopWithReason("歩数タブへの切り替えを28秒確認できず停止")
+   return true
+  }
+  if(tab!=RewardTabPolicy.Tab.MOVE)return false
+  return clickRewardTab(snap,RewardTabPolicy.Tab.STEPS,now)
+ }
  private fun choose(snap:Snapshot):Decision{
   val n=snap.nodes
   if(snap.has("友達にシェアする")){
