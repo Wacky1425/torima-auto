@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -16,6 +17,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -129,10 +131,14 @@ class TeachOverlay(
  private var sourceNodeDescription=""
  private var teachId=0
  private var active=false
+ private var awaitingPhysicalTap=false
+ private var physicalTapStartedAt=0L
+ private var physicalClickAt=0L
+ private var changedSince=0L
  private fun dp(n:Int)=(n*service.resources.displayMetrics.density+0.5f).toInt()
 
  fun begin():String{
-  if(active)return "学習用のタップ指定はすでに開始しています。"
+  if(active || awaitingPhysicalTap)return "学習中です。現在の選択または指タップが終わるまで待ってください。"
   val root=service.rootInActiveWindow
   if(root?.packageName?.toString()!=APP)return "トリマの画面を前面に出してから『学習』を押してください。"
   before=root
@@ -156,7 +162,9 @@ class TeachOverlay(
   return try{
    val manager=service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
    val layer=FrameLayout(service).apply{
-    setBackgroundColor(Color.argb(32,15,25,50))
+    // Stage 1 captures the POSITION. Fully transparent layer only lives
+    // until that choice; no dimming and no top-left help banner.
+    setBackgroundColor(Color.TRANSPARENT)
     isClickable=true
     setOnTouchListener{_,event->
      if(event.actionMasked==MotionEvent.ACTION_UP){
@@ -177,8 +185,8 @@ class TeachOverlay(
    }
    layer.addView(cancel,FrameLayout.LayoutParams(
     WindowManager.LayoutParams.WRAP_CONTENT,
-    WindowManager.LayoutParams.WRAP_CONTENT,Gravity.BOTTOM or Gravity.RIGHT).apply{
-     bottomMargin=dp(75)
+    WindowManager.LayoutParams.WRAP_CONTENT,Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply{
+     bottomMargin=dp(24)
     })
    val params=WindowManager.LayoutParams(
     WindowManager.LayoutParams.MATCH_PARENT,
@@ -194,8 +202,11 @@ class TeachOverlay(
    h.postDelayed({
     if(teachId==id&&active)cancelCapture("20秒経過したので学習を中止しました。")
    },20000)
-   status("学習中：次に押す場所を1回タップ")
-   "学習を開始しました。押したい場所を1回タップしてください。"
+   status("学習 1/2：まず押したい×／スキップの位置を選んでください")
+   Toast.makeText(service,
+    "学習 1/2：場所を選ぶ → 膜が消えたら同じ場所を指で押す",
+    Toast.LENGTH_LONG).show()
+   "学習 1/2：位置を指定。膜が消えたらもう一度指で直接押してください。"
   }catch(e:Exception){
    active=false
    before=null
@@ -214,7 +225,14 @@ class TeachOverlay(
  fun cancelCapture(message:String="学習中止"):String{
   teachId++
   removeLayer()
+  awaitingPhysicalTap=false
+  physicalTapStartedAt=0L
+  physicalClickAt=0L
+  changedSince=0L
   before=null
+  proposed=null
+  visualCapture=null
+  service.resumeTeachingBar()
   status(message)
   return message
  }
