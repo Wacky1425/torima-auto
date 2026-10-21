@@ -1599,41 +1599,101 @@ class AutoFlow(
   collection.finish("FAILED",reason)
   update("停止：$reason")
  }
- private fun completeCollection(){
+ private fun completeCollection(reason:String){
+  if(collection.isActive())collection.finish("COMPLETED",reason)
   running=false
   generation++
   h.removeCallbacks(poll)
   service.cancelHomeRecovery()
   homeRecoveryActive=false
   service.restoreHomeTouch()
-  HomeTrialJournal.endRun(service,"COMPLETED","HOME残回数0を複数回確認")
-  update("タンク動画回収タスク完了。HOMEの残り0回を繰り返し確認")
+  resetHomeExperiment()
+  resetTabSwitch()
+  HomeTrialJournal.endRun(service,"COMPLETED","移動タンク→歩数を両方回収済み：$reason")
+  update("移動タンクと歩数の動画回収が完了。$reason")
  }
+
  /**
-  * Only count progress on the selected HOME move tab, with the "または" divider
-  * and the exact visible remaining-reward label. Ad and gacha screens cannot
-  * prove that a task is complete.
+  * A text-only 0 is not required for the move tab: the user's provided MOVE
+  * screenshot has NO "あとN回" at all, two gray reward buttons, and an
+  * explicit "たくさん移動してマイルを獲得しよう！" empty-state message.
+  *
+  * The STEP screenshot has "今日の歩数", two valid reward buttons and
+  * "あと6回獲得できます". Only advance/finish from a verified CURRENT tab.
   */
  private fun monitorCollection(snap:Snapshot,now:Long):Boolean{
-  // Wait for the entire W-chance/card animation and result flow to finish
-  // before accepting HOME observations as a completion certificate.
-  if(gachaPhase!=GachaSafety.Phase.NONE)return false
-  val home=snap.nodes.any{it.node.isVisibleToUser && it.node.isSelected && it.desc=="move"} &&
-   snap.nodes.any{it.node.isVisibleToUser && it.text.trim()=="または"}
-  if(!home || snap.has("友達にシェアする") ||
-    snap.has("カードを1枚選んでください") || snap.has("持っている枚数") ||
-    snap.has("ガチャWチャンスに挑戦") || snap.has("動画を見て再チャレンジ"))return false
-  val count=snap.nodes.asSequence().filter{it.node.isVisibleToUser}
-   .mapNotNull{CollectionTaskPolicy.remaining(it.text)}.firstOrNull()?:return false
-  if(collection.observeHome(count,now)){
-   completeCollection()
+  if(blockedRewardObservation(snap))return false
+  if(rewardPhase==RewardTabPolicy.Phase.SWITCHING_TO_STEPS){
+   return switchToSteps(snap,now)
+  }
+  val tab=selectedRewardTab(snap)
+  val desired=if(rewardPhase==RewardTabPolicy.Phase.MOVE)
+   RewardTabPolicy.Tab.MOVE else RewardTabPolicy.Tab.STEPS
+  val divider=rewardSeparator(snap)
+  if(tab!=desired){
+   clearEmptyObservation()
+   // If the user started from the step tab, return to MOVE before processing.
+   // Similarly recover the step tab if they manually selected MOVE mid-run.
+   if(divider!=null && tab!=RewardTabPolicy.Tab.UNKNOWN){
+    if(tabSwitchStartedAt==0L)tabSwitchStartedAt=now
+    if(now-tabSwitchStartedAt>RewardTabPolicy.STEP_SWITCH_TIMEOUT_MS){
+     stopWithReason("${desired.name}タブに28秒間戻れず停止")
+     return true
+    }
+    return clickRewardTab(snap,desired,now)
+   }
+   return false
+  }
+  if(tabSwitchStartedAt!=0L)resetTabSwitch()
+  if(divider==null || !collection.isActive()){
+   clearEmptyObservation()
+   return false
+  }
+  val count=currentRemaining(snap)
+  val videoEnabled=upperVideoButtonEnabled(snap,divider)
+  val moveEmptyPrompt=snap.has("たくさん移動してマイルを獲得しよう")
+  val stepHero=snap.has("今日の歩数") ||
+   (snap.has("今日の") && snap.has("歩数"))
+  if(count!=null){
+   clearEmptyObservation()
+   val finished=collection.observeHome(count,now)
+   if(finished){
+    if(rewardPhase==RewardTabPolicy.Phase.MOVE){
+     beginStepTabSwitch("移動HOMEで残り0回を複数回確認")
+    }else{
+     completeCollection("歩数HOMEで残り0回を複数回確認")
+    }
+    return true
+   }
+   if(count==0){
+    update(if(rewardPhase==RewardTabPolicy.Phase.MOVE)
+     "移動の残り0回を確認。歩数へ切り替える前に再確認"
+     else "歩数の残り0回を確認。終了前に再確認")
+    next(850L)
+    return true
+   }
+   return false
+  }
+  val moveEmpty=RewardTabPolicy.moveOutOfRewards(
+   count,tab==RewardTabPolicy.Tab.MOVE,true,moveEmptyPrompt,
+   videoEnabled,snap.has("タンクが満タン"),false)
+  val stepEmpty=RewardTabPolicy.stepOutOfRewards(
+   count,tab==RewardTabPolicy.Tab.STEPS,true,stepHero,
+   videoEnabled,false) && snap.count>=15
+  val expectedEmpty=if(rewardPhase==RewardTabPolicy.Phase.MOVE)
+   moveEmpty else stepEmpty
+  if(expectedEmpty){
+   val stable=observeEmptyHome(now,if(rewardPhase==RewardTabPolicy.Phase.MOVE)
+    "移動画面で残回数表示が消え、報酬ボタンが灰色" else
+    "歩数画面で残回数表示が消え、動画ボタンが無効")
+   if(stable){
+    if(rewardPhase==RewardTabPolicy.Phase.MOVE)
+     beginStepTabSwitch("移動タンク：灰色ボタンと空状態を複数回確認")
+    else completeCollection("歩数：灰色ボタンと回収不能な状態を複数回確認")
+   }
    return true
   }
-  if(count==0){
-   update("HOMEの残り0回を確認。誤判定防止のため再確認中")
-   next(900)
-   return true
-  }
+  clearEmptyObservation()
   return false
  }
 
