@@ -282,42 +282,17 @@ class TeachOverlay(
    status("この画面はガチャ・シェア・スキップ券の可能性があるため、広告の画像学習を登録しません")
    return
   }
+  // The FIRST tap was intercepted to learn the coordinate. The original
+  // app did not receive it. For stage 2 fully remove the selection window and
+  // hide the collector, then let the actual finger touch Torima directly.
   removeLayer()
-  status(if(p.safe)"ノードを確認。1回の操作で自動登録します"
-   else "$sourceNodeDescription。タップ前の画像を取得中")
-  fun replay(){
-   h.postDelayed({
-    if(teachId!=id)return@postDelayed
-    if(service.rootInActiveWindow?.packageName?.toString()!=APP){
-     proposed=null
-     status("学習元が別アプリになったため操作を中止。再度学習してください")
-     return@postDelayed
-    }
-    val path=Path().apply{moveTo(x.toFloat(),y.toFloat())}
-    val gesture=GestureDescription.Builder()
-     .addStroke(GestureDescription.StrokeDescription(path,0,110)).build()
-    val accepted=service.dispatchGesture(gesture,
-     object:AccessibilityService.GestureResultCallback(){
-      override fun onCompleted(g:GestureDescription?){
-       if(teachId!=id)return
-       h.postDelayed({if(teachId==id)recordOutcome(p)},1_800L)
-      }
-      override fun onCancelled(g:GestureDescription?){
-       if(teachId!=id)return
-       proposed=null
-       status("学習タップがキャンセル。ルール未保存です")
-      }
-     },null)
-    if(!accepted){
-     proposed=null
-     status("学習タップが拒否されました。ルール未保存です")
-    }
-   },180L)
-  }
+  service.suspendTeachingBar()
+  status(if(p.safe)
+   "学習 1/2：ノードは取得済み。次は実際の指で同じ位置を押してください"
+   else "$sourceNodeDescription。タップ前の画面を画像学習中")
   if(p.safe){
-   replay()
+   startPhysicalObservation(p,id)
   }else{
-   // The teaching overlay has already been removed: capture BEFORE touch.
    service.captureVisualTeaching {bitmap,note->
     if(teachId!=id){
      bitmap?.recycle()
@@ -329,13 +304,11 @@ class TeachOverlay(
     }catch(_:Exception){null}
     finally{bitmap?.recycle()}
     if(visualCapture==null){
-     val reason=if(bitmap==null)note
-      else "押した付近に識別可能な模様がない、または×／スキップの許可領域外"
-     proposed=null
-     status("$sourceNodeDescription。画像学習不可：$reason。保留記録は増やしません")
+     failPhysicalObservation(
+      "$sourceNodeDescription。画像の学習特徴を保存できません："+
+       if(bitmap==null)note else "画面が単色／押した位置が対応領域外")
     }else{
-     status("$sourceNodeDescription。画像特徴取得成功、教えた操作を確認中")
-     replay()
+     startPhysicalObservation(p,id)
     }
    }
   }
