@@ -88,6 +88,60 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  private var busy=false
  private var lastRequest=0L
  private var lastProbeRequest=0L
+ private var badgeProbeBusy=false
+ private var badgeProbeAt=0L
+
+ /**
+  * Probe the two tiny header red dots from the FULL DISPLAY, not a cropped
+  * application window (whose origin may omit the system status bar).
+  * Only runs on a verified Torima foreground. Pixels live in RAM.
+  */
+ fun probeRewardBadges(done:(RewardBadgeDetector.Result?)->Unit){
+  val root=service.rootInActiveWindow
+  if(root?.packageName?.toString()!=TARGET || Build.VERSION.SDK_INT<30){
+   done(null);return
+  }
+  val now=SystemClock.elapsedRealtime()
+  if(badgeProbeBusy || busy || now-badgeProbeAt<1_100L){
+   done(null);return
+  }
+  badgeProbeBusy=true
+  badgeProbeAt=now
+  fun finish(image:Bitmap?){
+   if(image==null){
+    badgeProbeBusy=false
+    done(null)
+    return
+   }
+   io.execute{
+    val result=try{
+     val w=540
+     val h=(image.height.toLong()*w/image.width).toInt()
+     val scaled=Bitmap.createScaledBitmap(image,w,h,true)
+     try{
+      val pixels=IntArray(w*h)
+      scaled.getPixels(pixels,0,w,0,0,w,h)
+      RewardBadgeDetector.detect(pixels,w,h)
+     }finally{if(scaled!==image)scaled.recycle()}
+    }catch(_:Exception){null}
+    finally{image.recycle()}
+    service.mainExecutor.execute{
+     badgeProbeBusy=false
+     done(result)
+    }
+   }
+  }
+  try{
+   service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
+    object:AccessibilityService.TakeScreenshotCallback{
+     override fun onSuccess(result:AccessibilityService.ScreenshotResult){
+      finish(toSoftwareBitmap(result))
+     }
+     override fun onFailure(errorCode:Int){finish(null)}
+    })
+  }catch(_:Exception){finish(null)}
+ }
+
 
  /** Scan overlay marks in RAM. No screenshots are persisted by this path. */
  fun probeOverlay(done:(List<OverlayIconDetector.Marker>?,VisualLearnedActions.Match?)->Unit){
