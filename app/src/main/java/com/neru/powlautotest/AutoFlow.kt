@@ -39,6 +39,13 @@ class AutoFlow(
  private var tabSwitchConfirmedSince=0L
  private var tabSwitchConfirmedReads=0
  private var tabSwitchInFlight=false
+ private var badgeInspectionDone=false
+ private var badgeInspectionSince=0L
+ private var badgeProbePending=false
+ private var badgeProbeLastAt=0L
+ private var badgeLast:RewardBadgeDetector.Result?=null
+ private var badgeReadCount=0
+ private var badgeFirstReadAt=0L
  fun collectionStatus():String=CollectionRunStore.summary(service)
  private var playRecoveryStep=0
  private var playRecoveryAt=0L
@@ -305,6 +312,7 @@ class AutoFlow(
   emptyHomeSince=0L
   emptyHomeReads=0
   resetTabSwitch()
+  resetBadgeInspection()
   HomeRecoveryJournal.begin(service)
   HomeTrialJournal.beginRun(service)
   collection.begin()
@@ -322,6 +330,7 @@ class AutoFlow(
   service.restoreHomeTouch()
   resetHomeExperiment()
   resetTabSwitch()
+  resetBadgeInspection()
   playRecoveryStep=0
   gachaPhase=GachaSafety.Phase.NONE
   resetLiveVisual()
@@ -673,6 +682,15 @@ class AutoFlow(
    false
   }.distinctBy{"${it.node.windowId}/${it.rect.toShortString()}"}
  }
+ private fun resetBadgeInspection(){
+  badgeInspectionDone=false
+  badgeInspectionSince=0L
+  badgeProbePending=false
+  badgeProbeLastAt=0L
+  badgeLast=null
+  badgeReadCount=0
+  badgeFirstReadAt=0L
+ }
  private fun resetTabSwitch(){
   tabSwitchStartedAt=0L
   tabSwitchLastTapAt=0L
@@ -867,10 +885,65 @@ class AutoFlow(
   fallbackAttempted=false
   resetLiveVisual()
   clearDeferredHome()
-  update("移動タンクを回収済み。続けてHOME上部の歩数タブへ移動")
+  update("移動の確認結果：$reason。続けてHOME上部の歩数タブへ移動")
   next(850)
  }
 
+ /**
+  * On a STEPS starting screen, inspect both notification dots on TWO live
+  * screenshots before blindly switching to MOVE. Unknown results fall back
+  * to visiting MOVE and inspecting its gray button/remaining count.
+  */
+ private fun inspectBadgesWhenStartingOnSteps(snap:Snapshot,now:Long):Boolean{
+  if(badgeInspectionDone || rewardPhase!=RewardTabPolicy.Phase.MOVE ||
+   selectedRewardTab(snap)!=RewardTabPolicy.Tab.STEPS ||
+   rewardSeparator(snap)==null || blockedRewardObservation(snap))return false
+  if(badgeInspectionSince==0L)badgeInspectionSince=now
+  val result=badgeLast
+  if(result!=null && badgeReadCount>=2 &&
+   now-badgeFirstReadAt>=750L){
+   badgeInspectionDone=true
+   if(RewardBadgeDetector.canSkipMoveOnStepStart(result,badgeReadCount)){
+    collection.finish("SKIPPED",
+     "移動の赤丸なし／歩数の赤丸ありを${badgeReadCount}枚確認。移動画面は未訪問")
+    update("赤丸を確認：移動なし・歩数あり。歩数の回収へ進む")
+    beginStepTabSwitch("移動の赤丸がないため歩数から回収（画像2枚で確認）")
+    return true
+   }
+   update("赤丸検査：${result.describe()}。移動の実際の報酬を確認")
+   return false
+  }
+  if(now-badgeInspectionSince>8_000L){
+   badgeInspectionDone=true
+   update("赤丸が判定不能。移動タブを開いて残り回数を確認")
+   return false
+  }
+  if(!badgeProbePending && now-badgeProbeLastAt>=1_150L){
+   badgeProbePending=true
+   badgeProbeLastAt=now
+   val expectedGeneration=generation
+   service.probeRewardBadges{observed->
+    if(!running || generation!=expectedGeneration)return@probeRewardBadges
+    badgeProbePending=false
+    val stamped=SystemClock.elapsedRealtime()
+    if(observed!=null){
+     val previous=badgeLast
+     if(previous!=null && RewardBadgeDetector.same(previous,observed)){
+      badgeReadCount++
+     }else{
+      badgeReadCount=1
+      badgeFirstReadAt=stamped
+     }
+     badgeLast=observed
+     TeachOverlay.recordAutomatic(service,
+      "タブ赤丸検出：${observed.describe()} 連続${badgeReadCount}枚")
+    }
+   }
+  }
+  update("歩数から開始：移動・歩数の赤丸を画像で確認中（${badgeReadCount}/2枚）")
+  next(750L)
+  return true
+ }
  private fun switchToSteps(snap:Snapshot,now:Long):Boolean{
   val tab=selectedRewardTab(snap)
   if(blockedRewardObservation(snap))return false
@@ -1638,6 +1711,7 @@ class AutoFlow(
   val divider=rewardSeparator(snap)
   if(tab!=desired){
    clearEmptyObservation()
+   if(inspectBadgesWhenStartingOnSteps(snap,now))return true
    // If the user started from the step tab, return to MOVE before processing.
    // Similarly recover the step tab if they manually selected MOVE mid-run.
    if(divider!=null && tab!=RewardTabPolicy.Tab.UNKNOWN){
