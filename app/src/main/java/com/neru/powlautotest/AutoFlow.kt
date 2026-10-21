@@ -757,7 +757,7 @@ class AutoFlow(
   val chosen=nodes.sortedWith(compareByDescending<Item>{it.canPress}
    .thenBy{it.rect.width()*it.rect.height()}).firstOrNull()
   if(chosen!=null){
-   var candidate=chosen
+   var candidate:Item=chosen
    var parent=chosen.node.parent
    var depth=0
    while(parent!=null && depth<3){
