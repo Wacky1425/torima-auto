@@ -151,14 +151,40 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   }
  }
  private var teachingSuspend=false
- fun suspendForTeaching(){
+ private var teachingOriginalFlags:Int?=null
+ /** A hidden View alone may leave an intercepting overlay WINDOW on OPPO.
+  * Make its WindowManager touch region explicitly NOT_TOUCHABLE as well.
+  */
+ fun suspendForTeaching():Boolean{
+  if(teachingSuspend)return true
+  val panel=bar
+  val params=lp
+  if(panel==null || params==null)return true
+  val original=params.flags
+  params.flags=original or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+  try{
+   wm?.updateViewLayout(panel,params)
+  }catch(e:Exception){
+   params.flags=original
+   return false
+  }
+  teachingOriginalFlags=original
   teachingSuspend=true
-  bar?.visibility=View.INVISIBLE
+  panel.visibility=View.INVISIBLE
+  return true
  }
  fun resumeAfterTeaching(){
   if(!teachingSuspend)return
   teachingSuspend=false
-  bar?.visibility=View.VISIBLE
+  val old=teachingOriginalFlags
+  teachingOriginalFlags=null
+  val params=lp
+  val panel=bar
+  if(old!=null && params!=null && panel!=null){
+   params.flags=old
+   try{wm?.updateViewLayout(panel,params)}catch(_:Exception){}
+  }
+  panel?.visibility=View.VISIBLE
  }
  private var autoStatus="停止中"
  fun isVisible():Boolean=bar!=null
