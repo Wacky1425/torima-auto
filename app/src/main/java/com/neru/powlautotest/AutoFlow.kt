@@ -999,10 +999,10 @@ class AutoFlow(
    next(450L)
   }
   homeTrace("swipe_before_restart",HomeSwipeRecoveryPolicy.ID,
-   "twoFailed=${homeTrialIndex} old=${firstButton.rect.toShortString()} " +
+   "initialFailed=${homeTrialIndex} old=${firstButton.rect.toShortString()} " +
     "from=(${initial.x},${initial.fromY}) to=(${initial.x},${initial.toY}) " +
     "durationMs=${HomeSwipeRecoveryPolicy.SWIPE_DURATION_MS}")
-  update("HOMEで2回進めず。再起動前に画面を少し下へスワイプして再タップ")
+  update("HOMEの紫ボタンを1回押しても進まず。まず短い下スワイプ→再タップを試行")
   service.prepareHomeTouch(initial.x,initial.fromY){ready,note->
    if(!stillActive())return@prepareHomeTouch
    if(!ready){
@@ -1052,10 +1052,17 @@ class AutoFlow(
         return@postDelayed
        }
        val point=HomeTouchProfile.current(service,nextButton.rect)
+       val shift=HomeSwipeRecoveryPolicy.measuredButtonShift(
+        firstButton.rect.top,nextButton.rect.top)
+       val moved=HomeSwipeRecoveryPolicy.buttonActuallyMoved(
+        firstButton.rect.top,nextButton.rect.top)
        homeTrace("swipe_fresh_home",HomeSwipeRecoveryPolicy.ID,
         "old=${firstButton.rect.toShortString()} " +
-         "new=${nextButton.rect.toShortString()} tap=(${point.x},${point.y})")
-       update("HOMEを少し下にスワイプ完了。現在の紫ボタンを取り直してもう1回だけ押す")
+         "new=${nextButton.rect.toShortString()} dy=${shift}px " +
+         "contentMoved=${moved} tap=(${point.x},${point.y})")
+       update(if(moved)
+        "HOMEを短く下スワイプ：紫ボタンが縦に${shift}px変化。移動後の位置で再タップ"
+       else "HOMEを短く下スワイプ：ボタンの位置変化は未確認。現在の位置を再取得して再タップ")
        service.prepareHomeTouch(point.x,point.y){tapReady,tapNote->
         if(!stillActive())return@prepareHomeTouch
         if(!tapReady){
@@ -1193,18 +1200,25 @@ class AutoFlow(
     update("HOME試行：タッチ終了待ち。まだ画面遷移は確認できていません")
     return true
    }
-   val waitSeconds=(now-homeLastTrialAt)/1000L
-   if(homeTrialIndex>0 &&
-    now-homeLastTrialAt<HomeTouchTrials.DELAY_BETWEEN_TRIALS_MS){
-    update("HOMEの画面遷移なし。${waitSeconds}秒経過、次の押し方まで待機")
-    return true
-   }
    val sinceLast=if(homeLastTrialAt>0L) now-homeLastTrialAt else 0L
+   // One failed HOME tap -> a small pull-down before *any* second button
+   // hypothesis or force-stop. Do not count a mere gesture callback as success.
    if(HomeSwipeRecoveryPolicy.shouldTry(
      HomeRecoveryPolicy.enabled(service),homeRecoveryAttempts,
      homeSwipeAttempted,decision.kind,decision.target!=null,
      homeTrialIndex,homeTrialInFlight,sinceLast)){
+    homeLastTrial?.let{HomeTrialJournal.outcome(service,it.id,
+     HomeOutcomePolicy.NO_NAVIGATION,
+     "最初のタップ後もHOME。通常の二方式目より先に短い下スワイプへ")}
     return swipeThenRetapHome(decision,now)
+   }
+   val waitSeconds=sinceLast/1000L
+   if(homeTrialIndex>0 &&
+    sinceLast<HomeTouchTrials.DELAY_BETWEEN_TRIALS_MS){
+    update(if(homeSwipeAttempted)
+     "HOMEスワイプ後の再タップでも進まず。少し確認してから再起動復旧"
+     else "HOMEの画面遷移なし。 ${waitSeconds}秒経過、下スワイプ前に確認中")
+    return true
    }
    if(HomeRecoveryPolicy.shouldRecover(HomeRecoveryPolicy.enabled(service),
      homeTrialIndex,homeRecoveryAttempts,homeTrialInFlight,
