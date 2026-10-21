@@ -4,17 +4,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class HomeSwipeRecoveryPolicyTest {
- @Test fun swipeOnlyAfterTwoFailedHomeInputsAndBeforeRestart(){
-  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",true,1,false,30_000L))
-  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",true,2,false,6_999L))
-  assertTrue(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",true,2,false,7_000L))
+ @Test fun oneFailedHomeTapTriggersSwipeBeforeAnySecondMethod(){
+  val threshold=HomeSwipeRecoveryPolicy.FIRST_FAILURE_WAIT_MS
+  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",true,0,false,threshold+10))
+  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",true,1,false,threshold-1))
+  assertTrue(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",true,1,false,threshold))
+  assertTrue(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",true,1,false,7_000L))
   assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,true,"HOME",true,2,false,8_000L))
-  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,1,false,"HOME",true,2,false,8_000L))
-  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME_WAIT",true,2,false,8_000L))
-  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",false,2,false,8_000L))
-  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",true,2,true,8_000L))
-  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(false,0,false,"HOME",true,2,false,8_000L))
+  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,1,false,"HOME",true,1,false,8_000L))
+  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME_WAIT",true,1,false,8_000L))
+  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",false,1,false,8_000L))
+  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(true,0,false,"HOME",true,1,true,8_000L))
+  assertFalse(HomeSwipeRecoveryPolicy.shouldTry(false,0,false,"HOME",true,1,false,8_000L))
  }
+ @Test fun realButtonMovementIsMeasuredFromFreshRect(){
+  assertEquals(18,HomeSwipeRecoveryPolicy.measuredButtonShift(1175,1193))
+  assertTrue(HomeSwipeRecoveryPolicy.buttonActuallyMoved(1175,1193))
+  assertFalse(HomeSwipeRecoveryPolicy.buttonActuallyMoved(1175,1177))
+ }
+
  @Test fun gestureIsShortAndStaysOutsidePurpleButton(){
   val stroke=HomeSwipeRecoveryPolicy.strokeFor(90,1175,990,1080,2412)
   assertNotNull(stroke)
