@@ -979,7 +979,7 @@ class AutoFlow(
   if(initial==null){
    homeTrace("swipe_unavailable",HomeSwipeRecoveryPolicy.ID,
     "purple=${firstButton.rect.toShortString()} screen=${display.widthPixels}x${display.heightPixels}")
-   update("HOMEの短い下スワイプに適切な余白がないため、安全に再起動へ切替")
+   update("HOMEの短い上スワイプに適切な余白がないため、安全に再起動へ切替")
    return recoverStalledHome(now)
   }
   homeSwipeActive=true
@@ -1002,7 +1002,7 @@ class AutoFlow(
    "initialFailed=${homeTrialIndex} old=${firstButton.rect.toShortString()} " +
     "from=(${initial.x},${initial.fromY}) to=(${initial.x},${initial.toY}) " +
     "durationMs=${HomeSwipeRecoveryPolicy.SWIPE_DURATION_MS}")
-  update("HOMEの紫ボタンを1回押しても進まず。まず短い下スワイプ→再タップを試行")
+  update("HOMEの紫ボタンを1回押しても進まず。まず短い上スワイプ→再タップを試行")
   service.prepareHomeTouch(initial.x,initial.fromY){ready,note->
    if(!stillActive())return@prepareHomeTouch
    if(!ready){
@@ -1033,7 +1033,7 @@ class AutoFlow(
    val accepted=service.dispatchGesture(gesture,
     object:AccessibilityService.GestureResultCallback(){
      override fun onCancelled(gestureDescription:GestureDescription?){
-      abort("短い下スワイプがキャンセル")
+      abort("短い上スワイプがキャンセル")
      }
      override fun onCompleted(gestureDescription:GestureDescription?){
       if(!stillActive())return
@@ -1061,8 +1061,8 @@ class AutoFlow(
          "new=${nextButton.rect.toShortString()} dy=${shift}px " +
          "contentMoved=${moved} tap=(${point.x},${point.y})")
        update(if(moved)
-        "HOMEを短く下スワイプ：紫ボタンが縦に${shift}px変化。移動後の位置で再タップ"
-       else "HOMEを短く下スワイプ：ボタンの位置変化は未確認。現在の位置を再取得して再タップ")
+        "HOMEを短く上スワイプ：紫ボタンが縦に${shift}px変化。移動後の位置で再タップ"
+       else "HOMEを短く上スワイプ：ボタンの位置変化は未確認。現在の位置を再取得して再タップ")
        service.prepareHomeTouch(point.x,point.y){tapReady,tapNote->
         if(!stillActive())return@prepareHomeTouch
         if(!tapReady){
@@ -1090,7 +1090,7 @@ class AutoFlow(
         homeTrialIndex++
         homeClickObserved=false
         HomeTrialJournal.beginAttempt(service,trial.id,trial.label,
-         trial.mode.name,"下スワイプ後の最新紫ボタン ${current.rect.toShortString()}" +
+         trial.mode.name,"上スワイプ後の最新紫ボタン ${current.rect.toShortString()}" +
           " point=(${currentPoint.x},${currentPoint.y})")
         homeTrace("swipe_retry_dispatch",trial.id,
          "tap=${currentPoint.x},${currentPoint.y} " +
@@ -1105,7 +1105,7 @@ class AutoFlow(
       },HomeSwipeRecoveryPolicy.AFTER_SWIPE_SETTLE_MS)
      }
     },null)
-   if(!accepted)abort("短い下スワイプがAndroidに拒否された")
+   if(!accepted)abort("短い上スワイプがAndroidに拒否された")
   }
   return true
  }
@@ -1209,7 +1209,7 @@ class AutoFlow(
      homeTrialIndex,homeTrialInFlight,sinceLast)){
     homeLastTrial?.let{HomeTrialJournal.outcome(service,it.id,
      HomeOutcomePolicy.NO_NAVIGATION,
-     "最初のタップ後もHOME。通常の二方式目より先に短い下スワイプへ")}
+     "最初のタップ後もHOME。通常の二方式目より先に短い上スワイプへ")}
     return swipeThenRetapHome(decision,now)
    }
    val waitSeconds=sinceLast/1000L
@@ -1217,7 +1217,7 @@ class AutoFlow(
     sinceLast<HomeTouchTrials.DELAY_BETWEEN_TRIALS_MS){
     update(if(homeSwipeAttempted)
      "HOMEスワイプ後の再タップでも進まず。少し確認してから再起動復旧"
-     else "HOMEの画面遷移なし。 ${waitSeconds}秒経過、下スワイプ前に確認中")
+     else "HOMEの画面遷移なし。 ${waitSeconds}秒経過、上スワイプ前に確認中")
     return true
    }
    if(HomeRecoveryPolicy.shouldRecover(HomeRecoveryPolicy.enabled(service),
