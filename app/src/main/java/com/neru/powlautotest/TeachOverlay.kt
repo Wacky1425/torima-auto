@@ -165,15 +165,8 @@ class TeachOverlay(
      true
     }
    }
-   val label=TextView(service).apply{
-    text="学習モード：次に操作したい場所を1回タップ。\n画面に戻りたい場合は「中止」（20秒で自動終了）。"
-    textSize=13f
-    setTextColor(Color.WHITE)
-    setBackgroundColor(Color.rgb(22,39,64))
-    setPadding(dp(12),dp(9),dp(12),dp(9))
-   }
-   layer.addView(label,FrameLayout.LayoutParams(
-    dp(250),dp(80),Gravity.TOP or Gravity.LEFT))
+   // The top-left help box hid top-left ad dismiss controls. Don't cover
+   // the underlying screen: show instructions through Toast instead.
    val cancel=TextView(service).apply{
     text="中止"
     textSize=17f
