@@ -9,8 +9,8 @@ android {
         applicationId = "com.neru.powlautotest"
         minSdk = 24
         targetSdk = 35
-        versionCode = 44
-        versionName = "3.12.2"
+        versionCode = 45
+        versionName = "3.12.3"
     }
     signingConfigs {
         create("distribution") {
