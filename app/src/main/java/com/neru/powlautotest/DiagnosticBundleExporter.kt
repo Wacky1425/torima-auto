@@ -15,8 +15,8 @@ internal object DiagnosticBundleExporter {
  private const val DIR="diagnostic_exports"
  fun create(ctx:Context):File{
   val folder=File(ctx.cacheDir,DIR).also{it.mkdirs()}
-  val archive=File(folder,"torima-diagnostics-v3.12.1.zip")
-  val temp=File(folder,"torima-diagnostics-v3.12.1.tmp")
+  val archive=File(folder,"torima-diagnostics-v3.12.2.zip")
+  val temp=File(folder,"torima-diagnostics-v3.12.2.tmp")
   if(temp.exists())temp.delete()
   val resultText=HomeTrialJournal.report(ctx)
   try{
@@ -39,7 +39,7 @@ internal object DiagnosticBundleExporter {
     val screenshots=ScreenshotDiagnostics.appendToDiagnosticZip(ctx,zip)
     put("manifest.json",JSONObject().apply{
      put("formatVersion",1)
-     put("appVersion","3.12.1")
+     put("appVersion","3.12.2")
      put("createdAt",System.currentTimeMillis())
      put("screenshotCount",screenshots)
      put("nodeLearnedCount",LearnedActions.count(ctx))
@@ -54,7 +54,7 @@ internal object DiagnosticBundleExporter {
      put("localOnlyUntilUserShares",true)
     }.toString(2))
     put("README_まず読む.txt",
-     "Torima Auto v3.12.1 の診断データを1ファイルにまとめたZIPです。\n" +
+     "Torima Auto v3.12.2 の診断データを1ファイルにまとめたZIPです。\n" +
      "07_HOME復旧履歴.json はアプリ情報・強制停止UI・再起動の成功や失敗の記録です。\n" +
      "00_指タップと自動の比較.txt を先に読むと両者の結果が分かります。\n" +
      "06_指タップ比較イベント.json は手動試行のCLICK通知・画面遷移時刻・画面情報です。\n" +
