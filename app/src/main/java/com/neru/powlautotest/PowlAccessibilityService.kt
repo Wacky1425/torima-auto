@@ -175,6 +175,11 @@ class PowlAccessibilityService:AccessibilityService(){
  fun beginTeachTap():String {
   stopAutomaticOperation()
   val msg=teachOverlay.begin()
+  if(msg.startsWith("学習 1/2")){
+   // Don't let the collector bar cover a top-left / bottom ad close while
+   // the user is picking a point. Restore only after real finger outcome.
+   screenCollector.suspendForTeaching()
+  }
   report=msg
   return msg
  }
