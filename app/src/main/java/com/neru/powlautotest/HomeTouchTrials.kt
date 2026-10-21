@@ -30,7 +30,7 @@ internal object HomeTouchTrials {
  // Keep separate from ordered() so existing tap preference remains unchanged.
  val swipeRecoveryRetry=Trial(
   HomeSwipeRecoveryPolicy.ID,
-  "HOMEを少し下へスワイプ→再取得した紫ボタンをタップ",
+  "HOMEを少し上へスワイプ→再取得した紫ボタンをタップ",
   HomeSwipeRecoveryPolicy.RETRY_HOLD_MS,Position.LEARNED)
  const val OVERLAY_SETTLE_MS=220L
  const val DELAY_BETWEEN_TRIALS_MS=7_000L
