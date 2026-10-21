@@ -27,7 +27,7 @@ internal class CollectionRunStore(private val ctx:Context){
    return if(items.length()>0)items.optJSONObject(items.length()-1) else null
   }
   fun export(ctx:Context):String=JSONObject().apply{
-   put("scope","Torima tank video collection task only")
+   put("scope","Torima move tanks then step rewards (two verified phases)")
    put("active",json(pref(ctx).getString(ACTIVE,null)))
    put("history",recent(ctx))
   }.toString(2)
@@ -47,7 +47,8 @@ internal class CollectionRunStore(private val ctx:Context){
    val remaining=if(count>=0)"あと${count}回" else "残回数未確認"
    val first=if(initial>=0)"開始${initial}回" else "開始回数未確認"
    val note=session.optString("reason","").take(65)
-   return "タンク動画 [$status] ${elapsedText(end-start)} | $remaining (元$first) | 観測減少${observed}回"+
+   val taskName=session.optString("taskName","タンク動画")
+   return "$taskName [$status] ${elapsedText(end-start)} | $remaining (元$first) | 観測減少${observed}回"+
     if(note.isNotBlank())" | $note" else ""
   }
   private fun push(ctx:Context,run:JSONObject){
@@ -62,7 +63,11 @@ internal class CollectionRunStore(private val ctx:Context){
  private var zeroReads=0
  private var startedElapsed=0L
  fun isActive():Boolean=current?.optString("status")=="RUNNING"
- fun begin(){
+ fun begin(
+  taskId:String=CollectionTaskPolicy.TASK_ID,
+  taskName:String=CollectionTaskPolicy.TASK_TITLE,
+  scope:String="移動タンクの残回数と報酬取得確認"
+ ){
   val previous=json(pref(ctx).getString(ACTIVE,null))
   if(previous!=null && previous.optString("status")=="RUNNING"){
    previous.put("status","INTERRUPTED")
@@ -72,9 +77,9 @@ internal class CollectionRunStore(private val ctx:Context){
   }
   val now=System.currentTimeMillis()
   current=JSONObject().apply{
-   put("taskId",CollectionTaskPolicy.TASK_ID)
-   put("taskName",CollectionTaskPolicy.TASK_TITLE)
-   put("scope","タンク動画の残回数のみ。その他の回収対象は未対応")
+   put("taskId",taskId)
+   put("taskName",taskName)
+   put("scope",scope)
    put("status","RUNNING")
    put("startedAt",now)
    put("budgetMs",CollectionTaskPolicy.BUDGET_MS)
@@ -160,6 +165,7 @@ internal class CollectionRunStore(private val ctx:Context){
   val currentText=if(remaining>=0)"あと${remaining}回" else "回数未確認"
   val mins=(System.currentTimeMillis()-run.optLong("startedAt"))/60_000L
   val estimated=run.optInt("observedDecrements")
-  return "動画回収 ${mins}分／$currentText／画面上の回数減少$estimated"
+  val title=run.optString("taskName","動画回収")
+  return "$title ${mins}分／$currentText／画面上の回数減少$estimated"
  }
 }
