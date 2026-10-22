@@ -1723,9 +1723,32 @@ class AutoFlow(
 
  private fun mapLabels(snap:Snapshot)=snap.nodes.filter{it.node.isVisibleToUser}
   .flatMap{listOf(it.text.trim(),it.desc.trim())}.filter{it.isNotBlank()}
- private fun mapButton(snap:Snapshot,caption:String):Item? = snap.nodes.filter{
-  it.canPress && (it.text.trim()==caption || it.desc.trim()==caption)
- }.distinctBy{it.rect.toShortString()}.singleOrNull()
+ private fun mapButton(snap:Snapshot,caption:String):Item? {
+  val bounds=Rect();snap.root.getBoundsInScreen(bounds)
+  val w=bounds.width();val h=bounds.bottom
+  fun allowed(r:Rect):Boolean = r.width()>0 && r.height()>0 &&
+   r.width()<=w*95/100 && r.height()<=h*15/100 && when(caption){
+    "マップ"->r.centerY()>h*85/100 && r.centerX() in (w*60/100)..(w*80/100)
+    "ストック"->r.centerX()>w*60/100 && r.centerY() in (h*40/100)..(h*90/100)
+    else->true
+   }
+  val candidates=snap.nodes.filter{it.node.isVisibleToUser && allowed(it.rect) &&
+   (it.text.trim()==caption || it.desc.trim()==caption)}.mapNotNull { label->
+   if(label.canPress)return@mapNotNull label
+   var node=label.node.parent;var depth=0
+   var hit:Item?=null
+   while(node!=null && depth<3){
+    val r=Rect();node.getBoundsInScreen(r)
+    if(node.isVisibleToUser && node.isClickable && node.isEnabled && allowed(r)){
+     hit=Item(node,node.text?.toString().orEmpty(),node.contentDescription?.toString().orEmpty(),r)
+     break
+    }
+    node=node.parent;depth++
+   }
+   hit
+  }.distinctBy{it.rect.toShortString()}
+  return candidates.singleOrNull()
+ }
  private fun mapDecision(snap:Snapshot):Decision? {
   val labels=mapLabels(snap)
   val bottom=mapButton(snap,"宝箱の底のおもちゃをチェック")
@@ -1798,7 +1821,7 @@ class AutoFlow(
     next(900);return true
    }
    MapStockPolicy.Phase.OPEN_MAP->{
-    if(labels.any{it=="現在地"} && labels.any{it=="マップ"})mapGo(MapStockPolicy.Phase.OPEN_STOCK,now)
+    if(snap.has("現在地") && snap.has("マップ"))mapGo(MapStockPolicy.Phase.OPEN_STOCK,now)
     else return mapTap(snap,nav,"map","マップを開く",now)
    }
    else->Unit
