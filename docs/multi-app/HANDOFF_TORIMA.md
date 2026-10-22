@@ -43,13 +43,13 @@
 8. ビルドに成功したことと端末実機での成功は区別する。
 
 ## 開発フロー
-- `dev/torima`にコミットし、Actions「Development APK (no release)」を利用。テスト署名・appIdの注意は[BRANCH_AND_RELEASE_RULES.md](BRANCH_AND_RELEASE_RULES.md)を参照。
+- `dev/torima`にコミットし、Actions「Development APK (no release)」を利用。**最初の動作確認ビルドは成功**：[Actions run #39701993971](https://github.com/Wacky1425/torima-auto/actions/runs/39701993971)。同runのArtifacts内の`TorimaAuto-QA.apk`（`com.neru.powlautotest.qa`）は既存署名で作成済み。OPPO実機での独立インストールは未検証。
 - すべての正式公開をこのチャットで勝手に行わず、統合チャットへリリース候補を渡す。小さな修正でも理由とテスト結果を追記。
 - 既存`:app`のapplicationId・署名・保存済みルールを保つ。新アプリを`AutoFlow.kt`に追加しない。
 - 統合担当へ共通化したい処理を提案しても、許可前に`common/`を直接書き換えない。
 
 ## セッション終了時の引き継ぎ欄（毎回更新）
-- 最新コミット：現時点では新ブランチ作成直後のv3.14を起点
+- 新ブランチ起点：`dev/torima` のコミット `2326e780c673ee7b4fdaed2f0df2d76f5c1a4bf7`。この初回コミットはQA検証案内のみでTorima回収ロジックを変更していない。
 - 実機で確かめたこと：なし（移行準備時点）
 - 直近の要件：赤丸の実機検証、移動→歩数、広告自動操作・画像学習の信頼性向上
 - 新たな診断ZIPの場所・結果：新チャットで受け取ったら追記
