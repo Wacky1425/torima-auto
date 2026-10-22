@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.13" android:textSize="23sp"/>
+<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.14" android:textSize="23sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:layout_marginTop="10dp" android:text="診断を送るなら、このボタン1つだけでOK。"
  android:textStyle="bold" android:textSize="16sp"/>
@@ -42,7 +42,7 @@
  android:layout_height="wrap_content" android:text="回収タスク・所要時間の履歴をコピー"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="移動タンクの回収を終えると自動で「歩数」タブに移り、動画・ガチャを同じ流れで回収します。歩数も残り0回（または灰色の回収不可状態）を確認したら停止します。画面上のコンパクトなバーで「開始・停止・学習」を操作。バーを長押しして動かせます。「詳細」を開くと画面記録・画像・手動比較などの機能が表示されます。HOMEの紫ボタンが1回目で進まなければ、短い上スワイプでボタンの位置をずらし、新しい位置で再タップ。それでも進まなければ再起動復旧します。"/>
+ android:text="どちらのタブから開始しても移動・歩数を確認します。歩数から開始した場合はアイコン上の赤丸を画像で2回確認し、移動に赤丸がなければ歩数を先に回収、移動に赤丸があれば移動を確認します。画像判定不能ならタブを開いて確認します。移動タンクの回収を終えると自動で「歩数」タブに移り、動画・ガチャを同じ流れで回収します。歩数も残り0回（または灰色の回収不可状態）を確認したら停止します。画面上のコンパクトなバーで「開始・停止・学習」を操作。バーを長押しして動かせます。「詳細」を開くと画面記録・画像・手動比較などの機能が表示されます。HOMEの紫ボタンが1回目で進まなければ、短い上スワイプでボタンの位置をずらし、新しい位置で再タップ。それでも進まなければ再起動復旧します。"/>
 <Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作バーを表示（開始・停止・学習）"/>
 <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
 <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
