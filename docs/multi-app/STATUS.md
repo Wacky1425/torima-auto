@@ -50,3 +50,11 @@ Androidビルド: 未実行 / 合格 / 失敗
 
 ## 引き継ぎが混線しそうになったら
 まずこの台帳と[ブランチ運用](BRANCH_AND_RELEASE_RULES.md)を参照。GitHubコミットを確認せずに「他チャットが作った」と断定しない。同名Releaseが見えても、対象のAPK・version・SHAを検証する。古い開発チャットの説明が実装と食い違う場合は、対象ブランチの実際のコード・テストを優先する。
+
+## 統合担当引き継ぎ・初期API追加（2026-10-22）
+- 基準コミット: `7dff02b`。作業ブランチ: `integration/staging`。本項を含むコミットが変更単位（SHAはgit logで確認）。
+- 変更: `common/`にAndroid非依存APIと対象違い・古い観測・別画面・不正完了のテスト、ルートGradleへの登録、開発CIの`:common:test`、`MODULE_CONTRACT.md`。
+- `app/`、正式applicationId、署名、学習保存、mainは未変更。共通APIは既存Torimaに未接続。エンジン抽出/統合APK/サービス多重操作防止は未実装。
+- ローカル: `git diff --check`合格。Gradleは配布元へのネットワーク到達不可で起動前に失敗。テスト合格とは扱わず、push後のActionsで検証する。
+- 実機: 未実施。QAの共存と学習保持確認が必要。新アプリ名/packageは未確定のまま。
+- 次: ActionsのAPI/Androidビルド確認、OPPO QA共存・同一QA更新テスト、その後確定した新アプリのモジュール追加。

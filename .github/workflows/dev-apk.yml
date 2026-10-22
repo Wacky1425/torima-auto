@@ -46,6 +46,9 @@ jobs:
       - name: Set up Gradle with dependency cache
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Test shared API
+        run: bash ./gradlew :common:test --no-daemon
+
       - name: Validate module, build APK and run its unit tests
         shell: bash
         run: |

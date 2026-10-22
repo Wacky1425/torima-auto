@@ -7,3 +7,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "TorimaAuto"
 include(":app")
+include(":common")
