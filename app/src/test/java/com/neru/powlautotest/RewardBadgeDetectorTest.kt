@@ -42,6 +42,10 @@ class RewardBadgeDetectorTest {
   assertEquals(RewardTabPolicy.Tab.STEPS,detected.selected)
   assertTrue(RewardBadgeDetector.canSkipMoveOnStepStart(detected,2))
   assertFalse(RewardBadgeDetector.canSkipMoveOnStepStart(detected,1))
+  val uncertainSelection=RewardBadgeDetector.detect(
+   screen(false,true),width,height)
+  assertFalse(RewardBadgeDetector.canSkipMoveOnStepStart(
+   uncertainSelection,4))
  }
  @Test fun moveDotMeansCheckMoveFirst(){
   val result=RewardBadgeDetector.detect(
