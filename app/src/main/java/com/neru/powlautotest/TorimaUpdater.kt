@@ -28,6 +28,12 @@ class TorimaUpdater(private val activity: Activity, private val status: TextView
         return c
     }
     fun check() {
+        // QA has a different applicationId and cannot install a production
+        // Release as its own update. Keep the stable user's updater unchanged.
+        if (activity.packageName.endsWith(".dev")) {
+            show("これはTorima Auto DEVです。更新はGitHub Actionsの開発版APKから行ってください。正式版は別アプリとして残っています。")
+            return
+        }
         show("更新情報を確認しています…")
         Thread {
             try {
