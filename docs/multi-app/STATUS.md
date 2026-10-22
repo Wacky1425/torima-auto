@@ -22,8 +22,8 @@
 - [x] アプリ専用・統合担当の所有ファイル境界を文書化
 - [x] 新チャット用の引き継ぎ資料とコピー用開始文を用意
 - [x] 開発版APKを正式Releaseせずビルドするworkflowを追加
-- [ ] ドキュメント・workflowを安定ブランチに反映したことの確認
-- [ ] `dev/torima`、`integration/staging`の開発ブランチ作成・確認
+- [x] ドキュメント・workflowをmainへ反映（既存Torima v3.14正式Releaseは維持）
+- [x] `dev/torima`、`integration/staging`の専用ブランチを作成しSHAを確認
 - [x] Torima debug `.dev` と固定署名QA `.qa` の独立アプリID・表示名・Actionsビルド設定
 - [ ] 新アプリ名確定・新規ブランチ/モジュールの作成
 - [ ] 共通エンジンの物理的なGradleモジュール分割
