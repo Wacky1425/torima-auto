@@ -103,6 +103,6 @@ internal object RewardBadgeDetector {
    a.selected==b.selected &&
    a.move!=Mark.UNKNOWN && a.steps!=Mark.UNKNOWN
  fun canSkipMoveOnStepStart(result:Result,stableReads:Int):Boolean =
-  stableReads>=2 && result.move==Mark.ABSENT &&
-   result.steps==Mark.PRESENT
+  stableReads>=2 && result.selected==RewardTabPolicy.Tab.STEPS &&
+   result.move==Mark.ABSENT && result.steps==Mark.PRESENT
 }
