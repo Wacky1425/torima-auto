@@ -32,6 +32,7 @@ jobs:
     timeout-minutes: 25
     env:
       MODULE: ${{ inputs.module || 'app' }}
+      HAS_KEY: ${{ secrets.TORIMA_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
     steps:
       - name: Checkout requested branch
         uses: actions/checkout@v4
@@ -55,6 +56,37 @@ jobs:
           fi
           echo "Build module :$MODULE from $GITHUB_REF"
           bash ./gradlew ":$MODULE:assembleDebug" ":$MODULE:testDebugUnitTest" --no-daemon
+
+      # Optional stable-signature Torima QA app. It installs *alongside*
+      # production as com.neru.powlautotest.qa, so repeated tests preserve
+      # the separate QA app's image/node learning and settings.
+      - name: Decode Torima QA signing key
+        if: ${{ env.HAS_KEY == 'true' && env.MODULE == 'app' && github.event_name != 'pull_request' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.TORIMA_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/torima-qa.jks"
+          test -s "$RUNNER_TEMP/torima-qa.jks"
+
+      - name: Build stable-signature Torima QA APK (NOT public release)
+        if: ${{ env.HAS_KEY == 'true' && env.MODULE == 'app' && github.event_name != 'pull_request' }}
+        env:
+          TORIMA_KEYSTORE: ${{ runner.temp }}/torima-qa.jks
+          TORIMA_STORE_PASSWORD: ${{ secrets.TORIMA_STORE_PASSWORD }}
+          TORIMA_KEY_ALIAS: ${{ secrets.TORIMA_KEY_ALIAS }}
+          TORIMA_KEY_PASSWORD: ${{ secrets.TORIMA_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$TORIMA_STORE_PASSWORD"
+          test -n "$TORIMA_KEY_ALIAS"
+          test -n "$TORIMA_KEY_PASSWORD"
+          bash ./gradlew :app:assembleQa --no-daemon
+          test -s app/build/outputs/apk/qa/app-qa.apk
+          mkdir -p dev-artifacts
+          cp app/build/outputs/apk/qa/app-qa.apk dev-artifacts/TorimaAuto-QA.apk
 
       - name: Collect only this module's debug APK
         shell: bash
