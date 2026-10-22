@@ -2,7 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <queries><package android:name="jp.co.incrementp.milemobile" /></queries>
-    <application android:theme="@style/AppTheme" android:label="Torima Auto">
+    <application android:theme="@style/AppTheme" android:label="${appDisplayName}">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
