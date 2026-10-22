@@ -13,7 +13,8 @@ internal object RewardBadgeDetector {
  data class Result(
   val move:Mark,val steps:Mark,
   val moveRedPixels:Int,val stepRedPixels:Int,
-  val width:Int,val height:Int
+  val width:Int,val height:Int,
+  val selected:RewardTabPolicy.Tab=RewardTabPolicy.Tab.UNKNOWN
  ){
   fun describe():String="赤丸（移動=${move.name}:${moveRedPixels}px / 歩数=${steps.name}:${stepRedPixels}px）"
  }
@@ -29,6 +30,34 @@ internal object RewardBadgeDetector {
   val g=(c ushr 8) and 255
   val b=c and 255
   return r>=205 && g in 75..238 && b<=85
+ }
+ private fun orangeHeader(c:Int):Boolean{
+  val r=(c ushr 16) and 255
+  val g=(c ushr 8) and 255
+  val b=c and 255
+  return r>=235 && g in 78..150 && b<=55
+ }
+ private fun goldHeader(c:Int):Boolean{
+  val r=(c ushr 16) and 255
+  val g=(c ushr 8) and 255
+  val b=c and 255
+  return r>=235 && g in 155..225 && b<=55
+ }
+ private fun selectedHeader(pixels:IntArray,w:Int,h:Int):RewardTabPolicy.Tab{
+  // Small blank strips left of the MOVE and STEPS icons. In the two user
+  // screenshots, the active tab is orange and the other tab is gold.
+  val y=(h*0.145).toInt()
+  val mx=(w*0.035).toInt()
+  val sx=(w*0.160).toInt()
+  if(y !in 0 until h || mx !in 0 until w || sx !in 0 until w)
+   return RewardTabPolicy.Tab.UNKNOWN
+  val move=pixels[y*w+mx]
+  val steps=pixels[y*w+sx]
+  return when{
+   orangeHeader(move) && goldHeader(steps)->RewardTabPolicy.Tab.MOVE
+   orangeHeader(steps) && goldHeader(move)->RewardTabPolicy.Tab.STEPS
+   else->RewardTabPolicy.Tab.UNKNOWN
+  }
  }
  // A 15px diameter red dot in a 688px full-height screenshot becomes
  // approximately 12px in the 540px detector image.
@@ -66,10 +95,12 @@ internal object RewardBadgeDetector {
    return Result(Mark.UNKNOWN,Mark.UNKNOWN,0,0,width,height)
   val move=marker(pixels,width,height,0.116)
   val steps=marker(pixels,width,height,0.260)
-  return Result(move.first,steps.first,move.second,steps.second,width,height)
+  return Result(move.first,steps.first,move.second,steps.second,
+   width,height,selectedHeader(pixels,width,height))
  }
  fun same(a:Result,b:Result):Boolean =
   a.move==b.move && a.steps==b.steps &&
+   a.selected==b.selected &&
    a.move!=Mark.UNKNOWN && a.steps!=Mark.UNKNOWN
  fun canSkipMoveOnStepStart(result:Result,stableReads:Int):Boolean =
   stableReads>=2 && result.move==Mark.ABSENT &&
