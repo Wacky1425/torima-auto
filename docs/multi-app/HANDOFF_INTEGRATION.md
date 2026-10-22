@@ -30,7 +30,7 @@
 
 ### Phase 1：独立APKの実機テスト基盤
 - 新アプリのための`apps/<slug>`のモジュール登録契約を策定する。新アプリ用`applicationId`は一意、`FileProvider`のauthorityも一意。
-- トリマdebug APKに `applicationIdSuffix=.dev`、表示名 `Torima Auto DEV` を設定済み。**GitHubビルドとOPPO端末での独立インストールは未検証**。本番の学習データは別サンドボックスなのでexport/import機能を設計する。
+- Torima開発用に debug `.dev` と**既存署名を使うQA `.qa`** を追加し、GitHub Actionsから `TorimaAuto-QA.apk` を出せるようコード設定済み。ビルドとOPPO端末での独立インストールは要確認。別サンドボックスなので本番の学習データは自動で移らず、必要ならexport/importを設計する。
 - QA用の表示名／バージョン表示／共存インストールを用意。必要ならGitHub Actions Secretsの署名鍵を再利用し、**Secrets自体は公開しない**。
 - 新アプリ2つ以上が別々にビルドできることを実機で確認。
 
