@@ -37,12 +37,15 @@ class PublicQaUpdater(private val activity: Activity, private val status: TextVi
         show("QAの更新情報を確認しています…")
         Thread {
             try {
+                val local = installed()
+                show("現在のQA：${local.versionName}（${code(local)}）。更新情報を確認しています…")
                 val bytes = ByteArrayOutputStream()
                 readPublic(config.feedUrl) { boundedCopy(it, 64 * 1024L) { b, n -> bytes.write(b, 0, n) } }
                 val update = QaUpdate.parse(bytes.toString("UTF-8"))
                 update.validate(config, activity.packageName, Build.VERSION.SDK_INT)
-                val local = installed()
-                if (update.versionCode <= code(local)) {
+                if (update.versionCode < code(local)) {
+                    show("現在のQA：${local.versionName}（${code(local)}）。配布中のQA（${update.versionCode}）より新しいため更新しません。")
+                } else if (update.versionCode == code(local)) {
                     show("QA最新版です：${local.versionName}（${code(local)}）")
                 } else {
                     ui {

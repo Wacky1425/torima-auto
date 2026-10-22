@@ -74,3 +74,10 @@ Androidビルド: 未実行 / 合格 / 失敗
 - ローカルPython配布テスト2件合格、diff整形確認合格。Androidはローカル通信制限でGradle取得不可、Actionsへ引き継ぐ。CI合格・公開asset確認まで完了扱いしない。
 - 前回初期APIコミット`d229605`の[Actions #39704114700](https://github.com/Wacky1425/torima-auto/actions/runs/39704114700)は共通API/Android/QAビルド成功を確認。
 - OPPOでの上書き・設定/画像/ノード学習保持は未確認。初回手動QA上書き、その次の版からアプリ内更新する手順をQA_UPDATESに用意。
+
+### 初回QA配布の検証結果
+- 実装コミット: `b64834174adeaa24c6f021578faef837761952fe`（親: 統合`d229605`とTorima`b7899db`）。
+- [QAビルド/テスト/配布 #39723455063](https://github.com/Wacky1425/torima-auto/actions/runs/39723455063)成功。共通API、更新ポリシー、Torima QA/Debugのテスト、固定署名QA、匿名APKのSHA-256確認を完了。
+- [DEVビルド #39723455046](https://github.com/Wacky1425/torima-auto/actions/runs/39723455046)も成功。
+- 初回導入用: `qa-torima-100001` / `torima-qa-100001.apk`（2,882,332 bytes、SHA-256 `26fef511dfd2dc20d2774de16b21e19f7e65aa5c1d99c6e1ffd1cc0946b4b98d`）。プレリリース/asset実在確認済み。
+- 次版はQA現在版の表示と公開manifestの匿名取得確認を追加。初回導入用100001を残して、100002へのアプリ内更新を実機テストできるようにする。端末結果は未確認。

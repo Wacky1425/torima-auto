@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import time
 import urllib.request
 
 
@@ -120,6 +121,20 @@ def main():
         (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
         # Last write only, serialized per app by workflow concurrency.
         gh("release", "upload", channel, str(root / "manifest.json"), "--clobber")
+        feed_url = f"https://github.com/{repo}/releases/download/{channel}/manifest.json"
+        for attempt in range(5):
+            try:
+                request = urllib.request.Request(feed_url, headers={"Cache-Control": "no-cache"})
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    public_manifest = json.loads(response.read(65537))
+                if public_manifest != manifest:
+                    raise ValueError("Public manifest differs from the verified release")
+                break
+            except Exception:
+                if attempt == 4:
+                    raise
+                time.sleep(2)
+        print(f"Anonymous QA feed verified: {feed_url}")
     print(f'QA published: {manifest["apkUrl"]}')
 
 
