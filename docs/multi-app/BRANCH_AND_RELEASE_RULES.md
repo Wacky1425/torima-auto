@@ -58,3 +58,6 @@
 
 ## 統合担当への要望（未実装）
 安定Torimaを残したまま、debug（`.dev`）と署名付きQA（`.qa`）の**実機共存・上書き更新**を検証する。その後は新アプリごとの独立APK、統合版、学習データexport/importの実装を進める。
+
+## QA配布方式の更新（統合担当、2026-10-22）
+アプリ内QA更新は[QA_UPDATES.md](QA_UPDATES.md)を参照。`qa-publish.yml`がテスト済み固定署名QAを専用プレリリースへ公開し、通常開発workflowはDEV Artifactsのみを生成する構成へ変更した。正式版`releases/latest`は維持。専用チャットは統合ブランチの本変更を取り込んでから使用し、更新処理・app Gradle・共有module/CI以外の専用ロジックを上書きしない。旧QAの初回上書きとデータ保持は実機確認待ち。

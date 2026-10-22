@@ -58,3 +58,19 @@ Androidビルド: 未実行 / 合格 / 失敗
 - ローカル: `git diff --check`合格。Gradleは配布元へのネットワーク到達不可で起動前に失敗。テスト合格とは扱わず、push後のActionsで検証する。
 - 実機: 未実施。QAの共存と学習保持確認が必要。新アプリ名/packageは未確定のまま。
 - 次: ActionsのAPI/Androidビルド確認、OPPO QA共存・同一QA更新テスト、その後確定した新アプリのモジュール追加。
+## 2026-10-22 Torima専用：マップストックQA候補
+- `dev/torima`：既存QAの実機基本動作はユーザー報告あり。詳細ZIPなし。
+- 移動→歩数→赤丸ありマップ→ストック宝箱2広告回収を初回実装。コード・制約・テストは同ブランチHANDOFF_TORIMA末尾参照。新機能の実機は未確認。
+- 正式版・統合コード・CIは変更なし。QAビルド結果は実行後記録。
+
+- 初回マップ実装SHA：`a75e6c0ad651b5f95409d2da63f2a2ae46026ef7`。Actions `39714388563` のdebugビルド・単体テスト成功。親ボタン解決を補強した後続コミットのQAはActionsで確認。
+
+- 最終QAコードSHA：`2ef51f2a43ad277cc105380552c6314d972e4122`。Actions [39714575369](https://github.com/Wacky1425/torima-auto/actions/runs/39714575369) でdebugビルド・単体テスト・署名QA APK生成すべて成功。Artifact `12398087850`。新マップ機能の実機検証は未実施。提供3画面の赤丸を縮小画像で確認（PC上端を除いた場合も検出）。
+
+## QAアプリ内更新（2026-10-22、CI検証中）
+- `integration/staging`で実装。Torimaソース基準は`dev/torima`の`b7899db`。マップ等の専用変更はそのまま保持し、専用ブランチにはpushしない。
+- 追加/変更: `common/qa-updater/`、`qa/apps.json`、`scripts/qa/`、`qa-publish.yml`、開発workflow、ルートGradle、`app/build.gradle.kts`と`TorimaUpdater.kt`、本資料と[QA_UPDATES.md](QA_UPDATES.md)。
+- QA固定署名・固有IDを維持。正式Releaseと別の公開QAプレリリースにビルド済みAPKを配布。APKに秘密トークンなし。版別ID/署名/ハッシュを端末で検査する。
+- ローカルPython配布テスト2件合格、diff整形確認合格。Androidはローカル通信制限でGradle取得不可、Actionsへ引き継ぐ。CI合格・公開asset確認まで完了扱いしない。
+- 前回初期APIコミット`d229605`の[Actions #39704114700](https://github.com/Wacky1425/torima-auto/actions/runs/39704114700)は共通API/Android/QAビルド成功を確認。
+- OPPOでの上書き・設定/画像/ノード学習保持は未確認。初回手動QA上書き、その次の版からアプリ内更新する手順をQA_UPDATESに用意。

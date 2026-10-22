@@ -1,0 +1,94 @@
+name: Publish tested QA update
+
+on:
+  push:
+    branches: ['integration/staging', 'dev/torima']
+    paths:
+      - 'app/**'
+      - 'common/**'
+      - 'qa/**'
+      - 'scripts/qa/**'
+      - '*gradle*'
+      - '.github/workflows/qa-publish.yml'
+  workflow_dispatch:
+    inputs:
+      app_key:
+        description: 'Registered QA app key (qa/apps.json)'
+        default: torima
+        required: true
+        type: string
+      notes:
+        description: 'Change notes shown in the app'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+# App-specific channel updates must never run concurrently. No release/latest updates.
+concurrency:
+  group: qa-publish-${{ inputs.app_key || 'torima' }}
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    if: github.repository == 'Wacky1425/torima-auto'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APP_KEY: ${{ inputs.app_key || 'torima' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Validate registered QA app and branch
+        id: app
+        run: python scripts/qa/prepare.py
+      - name: Test distribution safeguards
+        run: python -m unittest discover -s scripts/qa -p 'test_*.py'
+      - name: Decode fixed QA signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets[format('{0}_KEYSTORE_BASE64', steps.app.outputs.signing_prefix)] }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/qa.jks"
+          test -s "$RUNNER_TEMP/qa.jks"
+      - name: Test and build signed QA (no stable APK publication)
+        env:
+          MODULE: ${{ steps.app.outputs.module }}
+          QA_VERSION_CODE: ${{ steps.app.outputs.version_code }}
+          TORIMA_KEYSTORE: ${{ runner.temp }}/qa.jks
+          TORIMA_STORE_PASSWORD: ${{ secrets[format('{0}_STORE_PASSWORD', steps.app.outputs.signing_prefix)] }}
+          TORIMA_KEY_ALIAS: ${{ secrets[format('{0}_KEY_ALIAS', steps.app.outputs.signing_prefix)] }}
+          TORIMA_KEY_PASSWORD: ${{ secrets[format('{0}_KEY_PASSWORD', steps.app.outputs.signing_prefix)] }}
+        run: |
+          set -euo pipefail
+          test -n "$TORIMA_STORE_PASSWORD"
+          test -n "$TORIMA_KEY_ALIAS"
+          test -n "$TORIMA_KEY_PASSWORD"
+          bash ./gradlew :common:test :qa-updater:testReleaseUnitTest ":$MODULE:testQaUnitTest" ":$MODULE:testDebugUnitTest" ":$MODULE:assembleQa" --no-daemon
+      - name: Upload QA and test reports to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-${{ env.APP_KEY }}-${{ steps.app.outputs.version_code }}
+          path: |
+            **/build/outputs/apk/qa/*.apk
+            **/build/reports/tests/**
+          if-no-files-found: error
+      - name: Publish verified APK then public QA manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          QA_VERSION_CODE: ${{ steps.app.outputs.version_code }}
+          QA_NOTES: ${{ inputs.notes }}
+          TORIMA_KEYSTORE: ${{ runner.temp }}/qa.jks
+          TORIMA_STORE_PASSWORD: ${{ secrets[format('{0}_STORE_PASSWORD', steps.app.outputs.signing_prefix)] }}
+          TORIMA_KEY_ALIAS: ${{ secrets[format('{0}_KEY_ALIAS', steps.app.outputs.signing_prefix)] }}
+        run: python scripts/qa/publish.py
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/qa.jks"

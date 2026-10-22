@@ -29,6 +29,18 @@ class AutoFlow(
  private val h=Handler(Looper.getMainLooper())
  private val learned by lazy{LearnedActions(service)}
  private val collection by lazy{CollectionRunStore(service)}
+ private var mapPhase=MapStockPolicy.Phase.OFF
+ private var mapSince=0L
+ private var mapBadgePending=false
+ private var mapBadgeReads=0
+ private var mapBadgeAttempts=0
+ private var mapLastBadgeAt=0L
+ private var mapLastAction=""
+ private var mapLastActionAt=0L
+ private var mapBeforeCount:Int?=null
+ private var mapEmptySince=0L
+ private var mapEmptyReads=0
+ private var mapReturnVerified=false
  private var rewardPhase=RewardTabPolicy.Phase.MOVE
  private var runStartedElapsed=0L
  private var emptyHomeSince=0L
@@ -308,6 +320,8 @@ class AutoFlow(
   playRecoveryAttempts=0
   homeRecoveryAttempts=0
   homeRecoveryActive=false
+  mapPhase=MapStockPolicy.Phase.OFF
+  mapBadgePending=false
   rewardPhase=RewardTabPolicy.Phase.MOVE
   runStartedElapsed=SystemClock.elapsedRealtime()
   emptyHomeSince=0L
@@ -317,7 +331,7 @@ class AutoFlow(
   HomeRecoveryJournal.begin(service)
   HomeTrialJournal.beginRun(service)
   collection.begin()
-  update("起動中：移動タンク→歩数の順に動画回収（全体上限3時間）。学習ルール${LearnedActions.count(service)}件も照合")
+  update("起動中：移動タンク→歩数→マップ赤丸確認の順に動画回収（全体上限3時間）。学習ルール${LearnedActions.count(service)}件も照合")
   h.postDelayed(poll,450)
   return "自動操作を開始しました。不明な画面では一切タップしません。"
  }
@@ -999,6 +1013,13 @@ class AutoFlow(
   return clickRewardTab(snap,RewardTabPolicy.Tab.STEPS,now)
  }
  private fun choose(snap:Snapshot):Decision{
+  if(mapPhase!=MapStockPolicy.Phase.OFF){
+   val map=mapDecision(snap)
+   if(map!=null)return map
+   if(snap.has("ガチャWチャンスに挑戦") || snap.has("カードを1枚選んでください"))
+    return Decision("MAP_WAIT","宝箱で想定外のガチャ画面","MAP_WAIT",detail="宝箱にはガチャ操作を適用しない")
+   if(!videoAdSessionActive)return Decision("MAP_WAIT","宝箱画面の確認待ち","MAP_WAIT",detail="未知の宝箱画面は操作しない")
+  }
   val n=snap.nodes
   if(snap.has("友達にシェアする")){
    // The reward pane has a stable private-use close glyph at top right in three samples.
@@ -1699,7 +1720,200 @@ class AutoFlow(
   collection.finish("FAILED",reason)
   update("停止：$reason")
  }
+
+ private fun mapLabels(snap:Snapshot)=snap.nodes.filter{it.node.isVisibleToUser}
+  .flatMap{listOf(it.text.trim(),it.desc.trim())}.filter{it.isNotBlank()}
+ private fun mapButton(snap:Snapshot,caption:String):Item? {
+  val bounds=Rect();snap.root.getBoundsInScreen(bounds)
+  val w=bounds.width();val h=bounds.bottom
+  fun allowed(r:Rect):Boolean = r.width()>0 && r.height()>0 &&
+   r.width()<=w*95/100 && r.height()<=h*15/100 && when(caption){
+    "マップ"->r.centerY()>h*85/100 && r.centerX() in (w*60/100)..(w*80/100)
+    "ストック"->r.centerX()>w*60/100 && r.centerY() in (h*40/100)..(h*90/100)
+    else->true
+   }
+  val candidates=snap.nodes.filter{it.node.isVisibleToUser && allowed(it.rect) &&
+   (it.text.trim()==caption || it.desc.trim()==caption)}.mapNotNull { label->
+   if(label.canPress)return@mapNotNull label
+   var node=label.node.parent;var depth=0
+   var hit:Item?=null
+   while(node!=null && depth<3){
+    val r=Rect();node.getBoundsInScreen(r)
+    if(node.isVisibleToUser && node.isClickable && node.isEnabled && allowed(r)){
+     hit=Item(node,node.text?.toString().orEmpty(),node.contentDescription?.toString().orEmpty(),r)
+     break
+    }
+    node=node.parent;depth++
+   }
+   hit
+  }.distinctBy{it.rect.toShortString()}
+  return candidates.singleOrNull()
+ }
+ private fun mapDecision(snap:Snapshot):Decision? {
+  val labels=mapLabels(snap)
+  val bottom=mapButton(snap,"宝箱の底のおもちゃをチェック")
+  if(bottom!=null && mapPhase==MapStockPolicy.Phase.FIRST_AD && labels.any{it.contains("このまま受け取る")})
+   return Decision("MAP_BOTTOM","宝箱の底をチェック（2本目の広告）","MAP_BOTTOM",bottom)
+  val receive=mapButton(snap,"このまま受け取る")
+  if(receive!=null && mapPhase==MapStockPolicy.Phase.SECOND_AD && bottom==null)
+   return Decision("MAP_RECEIVE","宝箱の報酬を受け取る","MAP_RECEIVE",receive)
+  if(mapPhase==MapStockPolicy.Phase.DETAIL && labels.any{it=="ストック中"} &&
+    labels.any{it.contains("ノーマル")} && labels.any{it.contains("獲得")}){
+   val targets=snap.nodes.filter{it.canPress &&
+    (it.text+it.desc).let{v->v.contains("動画を見て") && v.contains("獲得")}}
+    .distinctBy{it.rect.toShortString()}
+   return Decision("MAP_VIDEO","ストック宝箱の動画を見る","MAP_VIDEO",targets.singleOrNull(),"候補=${targets.size}")
+  }
+  return null
+ }
+ private fun mapGo(phase:MapStockPolicy.Phase,now:Long){
+  mapPhase=phase;mapSince=now;mapLastAction="";mapLastActionAt=0L
+  waitingKey=null;fallbackAttempted=false
+ }
+ private fun mapTap(snap:Snapshot,item:Item?,key:String,title:String,now:Long):Boolean {
+  if(item==null){
+   update("$title：操作対象を一意に確認できず待機。診断ZIPで確認")
+   next(1000);return true
+  }
+  if(mapLastAction==key){
+   update("$title：画面遷移待ち。重複操作しない")
+   next(1000);return true
+  }
+  if(steps>=MAX_ACTIONS){stopWithReason("マップを含む操作回数が上限に到達");return true}
+  steps++;mapLastAction=key;mapLastActionAt=now
+  update(title)
+  if(!item.node.performAction(AccessibilityNodeInfo.ACTION_CLICK))gestureTap(item.rect,title)
+  next(1000);return true
+ }
+ private fun handleMapStock(snap:Snapshot,now:Long):Boolean {
+  if(now-mapSince>120_000L){
+   service.saveVisualScreenshot("マップ宝箱：${mapPhase.name}を確認できず",snap.count,false)
+   stopWithReason("マップ宝箱 ${mapPhase.name} の画面を2分確認できず未完了。診断ZIPを送ってください")
+   return true
+  }
+  val labels=mapLabels(snap)
+  val nav=mapButton(snap,"マップ")
+  val stock=mapButton(snap,"ストック")
+  val list=labels.any{it.contains("ストックしている宝箱")} &&
+   labels.none{it=="ストック中" || it.contains("このまま受け取る") || it.contains("宝箱の底のおもちゃ")} &&
+   trustedAdEvidence(snap)==null
+  val count=if(list)MapStockPolicy.count(labels) else null
+  when(mapPhase){
+   MapStockPolicy.Phase.BADGE->{
+    // Badge absence is NOT a completion claim. A changed/covered layout is skipped as unverified.
+    if(nav==null){update("マップタブのノードを確認中");next(1000);return true}
+    if(mapBadgeReads>=2){mapGo(MapStockPolicy.Phase.OPEN_MAP,now);next(500);return true}
+    if(now-mapSince>=8000L || mapBadgeAttempts>=4){
+     collection.finish("SKIPPED","マップ赤丸を2枚で確認できず。ストック残数は未確認")
+     finishAllCollection("マップは赤丸未確認のため未訪問スキップ")
+     return true
+    }
+    if(!mapBadgePending && now-mapLastBadgeAt>=1400L){
+     mapBadgePending=true;mapBadgeAttempts++;mapLastBadgeAt=now
+     val expected=generation
+     service.probeRewardBadges{result->
+      if(!running || generation!=expected || mapPhase!=MapStockPolicy.Phase.BADGE)return@probeRewardBadges
+      mapBadgePending=false
+      mapBadgeReads=if(result?.mapDot==true)mapBadgeReads+1 else 0
+      update("マップ赤丸：${result?.mapDot} / 連続${mapBadgeReads}枚")
+     }
+    }
+    next(900);return true
+   }
+   MapStockPolicy.Phase.OPEN_MAP->{
+    if(snap.has("現在地") && snap.has("マップ"))mapGo(MapStockPolicy.Phase.OPEN_STOCK,now)
+    else return mapTap(snap,nav,"map","マップを開く",now)
+   }
+   else->Unit
+  }
+  if(mapPhase==MapStockPolicy.Phase.OPEN_STOCK){
+   if(list){mapGo(MapStockPolicy.Phase.LIST,now);next(900);return true}
+   if(stock!=null)return mapTap(snap,stock,"stock","宝箱ストックを開く",now)
+   return mapTap(snap,mapButton(snap,"今日"),"today","今日のマップに切り替える",now)
+  }
+  if(list && mapPhase in listOf(MapStockPolicy.Phase.LIST,MapStockPolicy.Phase.SECOND_AD,MapStockPolicy.Phase.RECEIVE,MapStockPolicy.Phase.RETURN)){
+   videoAdSessionActive=false
+   if(postAdClosedAt>0L && now-postAdClosedAt<4000L){next(900);return true}
+   postAdClosedAt=0L
+   if(mapBeforeCount!=null && !mapReturnVerified){
+    if(!MapStockPolicy.decreased(mapBeforeCount,count)){
+     update("宝箱回収後の残数減少を確認中：前=$mapBeforeCount / 今=$count")
+     next(1000);return true
+    }
+    mapReturnVerified=true
+    update("ストック減少を確認：$mapBeforeCount → $count")
+   }
+   if(count==0){
+    if(mapEmptySince==0L)mapEmptySince=now
+    mapEmptyReads++
+    if(MapStockPolicy.emptyConfirmed(count,mapEmptyReads,now-mapEmptySince)){
+     finishAllCollection("ストック中0個を複数回確認")
+    }else{update("ストック0個を再確認中");next(1000)}
+    return true
+   }
+   mapEmptySince=0L;mapEmptyReads=0
+   if(count==null){update("ストック数を読み取れず待機。空とは判定しない");next(1000);return true}
+   val counter=snap.nodes.filter{it.node.isVisibleToUser && MapStockPolicy.count(listOf(it.text,it.desc))==count}
+    .minByOrNull{it.rect.bottom}
+   val bounds=Rect();snap.root.getBoundsInScreen(bounds)
+   // Only a full-width list row below the count; exclude the ad above it.
+   val rows=if(counter==null)emptyList() else snap.nodes.filter{item->
+    val r=item.rect
+    item.canPress && r.top>=counter.rect.bottom && r.bottom<=bounds.bottom*87/100 &&
+     r.width()>=bounds.width()*65/100 && r.height() in (bounds.height()*4/100)..(bounds.height()*12/100) &&
+     (item.text+item.desc).none{it=='\n'} &&
+     !(item.text+item.desc).contains("広告") &&
+     snap.nodes.any{it.node.isVisibleToUser && r.contains(it.rect) &&
+      (it.text+it.desc).isNotBlank()} &&
+     snap.nodes.none{r.contains(it.rect) &&
+      listOf("広告","インストール","Google Play","PR").any{word->(it.text+it.desc).contains(word)}}
+   }.distinctBy{it.rect.toShortString()}
+   val first=rows.minByOrNull{it.rect.top}
+   if(first!=null){
+    mapBeforeCount=count;mapReturnVerified=false
+    mapGo(MapStockPolicy.Phase.DETAIL,now)
+   }
+   return mapTap(snap,first,"row","ストック宝箱を1個開く（残り${count}個）",now)
+  }
+  val decision=mapDecision(snap)
+  if(decision!=null){
+   if(protectPostAdTransition(decision,snap,now)){next(900);return true}
+   videoAdSessionActive=false
+   if(decision.target==null){update("${decision.display}：候補不明。操作せず待機");next(1000);return true}
+   val phase=when(decision.kind){
+    "MAP_VIDEO"->MapStockPolicy.Phase.FIRST_AD
+    "MAP_BOTTOM"->MapStockPolicy.Phase.SECOND_AD
+    else->MapStockPolicy.Phase.RECEIVE
+   }
+   mapGo(phase,now)
+   if(decision.kind in listOf("MAP_VIDEO","MAP_BOTTOM")){
+    videoAdSessionActive=true;resetLiveVisual();resetStableAdClose()
+   }
+   return mapTap(snap,decision.target,decision.key,decision.display,now)
+  }
+  if(mapPhase in listOf(MapStockPolicy.Phase.FIRST_AD,MapStockPolicy.Phase.SECOND_AD))return false
+  update("宝箱の次画面を確認中：${mapPhase.name}。未知の×は押さない")
+  next(1000);return true
+ }
+
  private fun completeCollection(reason:String){
+  if(mapPhase==MapStockPolicy.Phase.OFF){
+   if(collection.isActive())collection.finish("COMPLETED",reason)
+   collection.begin("map_stock","マップ宝箱ストック","赤丸確認→ストック残数0を確認")
+   mapPhase=MapStockPolicy.Phase.BADGE
+   mapSince=SystemClock.elapsedRealtime()
+   mapBadgeReads=0;mapBadgeAttempts=0;mapLastBadgeAt=0L
+   mapLastAction="";mapLastActionAt=0L;mapBeforeCount=null
+   mapEmptySince=0L;mapEmptyReads=0;mapReturnVerified=false
+   waitingKey=null;gachaPhase=GachaSafety.Phase.NONE
+   videoAdSessionActive=false;postAdClosedAt=0L
+   update("移動・歩数が完了。マップの赤丸を2枚で確認")
+   next(900)
+   return
+  }
+  finishAllCollection(reason)
+ }
+ private fun finishAllCollection(reason:String){
   if(collection.isActive())collection.finish("COMPLETED",reason)
   running=false
   generation++
@@ -1709,8 +1923,8 @@ class AutoFlow(
   service.restoreHomeTouch()
   resetHomeExperiment()
   resetTabSwitch()
-  HomeTrialJournal.endRun(service,"COMPLETED","移動タンク→歩数を両方回収済み：$reason")
-  update("移動タンクと歩数の動画回収が完了。$reason")
+  HomeTrialJournal.endRun(service,"COMPLETED","移動→歩数→マップ確認を終了：$reason")
+  update("移動・歩数・マップ確認が終了。$reason")
  }
 
  /**
@@ -2042,7 +2256,7 @@ class AutoFlow(
    if(collection.budgetExceeded() ||
     (runStartedElapsed>0L &&
      now-runStartedElapsed>=CollectionTaskPolicy.BUDGET_MS)){
-    stopWithReason("移動＋歩数の実行時間が合計3時間に達したため未完了として停止")
+    stopWithReason("移動＋歩数＋マップの実行時間が合計3時間に達したため未完了として停止")
     return
    }
    if(homeRecoveryActive){
@@ -2066,10 +2280,12 @@ class AutoFlow(
     next()
     return
    }
-   if(monitorCollection(snapshot,now))return
+   if(mapPhase!=MapStockPolicy.Phase.OFF){
+    if(handleMapStock(snapshot,now))return
+   }else if(monitorCollection(snapshot,now))return
    // The advertisement/gacha loop must never click a purple HOME button
    // when an incomplete reward-tab change is still in progress.
-   if(rewardSeparator(snapshot)!=null && !blockedRewardObservation(snapshot)){
+   if(mapPhase==MapStockPolicy.Phase.OFF && rewardSeparator(snapshot)!=null && !blockedRewardObservation(snapshot)){
     val selected=selectedRewardTab(snapshot)
     val desired=if(rewardPhase==RewardTabPolicy.Phase.STEPS)
      RewardTabPolicy.Tab.STEPS else RewardTabPolicy.Tab.MOVE

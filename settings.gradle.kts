@@ -8,3 +8,5 @@ dependencyResolutionManagement {
 rootProject.name = "TorimaAuto"
 include(":app")
 include(":common")
+include(":qa-updater")
+project(":qa-updater").projectDir = file("common/qa-updater")

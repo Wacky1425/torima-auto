@@ -28,6 +28,11 @@ class TorimaUpdater(private val activity: Activity, private val status: TextView
         return c
     }
     fun check() {
+        if (activity.packageName == "com.neru.powlautotest.qa") {
+            com.neru.rewardauto.update.PublicQaUpdater(activity, status,
+                com.neru.rewardauto.update.QaFeedConfig("torima", "com.neru.powlautotest.qa", "Wacky1425/torima-auto")).check()
+            return
+        }
         // QA has a different applicationId and cannot install a production
         // Release as its own update. Keep the stable user's updater unchanged.
         if (activity.packageName.endsWith(".dev") || activity.packageName.endsWith(".qa")) {

@@ -36,6 +36,10 @@ android {
         create("qa") {
             initWith(getByName("release"))
             applicationIdSuffix = ".qa"
+            val qaCode = System.getenv("QA_VERSION_CODE")?.toIntOrNull()
+            if (qaCode != null) {
+                require(qaCode in 100001..2100000000)
+            }
             versionNameSuffix = "-qa"
             manifestPlaceholders["appDisplayName"] = "Torima Auto QA"
             signingConfig = signingConfigs.getByName("distribution")
@@ -56,7 +60,21 @@ android {
     }
 }
 dependencies {
+    implementation(project(":qa-updater"))
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     testImplementation("junit:junit:4.13.2")
+}
+
+// Public Android Components API: QA output only, stable versionCode stays 47.
+androidComponents {
+    onVariants(selector().withBuildType("qa")) { variant ->
+        System.getenv("QA_VERSION_CODE")?.toInt()?.let { code ->
+            require(code in 100001..2100000000)
+            variant.outputs.forEach { output ->
+                output.versionCode.set(code)
+                output.versionName.set("${android.defaultConfig.versionName}-qa.$code")
+            }
+        }
+    }
 }

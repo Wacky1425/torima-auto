@@ -1,0 +1,10 @@
+{
+  "torima": {
+    "module": "app",
+    "applicationId": "com.neru.powlautotest.qa",
+    "displayName": "Torima Auto QA",
+    "signingPrefix": "TORIMA",
+    "minSdk": 24,
+    "sourceBranches": ["integration/staging", "dev/torima"]
+  }
+}
