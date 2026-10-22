@@ -61,3 +61,16 @@ adb shell dumpsys package com.neru.powlautotest
 3. FileProvider `${applicationId}.fileprovider`にcache `updates/`を公開。更新ボタンから登録値で`PublicQaUpdater(activity, status, QaFeedConfig(...)).check()`を呼ぶ。
 4. QA workflowを対象アプリのブランチで手動実行しapp_keyを指定。自動push対応が必要ならworkflowの対象ブランチとキー選択を統合担当が追加する。現行自動pushはTorimaのみ。
 5. 固有の`qa-channel-<appKey>`と`qa-<appKey>-<versionCode>`で配布し、既存QAとの共存/上書きデータ保持を実機検証する。
+
+## 今回の配布結果と直ぐに試す手順
+
+両版のビルド/単体テスト/固定署名/匿名配布は成功。端末確認はまだ行っていない。
+
+1. 設定値と画像・ノード学習の内容/件数を控え、自動回収を停止する。
+2. [初回導入用QA100001](https://github.com/Wacky1425/torima-auto/releases/download/qa-torima-100001/torima-qa-100001.apk)を既存QAへ**上書き**する。Android画面の対象はTorima Auto QA。アンインストールしない。
+3. QAを開き「更新を確認」→変更内容→「ダウンロードして更新」。公開済み100002を取得しAndroidの画面から更新する。必要ならインストール許可をONにし、戻って同じ操作をする。
+4. 開き直し、QA版番号100002と設定/学習内容・件数の保持を確認。正式Torimaが別に残っていることも確認する。
+
+[100001の成功run](https://github.com/Wacky1425/torima-auto/actions/runs/39723455063) / [100002の成功run](https://github.com/Wacky1425/torima-auto/actions/runs/39723776583)。100002のコードSHAは`72563bb`。変更をTorima専用チャットへ戻す[draft PR #1](https://github.com/Wacky1425/torima-auto/pull/1)あり。
+
+不具合を戻す場合もフィードの版番号を下げず、ソース変更をrevertした新しいQA runで上位の版番号を配布する。旧APKのためにアンインストールして学習データを失わせない。

@@ -4,7 +4,7 @@
 
 ## 出発点
 - 安定Torima正式Release: **v3.14** / `com.neru.powlautotest`
-- Torima`app/`はそのまま。現時点では物理的な`common/`、`apps/<slug>/`、`integrated/`のモジュール分割は**未着手**。
+- Torima `:app` を維持。共通API `:common` とQA更新ライブラリ `:qa-updater` を追加済み。既存回収エンジンの抽出、`apps/<slug>/`、`integrated/`は未着手。
 - 他のポイ活アプリの具体名はまだ決まっていない。**新アプリ2つ以上**を順次並行開発し、増加数の上限は設けない。
 
 ## 役割別の次の作業
@@ -81,3 +81,13 @@ Androidビルド: 未実行 / 合格 / 失敗
 - [DEVビルド #39723455046](https://github.com/Wacky1425/torima-auto/actions/runs/39723455046)も成功。
 - 初回導入用: `qa-torima-100001` / `torima-qa-100001.apk`（2,882,332 bytes、SHA-256 `26fef511dfd2dc20d2774de16b21e19f7e65aa5c1d99c6e1ffd1cc0946b4b98d`）。プレリリース/asset実在確認済み。
 - 次版はQA現在版の表示と公開manifestの匿名取得確認を追加。初回導入用100001を残して、100002へのアプリ内更新を実機テストできるようにする。端末結果は未確認。
+
+## QA更新・配布検証完了（2026-10-22、端末確認は未実施）
+- コード確定SHA: `72563bb34342e35631520afdc37d0df3ec14cde0`。作業ブランチ`integration/staging`。以下の資料更新コミットはコード/配布APKを変更しない。
+- [QA更新版100002のActions #39723776583](https://github.com/Wacky1425/torima-auto/actions/runs/39723776583)成功。共通API/更新ライブラリ/Torima QA/Debugテスト、固定署名、APK実ID・版番号、公開APKとmanifestの匿名取得・ハッシュを検証。
+- [DEV Actions #39723776584](https://github.com/Wacky1425/torima-auto/actions/runs/39723776584)成功。
+- 更新先は`qa-channel-torima/manifest.json`。現在版`3.14-qa.100002`、APK `torima-qa-100002.apk`（2,882,384 bytes、SHA-256 `0df040321b5542a6c1907e6206d11a7985c24587a226da1259b9018758dfa8ca`）。[版別配布ページ](https://github.com/Wacky1425/torima-auto/releases/tag/qa-torima-100002)でasset実在確認。
+- 初回導入用[QA 100001 APK](https://github.com/Wacky1425/torima-auto/releases/download/qa-torima-100001/torima-qa-100001.apk)を残し、アプリ内で100002へ上書きする実機検証が可能。100001/100002とも既存と同じQA ID/固定署名。
+- 正式版`releases/latest`はv3.14、Release ID `420174934`、APK asset ID `664167534`で前後一致。mainと正式APKは変更なし。
+- 専用チャット取り込み用[draft PR #1](https://github.com/Wacky1425/torima-auto/pull/1)を用意。`dev/torima`へは直接push/mergeしない。担当はPRの共通API/更新module/Gradle/CI/QA接続をまとめて取り込み、専用開発を続ける。取り込み前の旧dev workflowから出る47のQAを新QAへ戻そうとしない。
+- 未確認: OPPO Reno11 Aの実際のインストール、画像/ノード学習・設定保持、権限画面からの復帰、キャンセル後の再試行。診断ZIP未取得。次は[QA_UPDATES.md](QA_UPDATES.md)の実機手順。回収・学習操作はテストAPKの端末確認結果を待つ。
