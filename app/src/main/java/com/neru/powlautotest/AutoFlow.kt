@@ -46,6 +46,7 @@ class AutoFlow(
  private var badgeLast:RewardBadgeDetector.Result?=null
  private var badgeReadCount=0
  private var badgeFirstReadAt=0L
+ private var badgeLastObservedAt=0L
  fun collectionStatus():String=CollectionRunStore.summary(service)
  private var playRecoveryStep=0
  private var playRecoveryAt=0L
@@ -690,6 +691,7 @@ class AutoFlow(
   badgeLast=null
   badgeReadCount=0
   badgeFirstReadAt=0L
+  badgeLastObservedAt=0L
  }
  private fun resetTabSwitch(){
   tabSwitchStartedAt=0L
@@ -713,7 +715,17 @@ class AutoFlow(
   val stepHero=snap.has("今日の歩数") ||
    (snap.has("今日の") && snap.has("歩数") && !snap.has("タンクが満タン"))
   val emptyMove=snap.has("たくさん移動してマイルを獲得しよう")
-  return RewardTabPolicy.selectedTab(selectedMove,selectedSteps,stepHero,emptyMove)
+  val fromNodes=RewardTabPolicy.selectedTab(
+   selectedMove,selectedSteps,stepHero,emptyMove)
+  if(fromNodes!=RewardTabPolicy.Tab.UNKNOWN)return fromNodes
+  val image=badgeLast
+  val now=SystemClock.elapsedRealtime()
+  // Use screenshot-selected tab only during INITIAL inspection. Do not trust
+  // a stale orange highlight after changing tabs.
+  return if(rewardPhase==RewardTabPolicy.Phase.MOVE &&
+   !badgeInspectionDone && tabSwitchAttempts==0 &&
+   image!=null && now-badgeLastObservedAt<3_500L)
+    image.selected else RewardTabPolicy.Tab.UNKNOWN
  }
 
  private fun rewardSeparator(snap:Snapshot):Item?=
@@ -895,8 +907,11 @@ class AutoFlow(
   * to visiting MOVE and inspecting its gray button/remaining count.
   */
  private fun inspectBadgesWhenStartingOnSteps(snap:Snapshot,now:Long):Boolean{
+  val active=selectedRewardTab(snap)
+  val headerUnknown=active==RewardTabPolicy.Tab.UNKNOWN &&
+   snap.has("歩数") && snap.has("移動")
   if(badgeInspectionDone || rewardPhase!=RewardTabPolicy.Phase.MOVE ||
-   selectedRewardTab(snap)!=RewardTabPolicy.Tab.STEPS ||
+   (active!=RewardTabPolicy.Tab.STEPS && !headerUnknown) ||
    rewardSeparator(snap)==null || blockedRewardObservation(snap))return false
   if(badgeInspectionSince==0L)badgeInspectionSince=now
   val result=badgeLast
@@ -935,6 +950,7 @@ class AutoFlow(
       badgeFirstReadAt=stamped
      }
      badgeLast=observed
+     badgeLastObservedAt=stamped
      TeachOverlay.recordAutomatic(service,
       "タブ赤丸検出：${observed.describe()} 連続${badgeReadCount}枚")
     }
