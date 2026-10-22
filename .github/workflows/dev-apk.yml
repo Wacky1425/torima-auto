@@ -1,0 +1,80 @@
+name: Development APK (no release)
+
+# App-specific chats build/test on their own branches. No public Release,
+# no update of the stable Torima app, no access to the production signing key.
+on:
+  push:
+    branches:
+      - 'dev/**'
+      - 'integration/**'
+      - 'feature/**'
+      - 'fix/**'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      module:
+        description: "Gradle Android module path, e.g. app or apps:some-slug"
+        required: false
+        type: string
+        default: app
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MODULE: ${{ inputs.module || 'app' }}
+    steps:
+      - name: Checkout requested branch
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle with dependency cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate module, build APK and run its unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$MODULE" =~ ^[A-Za-z][A-Za-z0-9_-]*(:[A-Za-z][A-Za-z0-9_-]*)*$ ]]; then
+            echo "::error::Invalid Gradle module path: $MODULE"
+            exit 1
+          fi
+          echo "Build module :$MODULE from $GITHUB_REF"
+          bash ./gradlew ":$MODULE:assembleDebug" ":$MODULE:testDebugUnitTest" --no-daemon
+
+      - name: Collect only this module's debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_dir="${MODULE//://}"
+          project_dir="${MODULE//:/\/}"
+          debug_dir="$project_dir/build/outputs/apk/debug"
+          test -d "$debug_dir" || { echo "::error::Not found: $debug_dir"; exit 1; }
+          apk="$(find "$debug_dir" -maxdepth 1 -type f -name '*.apk' | head -1)"
+          test -n "$apk" || { echo "::error::No debug APK found"; exit 1; }
+          mkdir -p dev-artifacts
+          safe_module="${MODULE//:/-}"
+          cp "$apk" "dev-artifacts/${safe_module}-debug.apk"
+          echo "Artifact created for $MODULE; this is a DEBUG build, NOT a signed public Release."
+
+      - name: Upload test APK (not a GitHub Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: development-apk-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dev-artifacts/*.apk
+          if-no-files-found: error
+          retention-days: 14
