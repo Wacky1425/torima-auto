@@ -16,7 +16,7 @@ internal object RewardBadgeDetector {
   val width:Int,val height:Int,
   val selected:RewardTabPolicy.Tab=RewardTabPolicy.Tab.UNKNOWN
  ){
-  fun describe():String="赤丸（移動=${move.name}:${moveRedPixels}px / 歩数=${steps.name}:${stepRedPixels}px）"
+  fun describe():String="赤丸（移動=${move.name}:${moveRedPixels}px / 歩数=${steps.name}:${stepRedPixels}px / 選択タブ=${selected.name}）"
  }
 
  private fun red(c:Int):Boolean{
