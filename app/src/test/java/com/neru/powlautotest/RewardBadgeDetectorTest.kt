@@ -9,8 +9,18 @@ class RewardBadgeDetectorTest {
  private val yellow=0xffffc107.toInt()
  private val orange=0xffff6f00.toInt()
  private val red=0xffff0000.toInt()
- private fun screen(move:Boolean=false,steps:Boolean=true):IntArray{
+ private fun screen(
+  move:Boolean=false,steps:Boolean=true,
+  selected:RewardTabPolicy.Tab=RewardTabPolicy.Tab.UNKNOWN
+ ):IntArray{
   val pixels=IntArray(width*height){yellow}
+  val selectedX=when(selected){
+   RewardTabPolicy.Tab.MOVE->(width*0.035).toInt()
+   RewardTabPolicy.Tab.STEPS->(width*0.160).toInt()
+   else->-1
+  }
+  if(selectedX>=0)for(yy in (height*0.14).toInt()..(height*0.15).toInt())
+   for(xx in selectedX-3..selectedX+3)pixels[yy*width+xx]=orange
   val y=(height*0.1172).toInt()
   for((on,fx) in listOf(move to 0.116,steps to 0.260)){
    if(!on)continue
@@ -22,20 +32,23 @@ class RewardBadgeDetectorTest {
   return pixels
  }
  @Test fun detectsRightStepDotButNoMoveDot(){
-  val pixels=screen(false,true)
+  val pixels=screen(false,true,RewardTabPolicy.Tab.STEPS)
   val y=(height*0.1172).toInt()
   val x=(width*0.116).toInt()
   pixels[y*width+x]=orange
   val detected=RewardBadgeDetector.detect(pixels,width,height)
   assertEquals(RewardBadgeDetector.Mark.ABSENT,detected.move)
   assertEquals(RewardBadgeDetector.Mark.PRESENT,detected.steps)
+  assertEquals(RewardTabPolicy.Tab.STEPS,detected.selected)
   assertTrue(RewardBadgeDetector.canSkipMoveOnStepStart(detected,2))
   assertFalse(RewardBadgeDetector.canSkipMoveOnStepStart(detected,1))
  }
  @Test fun moveDotMeansCheckMoveFirst(){
-  val result=RewardBadgeDetector.detect(screen(true,true),width,height)
+  val result=RewardBadgeDetector.detect(
+   screen(true,true,RewardTabPolicy.Tab.MOVE),width,height)
   assertEquals(RewardBadgeDetector.Mark.PRESENT,result.move)
   assertEquals(RewardBadgeDetector.Mark.PRESENT,result.steps)
+  assertEquals(RewardTabPolicy.Tab.MOVE,result.selected)
   assertFalse(RewardBadgeDetector.canSkipMoveOnStepStart(result,3))
  }
  @Test fun hiddenOrUnknownBackgroundNeverBecomesNoReward(){
