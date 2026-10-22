@@ -28,7 +28,7 @@
 - 外部サービスの利用規約、利用可能な操作、Accessibility権限とプライバシーに注意する。
 
 ## ビルドとリリース
-- 作業途中は`.github/workflows/dev-apk.yml`で **ActionsのテストAPK成果物**を取得する。正式Releaseは不要。
+- 作業途中は`.github/workflows/dev-apk.yml`で **ActionsのテストAPK成果物**を取得。Torima専用ブランチではSecretsがある場合、`TorimaAuto-QA.apk`（`com.neru.powlautotest.qa`・固定署名）も生成し、既存本番APKを上書きせず同じQAへ更新できるようにする。正式Releaseは作らない。
 - 既存の`.github/workflows/android.yml`はmain向け正式Releaseワークフロー。バージョンを上げると正式APKがリリースされる。個別チャットから実行しない。
 - コード修正には同じスコープの単体テスト、失敗例の回帰テスト、できれば実機診断ZIPを添付する。
 - GitHubのActionsが成功しただけで「OPPO実機で動いた」とは主張しない。APKリリースを宣言する前に`releases/latest`と配布assetを検証する。
