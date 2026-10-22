@@ -24,7 +24,7 @@
 - [x] 開発版APKを正式Releaseせずビルドするworkflowを追加
 - [ ] ドキュメント・workflowを安定ブランチに反映したことの確認
 - [ ] `dev/torima`、`integration/staging`の開発ブランチ作成・確認
-- [x] Torima debugアプリIDを\`com.neru.powlautotest.dev\`に分離するコードを追加\n- [ ] Torima QA（DEV）のGitHub Actionsビルドと独立インストールの実機確認
+- [x] Torima debug `.dev` と固定署名QA `.qa` の独立アプリID・表示名・Actionsビルド設定
 - [ ] 新アプリ名確定・新規ブランチ/モジュールの作成
 - [ ] 共通エンジンの物理的なGradleモジュール分割
 - [ ] 統合版APK
