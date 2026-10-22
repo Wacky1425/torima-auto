@@ -14,7 +14,8 @@ internal object RewardBadgeDetector {
   val move:Mark,val steps:Mark,
   val moveRedPixels:Int,val stepRedPixels:Int,
   val width:Int,val height:Int,
-  val selected:RewardTabPolicy.Tab=RewardTabPolicy.Tab.UNKNOWN
+  val selected:RewardTabPolicy.Tab=RewardTabPolicy.Tab.UNKNOWN,
+  val mapDot:Boolean=false
  ){
   fun describe():String="赤丸（移動=${move.name}:${moveRedPixels}px / 歩数=${steps.name}:${stepRedPixels}px / 選択タブ=${selected.name}）"
  }
@@ -96,7 +97,8 @@ internal object RewardBadgeDetector {
   val move=marker(pixels,width,height,0.116)
   val steps=marker(pixels,width,height,0.260)
   return Result(move.first,steps.first,move.second,steps.second,
-   width,height,selectedHeader(pixels,width,height))
+   width,height,selectedHeader(pixels,width,height),
+   MapStockPolicy.hasMapDot(pixels,width,height))
  }
  fun same(a:Result,b:Result):Boolean =
   a.move==b.move && a.steps==b.steps &&

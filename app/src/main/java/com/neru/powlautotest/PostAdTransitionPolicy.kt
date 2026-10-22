@@ -14,7 +14,7 @@ internal object PostAdTransitionPolicy {
  const val MAX_WAIT_MS=90_000L
 
  val nextScreens=setOf("HOME","SKIP_NO","RETRY","W_CHANCE",
-  "CARDS","CARD_RESULT","SHARE_CLOSE")
+  "CARDS","CARD_RESULT","SHARE_CLOSE","MAP_BOTTOM","MAP_RECEIVE")
 
  val adActions=setOf("AD_CLOSE","AD_SKIP","AD_GOOGLE_PLAY","AD_VISUAL_X",
   "AD_VISUAL_NEXT","LEARNED","LEARNED_TEXT","LEARNED_ICON")
