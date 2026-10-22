@@ -14,7 +14,7 @@
 - Androidプロジェクトは`settings.gradle.kts`上では**`:app`のみ**。現在のアプリIDは`com.neru.powlautotest`、対象Torimaは`jp.co.incrementp.milemobile`。
 - Kotlinコードは`app/src/main/java/com/neru/powlautotest/`に混在。特に`AutoFlow.kt`、`PowlAccessibilityService.kt`は大きく、今すぐファイル移動すると動作を壊すリスクが高い。
 - 移動タンク回収、歩数回収、HOME紫ボタンの上スワイプ復旧、広告／ガチャ／Play復帰、画像学習、赤丸判定、診断ZIPが実装済み。**全機能がOPPO実機のあらゆる広告で動作検証済み、という意味ではない**。
-- 既存`.github/workflows/android.yml`は`main`へのpushでビルド・単体テスト・署名付き正式Releaseを試行する。作業用に`.github/workflows/dev-apk.yml`を追加して、開発ブランチでは公開Releaseを作らない。 Torima debugは `com.neru.powlautotest.dev`・`Torima Auto DEV` として別アプリ化（実機未確認）。
+- 既存`.github/workflows/android.yml`は`main`へのpushでビルド・単体テスト・署名付き正式Releaseを試行する。作業用に`.github/workflows/dev-apk.yml`を追加して、開発ブランチでは公開Releaseを作らない。 Torima debug `.dev` と固定署名QA `.qa` は別インストール用の設定を追加した（ビルド・実機は要確認）。
 - 自動操作は利用規約や端末の画面表示・Accessibility制約に左右される。誤操作したら診断して修正する。
 
 ## 入口（担当別）
