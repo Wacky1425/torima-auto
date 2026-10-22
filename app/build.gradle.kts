@@ -31,6 +31,16 @@ android {
             versionNameSuffix = "-dev"
             manifestPlaceholders["appDisplayName"] = "Torima Auto DEV"
         }
+        // Reproducibly signed for repeatable phone tests. Different appId
+        // and independent data sandbox from both production and debug.
+        create("qa") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".qa"
+            versionNameSuffix = "-qa"
+            manifestPlaceholders["appDisplayName"] = "Torima Auto QA"
+            signingConfig = signingConfigs.getByName("distribution")
+            matchingFallbacks += listOf("release")
+        }
         getByName("release") {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("distribution")
