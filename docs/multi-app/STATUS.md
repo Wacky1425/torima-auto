@@ -25,6 +25,8 @@
 - [x] ドキュメント・workflowをmainへ反映（既存Torima v3.14正式Releaseは維持）
 - [x] `dev/torima`、`integration/staging`の専用ブランチを作成しSHAを確認
 - [x] Torima debug `.dev` と固定署名QA `.qa` の独立アプリID・表示名・Actionsビルド設定
+- [x] [開発ビルド#39701993971](https://github.com/Wacky1425/torima-auto/actions/runs/39701993971)でDebug/単体テスト/固定署名QA APK/Artifacts公開が成功
+- [ ] OPPO端末でTorima QAと正式Torimaが共存・QAに再インストールしても学習が残るかを確認
 - [ ] 新アプリ名確定・新規ブランチ/モジュールの作成
 - [ ] 共通エンジンの物理的なGradleモジュール分割
 - [ ] 統合版APK
