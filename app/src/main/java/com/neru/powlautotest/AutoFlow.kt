@@ -2067,6 +2067,19 @@ class AutoFlow(
     return
    }
    if(monitorCollection(snapshot,now))return
+   // The advertisement/gacha loop must never click a purple HOME button
+   // when an incomplete reward-tab change is still in progress.
+   if(rewardSeparator(snapshot)!=null && !blockedRewardObservation(snapshot)){
+    val selected=selectedRewardTab(snapshot)
+    val desired=if(rewardPhase==RewardTabPolicy.Phase.STEPS)
+     RewardTabPolicy.Tab.STEPS else RewardTabPolicy.Tab.MOVE
+    if(rewardPhase==RewardTabPolicy.Phase.SWITCHING_TO_STEPS ||
+     selected!=desired){
+     update("タブ確認中：現在=${selected.name} / 期待=${desired.name}。紫ボタンの誤操作を防止")
+     next(900)
+     return
+    }
+   }
    val initial=choose(snapshot)
    if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD ||
     initial.kind in listOf("UNKNOWN","OPAQUE","AD_VISUAL_X","AD_VISUAL_NEXT") ||
