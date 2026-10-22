@@ -4,7 +4,7 @@
 
 | slug | 表示名 | 操作対象packageName | 開発APKのapplicationId | 担当ブランチ | 状態 |
 |---|---|---|---|---|---|
-| torima | トリマ | `jp.co.incrementp.milemobile` | 本番：`com.neru.powlautotest` / QA：`com.neru.powlautotest.dev`（整備中） | `dev/torima` | v3.14実装済み・引き続き実機検証 |
+| torima | トリマ | `jp.co.incrementp.milemobile` | 本番：`com.neru.powlautotest` / QA：`com.neru.powlautotest.dev`（debugビルド設定済み・実機未確認） | `dev/torima` | v3.14実装済み・引き続き実機検証 |
 | （次のアプリが決まったら追加） | - | - | - | `dev/app-<slug>` | 未着手 |
 
 新規アプリの記入項目:
