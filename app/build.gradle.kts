@@ -24,9 +24,17 @@ android {
         }
     }
     buildTypes {
+        // The development APK is a SECOND installed Android app, NOT an update
+        // of the user's Torima v3.14. Do not change release applicationId.
+        getByName("debug") {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            manifestPlaceholders["appDisplayName"] = "Torima Auto DEV"
+        }
         getByName("release") {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("distribution")
+            manifestPlaceholders["appDisplayName"] = "Torima Auto"
         }
     }
     compileOptions {
