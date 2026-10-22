@@ -25,4 +25,4 @@ Torima v3.14の正式APK・学習データを維持しながら、今後増え�
 - [実コードの担当と共通化計画](docs/multi-app/ARCHITECTURE.md)
 - [現在の作業状況](docs/multi-app/STATUS.md)
 
-Torimaの安定版は従来の`com.neru.powlautotest`、テスト用debugビルドは`com.neru.powlautotest.dev`（アプリ名「Torima Auto DEV」）に分けています。学習データは別保存なので、**安定版から自動では引き継がれません**。実機での同居・操作確認は引き続き必要です。新アプリの独立APKと統合版APKはこれから追加します。
+Torimaの安定版は従来の`com.neru.powlautotest`。開発用は`com.neru.powlautotest.dev`（通常のdebug）と`com.neru.powlautotest.qa`（固定署名で上書き更新できるQA）の2種類です。QA APKはActions Artifactsの`TorimaAuto-QA.apk`から入手。学習データは本番と別保存なので、**安定版から自動では引き継がれません**。実機での同居・操作確認は引き続き必要です。新アプリの独立APKと統合版APKはこれから追加します。
