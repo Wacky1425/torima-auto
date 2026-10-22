@@ -38,7 +38,7 @@
 1. 該当の開発ブランチに変更をpush。
 2. GitHub → Actions → `Development APK (no release)` → 該当run → **Artifacts**。
 3. テストAPKを端末へ保存して実機テスト。Debugキーがrunごとに変わると上書き更新できないことがあるので、既存Torimaの学習データを維持してテストしたい場合は本番と同じ署名の**専用テスト配布フロー**を統合担当に依頼する。
-4. 安定Torimaを上書きしない**独立したテスト用アプリID**での配布は次段階で導入予定。現時点の`:app:assembleDebug`は`applicationId=com.neru.powlautotest`なので、**安定Torimaと共存できる開発APKではない**。混同してインストールしないこと。
+4. Torimaのdebug APKは `com.neru.powlautotest.dev`・表示名 `Torima Auto DEV`（releaseは従来の `com.neru.powlautotest`）。**既存のTorimaとは別アプリで、学習データも別保存領域**になる。コード設定は済み、端末での共存確認はこれから。
 5. Androidアプリごとの追加`:apps:<slug>`モジュールが存在する場合、`workflow_dispatch`の`module`に`apps:<slug>`を指定してそのAPKと単体テストを生成できる。
 
 ### 既存Actionとの違い
@@ -57,4 +57,4 @@
 - 各アプリの規約を検討して適切な自動化範囲を決める。
 
 ## 統合担当への要望（未実装）
-安定Torimaを残したまま、`qa`用applicationIdSuffixや統合版の**固定署名・独立インストール**をテスト用に実装すること。学習データexport/importと専用のAPK表示名を作り、テスト対象を取り違えない仕組みにする。
+安定Torimaを残したまま、debug用applicationIdSuffix `.dev` を実機で検証する。その後は統合版の独立インストール・QAの固定署名・学習データexport/importを実装する。
