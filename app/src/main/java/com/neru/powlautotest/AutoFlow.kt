@@ -722,8 +722,13 @@ class AutoFlow(
   val now=SystemClock.elapsedRealtime()
   // Use screenshot-selected tab only during INITIAL inspection. Do not trust
   // a stale orange highlight after changing tabs.
-  return if(rewardPhase==RewardTabPolicy.Phase.MOVE &&
-   !badgeInspectionDone && tabSwitchAttempts==0 &&
+  val inspectingStart=rewardPhase==RewardTabPolicy.Phase.MOVE &&
+   !badgeInspectionDone && tabSwitchAttempts==0
+  val skippingMoveWithoutTouch=
+   rewardPhase==RewardTabPolicy.Phase.SWITCHING_TO_STEPS &&
+   tabSwitchAttempts==0 && badgeReadCount>=2 &&
+   image?.selected==RewardTabPolicy.Tab.STEPS
+  return if((inspectingStart || skippingMoveWithoutTouch) &&
    image!=null && now-badgeLastObservedAt<3_500L)
     image.selected else RewardTabPolicy.Tab.UNKNOWN
  }
