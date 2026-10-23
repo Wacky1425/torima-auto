@@ -21,25 +21,25 @@ internal object DiagnosticBundleExporter {
   val resultText=HomeTrialJournal.report(ctx)
   try{
    ZipOutputStream(FileOutputStream(temp)).use{zip->
-    fun put(name:String,content:String){
+    fun writeTextEntry(name:String,content:String){
      zip.putNextEntry(ZipEntry(name))
      zip.write(content.toByteArray(Charsets.UTF_8))
      zip.closeEntry()
     }
-    put("00_指タップと自動の比較.txt",HomeManualComparison.compare(ctx))
-    put("00_HOME_診断結果.txt",resultText)
-    put("01_HOME_試行詳細.json",HomeTrialJournal.export(ctx))
-    put("02_操作履歴.json",TeachOverlay.export(ctx))
-    put("09_学習診断.json",DiagnosticJournal.export(ctx,"teaching"))
-    put("10_撮影診断.json",DiagnosticJournal.export(ctx,"screenshots"))
-    put("03_回収タスク履歴.json",CollectionRunStore.export(ctx))
-    put("04_画面ノード記録.txt",ScreenCollector.export(ctx))
-    put("05_学習済み操作.txt",LearnedActions.export(ctx))
-    put("08_画像で学習した操作.json",VisualLearnedActions.export(ctx))
-    put("06_指タップ比較イベント.json",HomeManualComparison.export(ctx))
-    put("07_HOME復旧履歴.json",HomeRecoveryJournal.export(ctx))
+    writeTextEntry("00_指タップと自動の比較.txt",HomeManualComparison.compare(ctx))
+    writeTextEntry("00_HOME_診断結果.txt",resultText)
+    writeTextEntry("01_HOME_試行詳細.json",HomeTrialJournal.export(ctx))
+    writeTextEntry("02_操作履歴.json",TeachOverlay.export(ctx))
+    writeTextEntry("09_学習診断.json",DiagnosticJournal.export(ctx,"teaching"))
+    writeTextEntry("10_撮影診断.json",DiagnosticJournal.export(ctx,"screenshots"))
+    writeTextEntry("03_回収タスク履歴.json",CollectionRunStore.export(ctx))
+    writeTextEntry("04_画面ノード記録.txt",ScreenCollector.export(ctx))
+    writeTextEntry("05_学習済み操作.txt",LearnedActions.export(ctx))
+    writeTextEntry("08_画像で学習した操作.json",VisualLearnedActions.export(ctx))
+    writeTextEntry("06_指タップ比較イベント.json",HomeManualComparison.export(ctx))
+    writeTextEntry("07_HOME復旧履歴.json",HomeRecoveryJournal.export(ctx))
     val screenshots=ScreenshotDiagnostics.appendToDiagnosticZip(ctx,zip)
-    put("manifest.json",JSONObject().apply{
+    writeTextEntry("manifest.json",JSONObject().apply{
      put("formatVersion",1)
      put("appVersion",BuildConfig.VERSION_NAME)
      put("applicationId",BuildConfig.APPLICATION_ID)
@@ -57,7 +57,7 @@ internal object DiagnosticBundleExporter {
      put("imageRecognition","PixelAdCloseDetector 540px; confirmed ad session and repeated location")
      put("localOnlyUntilUserShares",true)
     }.toString(2))
-    put("README_まず読む.txt",
+    writeTextEntry("README_まず読む.txt",
      "Torima Auto v3.14 の診断データを1ファイルにまとめたZIPです。\n" +
      "07_HOME復旧履歴.json はアプリ情報・強制停止UI・再起動の成功や失敗の記録です。\n" +
      "00_指タップと自動の比較.txt を先に読むと両者の結果が分かります。\n" +

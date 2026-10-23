@@ -106,3 +106,5 @@ Androidビルド: 未実行 / 合格 / 失敗
 - テスト：撮影予約中にlive probeが割り込まない、重複要求で待機期限が延長されない、撮影間隔を待って保存できる回帰テストを追加。ローカルQA配布Pythonテスト2件合格。AndroidはActionsで確認し追記。
 - 実機：今回修正は未検証。既存ZIPではHOME上スワイプ後にSKIP_NOへの遷移成功、右上ImageViewの学習登録成功例あり。1回目漏れの原因自体は未確定。
 - 次：新QAをアプリ内更新で取得し、右上×を位置指定→2回目案内→本人タップ。失敗時に09/10と最新画像がZIPに残るか確認。生ログ/ユーザー画面画像は公開Gitへ保存しない。
+
+- 補足：ZIP作成用のローカル関数`put(String,String)`がJSONObject内の文字列putを隠し、appVersion等がmanifestではなくZIPルートの別エントリになっていた問題も確認。ZIP関数をwriteTextEntryへ改名し、版情報がmanifest内へ入るよう修正。
