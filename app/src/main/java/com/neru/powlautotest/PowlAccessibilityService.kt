@@ -195,12 +195,13 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun captureNavigationFrame(done:(android.graphics.Bitmap?,String)->Unit){imageDiagnostics.captureWithoutControlBar(done)}
  fun showLearningMenu():String {
   stopAutomaticOperation()
-  val choices=arrayOf("広告の×／スキップを学習（従来の2段階）","アプリ内：マップを開くを登録","アプリ内：今日に戻るを登録","アプリ内：ストックを開くを登録","登録したアプリ内操作だけ削除")
+  val choices=arrayOf("広告の×／スキップを学習（従来の2段階）","アプリ内：マップを開くを登録","アプリ内：今日に戻るを登録","アプリ内：ストックを開くを登録","アプリ内：HOME動画ボタンを学習（実タップ検証）","登録したアプリ内操作だけ削除")
   val dialog=android.app.AlertDialog.Builder(this).setTitle("学習する操作の種類")
    .setItems(choices){_,which->
     h.postDelayed({
      if(which==0){navigationTeacher.cancel();reportNavigationTeaching(beginTeachTap())}
-     else if(which==4){AppNavigationRules.clear(this);reportNavigationTeaching("アプリ内操作だけ削除しました。広告の学習は保持")}
+     else if(which==4){navigationTeacher.cancel();reportNavigationTeaching(beginTeachTap(true))}
+     else if(which==5){AppNavigationRules.clear(this);reportNavigationTeaching("アプリ内操作だけ削除しました。広告の学習は保持")}
      else {
       teachOverlay.cancelCapture("アプリ内操作の登録へ切り替え")
       reportNavigationTeaching(navigationTeacher.begin(AppNavigationRules.Role.values()[which-1]))
@@ -211,9 +212,14 @@ class PowlAccessibilityService:AccessibilityService(){
   dialog.show()
   return "アプリ内操作の登録／広告の×学習を選択"
  }
- fun beginTeachTap():String {
+ fun beginTeachTap(homeOnly:Boolean=false):String {
   navigationTeacher.cancel()
   stopAutomaticOperation()
+  val source=MainScreenReader.read(rootInActiveWindow).screen
+  if(homeOnly && source!=MainScreenPolicy.Screen.HOME)
+   return "HOMEの動画ボタン学習はHOMEの上下表示を確認してから行ってください"
+  if(!homeOnly && source in listOf(MainScreenPolicy.Screen.HOME,MainScreenPolicy.Screen.MAP))
+   return "これはアプリ内の画面です。「学習」からアプリ内操作の登録を選んでください。広告の×学習には登録しません"
   val msg=teachOverlay.begin()
   if(msg.startsWith("学習 1/2")){
    // Hide and make the window NOT_TOUCHABLE for real manual interaction.

@@ -1846,7 +1846,7 @@ class AutoFlow(
    val expected=generation
    service.probeMapStock(role) { result->
     mapIconPending=false
-    if(!running || generation!=expected || mapIconRole!=role || mapPhase !in listOf(MapStockPolicy.Phase.OPEN_MAP,MapStockPolicy.Phase.OPEN_STOCK))return@probeMapStock
+    if(!running || generation!=expected || mapIconRole!=role || mapPhase !in listOf(MapStockPolicy.Phase.OFF,MapStockPolicy.Phase.OPEN_MAP,MapStockPolicy.Phase.OPEN_STOCK))return@probeMapStock
     val stamp=SystemClock.elapsedRealtime();val old=mapIconPoint
     mapVisualOnMap=result?.onMap==true;mapVisualAt=stamp
     mapIconSourceConfirmed=result?.sourceConfirmed==true
@@ -2418,6 +2418,15 @@ class AutoFlow(
     return
    }
    val main=mainScreen(snapshot)
+   // Starting on MAP must work even when the header/navigation expose no selection nodes.
+   if(mapPhase==MapStockPolicy.Phase.OFF && main.screen==MainScreenPolicy.Screen.UNKNOWN &&
+    !videoAdSessionActive && gachaPhase==GachaSafety.Phase.NONE){
+    val bottom=snapshot.nodes.filter{it.node.isVisibleToUser &&
+     it.rect.centerY()>service.resources.displayMetrics.heightPixels*85/100}
+    val labels=bottom.flatMap{listOf(it.text.trim(),it.desc.trim())}
+    if("マップ" in labels && labels.any{it in listOf("マイル","ホーム","HOME")})
+     openStockByImage(now,false)
+   }
    if(mapPhase==MapStockPolicy.Phase.OFF && main.screen==MainScreenPolicy.Screen.MAP){
     if(collection.isActive())collection.finish("STOPPED","MAPから再開。移動・歩数の完了は未確認")
     collection.begin("map_stock","マップ宝箱ストック","表示中のMAPからストック回収")
