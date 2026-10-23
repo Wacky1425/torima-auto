@@ -31,6 +31,8 @@ internal object DiagnosticBundleExporter {
     writeTextEntry("00_HOME_診断結果.txt",resultText)
     writeTextEntry("01_HOME_試行詳細.json",HomeTrialJournal.export(ctx))
     writeTextEntry("02_操作履歴.json",TeachOverlay.export(ctx))
+    writeTextEntry("11_学習ルール設定.json",LearnedRuleManager.export(ctx))
+    writeTextEntry("12_学習位置の表示確認.json",DiagnosticJournal.export(ctx,"learned_guard"))
     writeTextEntry("09_学習診断.json",DiagnosticJournal.export(ctx,"teaching"))
     writeTextEntry("10_撮影診断.json",DiagnosticJournal.export(ctx,"screenshots"))
     writeTextEntry("03_回収タスク履歴.json",CollectionRunStore.export(ctx))

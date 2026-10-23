@@ -36,6 +36,9 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun probeRewardBadges(onDone:(RewardBadgeDetector.Result?)->Unit){
   imageDiagnostics.probeRewardBadges(onDone)
  }
+ internal fun probeLearnedX(x:Int,y:Int,onDone:(Boolean?)->Unit){
+  imageDiagnostics.probeLearnedX(x,y,onDone)
+ }
  internal fun matchVisualLearning(pixels:IntArray,width:Int,height:Int):
   VisualLearnedActions.Match? =
   visualLearnedActions.matchCanonical(pixels,width,height)

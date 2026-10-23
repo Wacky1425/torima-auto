@@ -65,6 +65,7 @@
  android:text="学習は2段階です。①透明な学習膜の上からボタンの位置を選択、②膜と操作バーが消えたら実際の指で同じ場所をタップ。指による本物の画面操作で遷移またはクリックが確認できれば、ノード／画像ルールとして自動登録します。左上の邪魔な案内パネルは廃止しました。識別できない場合は理由を出し、保留データは蓄積しません。"/>
 <Button android:id="@+id/copyActionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作履歴をコピー"/>
 <Button android:id="@+id/copyLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習済み操作をコピー"/>
+<Button android:id="@+id/manageLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習ルールの管理（個別ON／OFF）"/>
 <Button android:id="@+id/clearLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作をすべて削除"/>
  <Button android:id="@+id/clearLegacyPending" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="古い保留例だけ削除（学習済みは残す）"/>
 

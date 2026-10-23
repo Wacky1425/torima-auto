@@ -209,6 +209,25 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  }
 
 
+ /** A local before-input glyph check. It never clicks, saves, or trusts scene identity. */
+ fun probeLearnedX(x:Int,y:Int,done:(Boolean?)->Unit){
+  val now=SystemClock.elapsedRealtime()
+  if(!captureSchedule.allowProbe() || busy || now-lastProbeRequest<1_300L){done(null);return}
+  lastProbeRequest=now
+  captureForVisualTeaching{bitmap,_->
+   if(bitmap==null){done(null);return@captureForVisualTeaching}
+   val result=try{
+    val w=540;val h=(bitmap.height.toLong()*w/bitmap.width).toInt()
+    val small=Bitmap.createScaledBitmap(bitmap,w,h,true)
+    try{
+     val pixels=IntArray(w*h);small.getPixels(pixels,0,w,0,0,w,h)
+     LearnedXPresence.visible(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height)
+    }finally{if(small!==bitmap)small.recycle()}
+   }catch(_:Exception){null}finally{bitmap.recycle()}
+   done(result)
+  }
+ }
+
  /**
   * Teaching uses the live source frame *before* its touch is injected.
   * This is independent of ordinary diagnostic screenshot rate limits.

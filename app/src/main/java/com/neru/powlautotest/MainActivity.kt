@@ -178,6 +178,17 @@ class MainActivity:AppCompatActivity(){
     .setPrimaryClip(ClipData.newPlainText("Torima 学習済み操作",data))
    Toast.makeText(this,"学習済み操作をコピー（ノード${LearnedActions.count(this)}件＋画像${VisualLearnedActions.count(this)}件）",Toast.LENGTH_LONG).show()
   }
+  findViewById<Button>(R.id.manageLearnedRules).setOnClickListener{
+   PowlAccessibilityService.instance?.stopAutomaticOperation()
+   val entries=LearnedRuleManager.entries(this)
+   if(entries.isEmpty())Toast.makeText(this,"学習済みの操作はありません",Toast.LENGTH_SHORT).show()
+   else AlertDialog.Builder(this)
+    .setTitle("学習ルール：チェックあり＝有効")
+    .setMultiChoiceItems(entries.map{it.title}.toTypedArray(),entries.map{it.enabled}.toBooleanArray()) {_,which,checked->
+     LearnedRuleManager.setEnabled(this,entries[which].key,checked)
+    }
+    .setPositiveButton("閉じる",null).show()
+  }
   findViewById<Button>(R.id.clearLearnedRules).setOnClickListener{
    AlertDialog.Builder(this)
     .setTitle("学習した自動操作をすべて削除？")

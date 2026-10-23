@@ -24,6 +24,7 @@ internal class VisualLearnedActions(private val ctx:Context){
    JSONArray(file(ctx).takeIf{it.exists()}?.readText(Charsets.UTF_8)?:"[]")
   }catch(_:Exception){JSONArray()}
   fun count(ctx:Context)=read(ctx).length()
+  internal fun rulesForManagement(ctx:Context):JSONArray=read(ctx)
   fun clear(ctx:Context){
    val file=file(ctx)
    if(file.exists())file.delete()
@@ -116,9 +117,11 @@ internal class VisualLearnedActions(private val ctx:Context){
  }
  fun matchCanonical(pixels:IntArray,width:Int,height:Int):Match?{
   val rules=read(ctx)
+  val disabled=LearnedRuleManager.disabled(ctx)
   val candidates=ArrayList<Match>()
   for(i in 0 until rules.length()){
    val item=rules.optJSONObject(i)?:continue
+   if(LearnedRuleManager.key("画像",item) in disabled)continue
    val near=array(item.optJSONArray("near"),
     VisualTemplateModel.NEAR_GRID*VisualTemplateModel.NEAR_GRID)?:continue
    val context=array(item.optJSONArray("context"),

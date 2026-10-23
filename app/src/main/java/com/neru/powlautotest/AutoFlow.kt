@@ -108,6 +108,9 @@ class AutoFlow(
  private var visualProbePending=false
  private var visualProbeLast=0L
  // A visual X with no SDK metadata needs a known video-ad entry path.
+ private val learnedXGate=LearnedXPresence.Gate()
+ private var learnedXPending=false
+ private var learnedXLastRequest=0L
  private var videoAdSessionActive=false
  private var lastKind=""
  private var learnedTextSeenAt=0L
@@ -155,6 +158,7 @@ class AutoFlow(
  )
 
  private fun resetLiveVisual(){
+  learnedXGate.reset()
   liveVisualAt=0L;liveVisualSince=0L;liveVisualCount=0
   liveVisual=null;visualProbePending=false;visualProbeLast=0L
   visualLearned=null;visualLearnedSince=0L
@@ -1149,7 +1153,7 @@ class AutoFlow(
      .containsMatchIn(it.text)}?.text?.trim().orEmpty()
    return Decision(if(memory.visualIcon)"LEARNED_ICON"
     else if(memory.gestureOnly)"LEARNED_TEXT" else "LEARNED",memory.title,
-    "LEARNED:${memory.bounds.toShortString()}:${memory.title}:$counter",item,
+    "LEARNED:${memory.ruleKey}:${memory.bounds.toShortString()}:$counter",item,
     "本人が登録した画面と一意の対象を再照合済み",memory.tapPoint,
     memory.exact,true)
   }
@@ -2249,6 +2253,44 @@ class AutoFlow(
   update("広告後の${current}を確認。通常の判定に復帰")
   return false
  }
+ private fun requiresVisibleLearnedX(decision:Decision):Boolean {
+  if(decision.kind in listOf("LEARNED_ICON","LEARNED_VISUAL"))return true
+  if(decision.kind !in listOf("LEARNED","LEARNED_TEXT","AD_CLOSE"))return false
+  val item=decision.target?:return false
+  val caption=(item.text+" "+item.desc).lowercase()
+  if(caption.contains("skip") || caption.contains("スキップ"))return false
+  return decision.registeredLearned || item.node.className?.toString()?.endsWith("ImageView")==true ||
+   caption.trim() in setOf("close","close ad","×","✕","✖")
+ }
+ private fun confirmLearnedX(decision:Decision,now:Long):Boolean {
+  val key=decision.key
+  learnedXGate.expect(key,now)
+  if(learnedXGate.ready(key,now))return true
+  if(now-learnedXGate.since>=120_000L){
+   stopWithReason("学習した位置に×の安定表示を2分確認できず停止。広告先の誤タップを防ぎました")
+   return false
+  }
+  val point=decision.touch?:decision.target?.rect?.let{Point(it.centerX(),it.centerY())}
+  if(point==null){next(900);return false}
+  if(!learnedXPending && now-learnedXLastRequest>=1_400L){
+   learnedXPending=true;learnedXLastRequest=now
+   val expected=generation
+   service.probeLearnedX(point.x,point.y){visible->
+    learnedXPending=false
+    if(!running || generation!=expected || learnedXGate.key!=key)return@probeLearnedX
+    val stamp=SystemClock.elapsedRealtime()
+    learnedXGate.observe(key,visible==true,stamp)
+    DiagnosticJournal.record(service,"learned_guard","x_observed",org.json.JSONObject()
+     .put("key",key).put("visible",visible?:org.json.JSONObject.NULL)
+     .put("x",point.x).put("y",point.y))
+    next(100)
+   }
+  }
+  update("学習位置の×を確認中：実際の表示が2枚で一致するまで押しません")
+  next(900)
+  return false
+ }
+
  private fun check(){
   if(!running)return
   try {
@@ -2297,11 +2339,11 @@ class AutoFlow(
     }
    }
    val initial=choose(snapshot)
-   if(gachaPhase==GachaSafety.Phase.AWAIT_REWARD ||
+   if(!requiresVisibleLearnedX(initial) && (gachaPhase==GachaSafety.Phase.AWAIT_REWARD ||
     initial.kind in listOf("UNKNOWN","OPAQUE","AD_VISUAL_X","AD_VISUAL_NEXT") ||
    (VisualLearnedActions.count(service)>0 &&
      (videoAdSessionActive || initial.kind in listOf("AD_CLOSE","AD_SKIP",
-      "AD_VISUAL_X","AD_VISUAL_NEXT")))){
+      "AD_VISUAL_X","AD_VISUAL_NEXT"))))){
     probeLiveOverlay(now)
    }
    val decision=choose(snapshot)
@@ -2411,6 +2453,9 @@ class AutoFlow(
     verifiedAdKey=""
     verifiedAdSince=0L
    }
+   if(requiresVisibleLearnedX(decision)){
+    if(!confirmLearnedX(decision,now))return
+   }else learnedXGate.reset()
    if(waitingKey!=null){
     if(waitingKey==decision.key){
      val seconds=(now-waitingSince)/1000

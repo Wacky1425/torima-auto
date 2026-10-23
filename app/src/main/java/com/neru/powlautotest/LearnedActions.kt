@@ -25,6 +25,7 @@ class LearnedActions(private val ctx:Context) {
    JSONArray(file(ctx).takeIf{it.exists()}?.readText(Charsets.UTF_8)?:"[]")
   }catch(_:Exception){JSONArray()}
   fun count(ctx:Context):Int=read(ctx).length()
+  internal fun rulesForManagement(ctx:Context):JSONArray=read(ctx)
   fun demonstrationCount(ctx:Context):Int=demonstrationList(ctx).length()
   fun clear(ctx:Context){
    file(ctx).writeText("[]",Charsets.UTF_8)
@@ -59,7 +60,7 @@ class LearnedActions(private val ctx:Context) {
  data class Match(val node:AccessibilityNodeInfo,val bounds:Rect,
   val title:String,val gestureOnly:Boolean=false,val tapPoint:Point?=null,
   val visualIcon:Boolean=false,
-  val exact:Boolean=false)
+  val exact:Boolean=false,val ruleKey:String="")
 
  /**
   * Users already explicitly pressed 登録 on these examples. Upgrade only the
@@ -395,9 +396,11 @@ class LearnedActions(private val ctx:Context) {
   val activeAnchors=if(sig==null)emptySet() else stableAnchors(sig)
   val verifiedWebAd=TeachRulePolicy.provenWebAdFrame(sample.items.map{it.viewId})
   val rows=read(ctx)
+  val disabled=LearnedRuleManager.disabled(ctx)
   val found=ArrayList<Candidate>()
   for(i in 0 until rows.length()){
    val rule=rows.optJSONObject(i)?:continue
+   if(LearnedRuleManager.key("ノード",rule) in disabled)continue
    val stored=rule.optString("signature")
    val exact=sig!=null && sig==stored
    val savedAnchors=stableAnchors(stored)
@@ -467,6 +470,7 @@ class LearnedActions(private val ctx:Context) {
   // but respond to the actual touch at the taught location.
   val point=if(chosen.target.bounds.contains(tx,ty))Point(tx,ty) else null
   return Match(chosen.target.node,chosen.target.bounds,title,gestureOnly,point,
-   chosen.rule.optBoolean("visualIcon",false),bestScore>=1000)
+   chosen.rule.optBoolean("visualIcon",false),bestScore>=1000,
+   LearnedRuleManager.key("ノード",chosen.rule))
  }
 }
