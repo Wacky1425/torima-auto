@@ -209,13 +209,30 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  }
 
 
+ /** Capture after the collector has left the compositor; restore on every terminal path. */
+ internal fun captureWithoutControlBar(done:(Bitmap?,String)->Unit){
+  val restore=service.hideControlBarForScreenshot()
+  var finished=false
+  fun finish(bitmap:Bitmap?,note:String){
+   if(finished){bitmap?.recycle();return}
+   finished=true;restore()
+   DiagnosticJournal.record(service,"screenshots","control_bar_excluded",JSONObject()
+    .put("success",bitmap!=null).put("result",note))
+   done(bitmap,note)
+  }
+  captureHandler.postDelayed({if(!finished)finish(null,"操作バーなし撮影が3秒で完了せず終了")},3000L)
+  captureHandler.postDelayed({
+   if(!finished)captureForVisualTeaching{bitmap,note->finish(bitmap,note)}
+  },200L)
+ }
+
  /** Read only the stock-control descriptor; callbacks use full-display coordinates. */
- fun probeMapStock(done:(MapStockIconDetector.Result?)->Unit){
+ fun probeMapStock(role:AppNavigationRules.Role,done:(MapStockIconDetector.Result?)->Unit){
   val now=SystemClock.elapsedRealtime()
   if(!captureSchedule.allowProbe() || busy || now-lastProbeRequest<1300L){done(null);return}
   lastProbeRequest=now
-  captureForVisualTeaching{bitmap,_->
-   if(bitmap==null){done(null);return@captureForVisualTeaching}
+  captureWithoutControlBar{bitmap,_->
+   if(bitmap==null){done(null);return@captureWithoutControlBar}
    val originalWidth=bitmap.width
    io.execute{
     val result=try{
@@ -223,11 +240,15 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      val scaled=Bitmap.createScaledBitmap(bitmap,w,h,true)
      try{
       val pixels=IntArray(w*h);scaled.getPixels(pixels,0,w,0,0,w,h)
-      val onMap=MapStockIconDetector.onMap(pixels,w,h)
-      val stock=if(onMap)MapStockIconDetector.detect(pixels,w,h) else null
+      val nodes=MainScreenReader.read(service.rootInActiveWindow)
+      val onMap=nodes.screen==MainScreenPolicy.Screen.MAP ||
+       (nodes.allowVisual && nodes.screen==MainScreenPolicy.Screen.UNKNOWN && MapStockIconDetector.onMap(pixels,w,h))
+      val sourceConfirmed=if(role.source==MainScreenPolicy.Screen.MAP)onMap else nodes.screen==MainScreenPolicy.Screen.HOME
+      val stock=if(sourceConfirmed)AppNavigationRules.match(service,role,pixels,w,h)?:
+       (if(role==AppNavigationRules.Role.STOCK)MapStockIconDetector.detect(pixels,w,h) else null) else null
       MapStockIconDetector.Result(onMap,stock?.let{
        MapStockIconDetector.Point(it.x*originalWidth/w,it.y*originalWidth/w)
-      })
+      },sourceConfirmed)
      }finally{if(scaled!==bitmap)scaled.recycle()}
     }catch(_:Exception){null}finally{bitmap.recycle()}
     service.mainExecutor.execute{done(result)}
@@ -336,10 +357,12 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   busy=true
   lastRequest=now
   val windowId=root.windowId
+  val restoreBar=service.hideControlBarForScreenshot()
   var delivered=false
   fun deliver(message:String){
    if(delivered)return
-   delivered=true;busy=false
+   delivered=true;busy=false;restoreBar()
+   DiagnosticJournal.record(service,"screenshots","diagnostic_control_bar_excluded",JSONObject().put("result",message))
    done(message)
   }
   captureHandler.postDelayed({
@@ -373,6 +396,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      })
    }catch(e:Exception){onResult(error="画面取得を開始できません：${e.javaClass.simpleName}")}
   }
+  fun requestClean(){
   // On Android 14+ capture the app window, not the accessibility overlay.
   if(Build.VERSION.SDK_INT>=34 && windowId>=0){
    try{
@@ -388,6 +412,8 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      })
    }catch(_:Exception){requestDisplay()}
   }else requestDisplay()
+  }
+  captureHandler.postDelayed({if(!delivered)requestClean()},200L)
  }
 
  private fun toSoftwareBitmap(screenshot:AccessibilityService.ScreenshotResult):Bitmap?{

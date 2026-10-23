@@ -30,7 +30,45 @@ class MainActivity:AppCompatActivity(){
   if(text.isNotBlank() && text!=lastShown){lastShown=text;results.text=text}
   h.postDelayed(this,500)
  }}
+ private val drivePicker=registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()){result->
+  val data=result.data
+  val uri=data?.data
+  if(result.resultCode==RESULT_OK && uri!=null){
+   try{DriveDiagnosticTarget.select(this,uri,data?.flags?:0);sendDriveDiagnostics()}
+   catch(e:Exception){Toast.makeText(this,e.message?:"Drive保存先を設定できません",Toast.LENGTH_LONG).show()}
+  }
+ }
+ private fun pickDriveTarget(){
+  AlertDialog.Builder(this).setTitle("初回：Driveの診断保存先を指定")
+   .setMessage("左メニューからGoogle Driveを選び、このチャットと連携したGoogleアカウントの「Torima Diagnostics」フォルダへ保存してください。以後は同じ診断ファイルを更新します。地図などを含む診断画像が送信されます。")
+   .setPositiveButton("保存先を選ぶ"){_,_->
+    drivePicker.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply{
+     addCategory(Intent.CATEGORY_OPENABLE);type="application/zip"
+     putExtra(Intent.EXTRA_TITLE,DriveDiagnosticTarget.FILE_NAME)
+     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+    })
+   }.setNegativeButton("キャンセル",null).show()
+ }
+ private var driveSending=false
+ private fun sendDriveDiagnostics(){
+  if(driveSending)return
+  if(DriveDiagnosticTarget.target(this)==null){pickDriveTarget();return}
+  driveSending=true
+  val button=findViewById<Button>(R.id.sendDriveDiagnostics);button.isEnabled=false
+  Toast.makeText(this,"最新診断を作成してDriveへ送信中",Toast.LENGTH_SHORT).show()
+  Thread{
+   val message=try{DriveDiagnosticTarget.send(this,DiagnosticBundleExporter.create(this))}
+    catch(e:Exception){"Drive送信失敗：${e.message?:e.javaClass.simpleName}。保存先を確認・再設定してください"}
+   runOnUiThread{driveSending=false;button.isEnabled=true
+    findViewById<TextView>(R.id.driveDiagnosticStatus).text=message
+    Toast.makeText(this,message,Toast.LENGTH_LONG).show()
+   }
+  }.start()
+ }
  override fun onCreate(b:Bundle?){super.onCreate(b);setContentView(R.layout.activity_main)
+  findViewById<Button>(R.id.sendDriveDiagnostics).setOnClickListener{sendDriveDiagnostics()}
+  findViewById<Button>(R.id.changeDriveDiagnosticTarget).setOnClickListener{pickDriveTarget()}
+
   results=findViewById(R.id.results);state=findViewById(R.id.debugStatus)
   collectionOverview=findViewById(R.id.collectionOverview)
   homeExperimentInfo=findViewById(R.id.homeExperimentInfo)

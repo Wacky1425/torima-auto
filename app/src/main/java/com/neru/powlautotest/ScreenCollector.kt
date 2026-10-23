@@ -150,6 +150,23 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    try{wm?.updateViewLayout(panel,p)}catch(_:Exception){}
   }
  }
+ internal fun isCapturingScreenshot()=screenshotHides>0
+ private var screenshotHides=0
+ private var screenshotOriginalVisibility=View.VISIBLE
+ /** Lease only this collector; restoring a screenshot never ends a teaching session. */
+ internal fun hideForScreenshot():()->Unit {
+  val panel=bar
+  if(screenshotHides==0)screenshotOriginalVisibility=if(teachingSuspend)View.VISIBLE else panel?.visibility?:View.VISIBLE
+  screenshotHides++
+  panel?.visibility=View.INVISIBLE
+  var released=false
+  return restore@{
+   if(released)return@restore
+   released=true;screenshotHides=maxOf(0,screenshotHides-1)
+   if(screenshotHides==0 && panel!=null && bar===panel && !teachingSuspend)
+    panel.visibility=screenshotOriginalVisibility
+  }
+ }
  private var teachingSuspend=false
  private var teachingOriginalFlags:Int?=null
  /** A hidden View alone may leave an intercepting overlay WINDOW on OPPO.
@@ -184,7 +201,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    params.flags=old
    try{wm?.updateViewLayout(panel,params)}catch(_:Exception){}
   }
-  panel?.visibility=View.VISIBLE
+  panel?.visibility=if(screenshotHides>0)View.INVISIBLE else View.VISIBLE
  }
  private var autoStatus="停止中"
  fun isVisible():Boolean=bar!=null
@@ -279,7 +296,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
     LinearLayout.LayoutParams(0,dp(49),1f))
    primary.addView(control("■ 停止"){updateAutoStatus(service.stopAutomaticOperation())},
     LinearLayout.LayoutParams(0,dp(49),1f))
-   primary.addView(control("✦ 学習"){updateAutoStatus(service.beginTeachTap())},
+   primary.addView(control("✦ 学習"){updateAutoStatus(service.showLearningMenu())},
     LinearLayout.LayoutParams(0,dp(49),1f))
    panel.addView(primary)
    val status=TextView(service).apply{

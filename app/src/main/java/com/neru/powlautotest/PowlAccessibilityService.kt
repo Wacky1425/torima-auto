@@ -36,8 +36,8 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun probeRewardBadges(onDone:(RewardBadgeDetector.Result?)->Unit){
   imageDiagnostics.probeRewardBadges(onDone)
  }
- internal fun probeMapStock(done:(MapStockIconDetector.Result?)->Unit){
-  imageDiagnostics.probeMapStock(done)
+ internal fun probeMapStock(role:AppNavigationRules.Role,done:(MapStockIconDetector.Result?)->Unit){
+  imageDiagnostics.probeMapStock(role,done)
  }
  internal fun probeLearnedX(x:Int,y:Int,onDone:(Boolean?)->Unit){
   imageDiagnostics.probeLearnedX(x,y,onDone)
@@ -45,6 +45,8 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun matchVisualLearning(pixels:IntArray,width:Int,height:Int):
   VisualLearnedActions.Match? =
   visualLearnedActions.matchCanonical(pixels,width,height)
+ internal fun isCapturingCleanScreenshot()=screenCollector.isCapturingScreenshot()
+ internal fun hideControlBarForScreenshot():()->Unit=screenCollector.hideForScreenshot()
  internal fun suspendTeachingBar():Boolean=screenCollector.suspendForTeaching()
  internal fun resumeTeachingBar(){screenCollector.resumeAfterTeaching()}
  internal fun captureVisualTeaching(onDone:(android.graphics.Bitmap?,String)->Unit){
@@ -160,6 +162,7 @@ class PowlAccessibilityService:AccessibilityService(){
  override fun onDestroy(){
   homeRecovery.cancel()
   manualHomeComparison.cancel()
+  navigationTeacher.cancel()
   teachOverlay.cancelCapture("サービス終了")
   stopSequence()
   screenCollector.hide()
@@ -184,7 +187,32 @@ class PowlAccessibilityService:AccessibilityService(){
  }
 
 
+ private val navigationTeacher by lazy{AppNavigationTeachOverlay(this)}
+ internal fun reportNavigationTeaching(message:String){
+  report=message;screenCollector.updateAutoStatus(message)
+  android.widget.Toast.makeText(this,message,android.widget.Toast.LENGTH_LONG).show()
+ }
+ internal fun captureNavigationFrame(done:(android.graphics.Bitmap?,String)->Unit){imageDiagnostics.captureWithoutControlBar(done)}
+ fun showLearningMenu():String {
+  stopAutomaticOperation()
+  val choices=arrayOf("広告の×／スキップを学習（従来の2段階）","アプリ内：マップを開くを登録","アプリ内：今日に戻るを登録","アプリ内：ストックを開くを登録","登録したアプリ内操作だけ削除")
+  val dialog=android.app.AlertDialog.Builder(this).setTitle("学習する操作の種類")
+   .setItems(choices){_,which->
+    h.postDelayed({
+     if(which==0){navigationTeacher.cancel();reportNavigationTeaching(beginTeachTap())}
+     else if(which==4){AppNavigationRules.clear(this);reportNavigationTeaching("アプリ内操作だけ削除しました。広告の学習は保持")}
+     else {
+      teachOverlay.cancelCapture("アプリ内操作の登録へ切り替え")
+      reportNavigationTeaching(navigationTeacher.begin(AppNavigationRules.Role.values()[which-1]))
+     }
+    },250L)
+   }.setNegativeButton("キャンセル",null).create()
+  dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+  dialog.show()
+  return "アプリ内操作の登録／広告の×学習を選択"
+ }
  fun beginTeachTap():String {
+  navigationTeacher.cancel()
   stopAutomaticOperation()
   val msg=teachOverlay.begin()
   if(msg.startsWith("学習 1/2")){

@@ -11,6 +11,9 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
  android:text="不具合調査が必要なときだけZIPを1個共有してください。操作バーには「開始・停止・学習」の3つを表示します。長押しでバーを移動でき、詳しい記録やテストは「詳細」にまとめました。"
  android:paddingBottom="8dp"/>
+<Button android:id="@+id/sendDriveDiagnostics" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Driveに診断を送信（初回のみ保存先設定）"/>
+<Button android:id="@+id/changeDriveDiagnosticTarget" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Driveの診断保存先を変更"/>
+<TextView android:id="@+id/driveDiagnosticStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="連携済みGoogleアカウントのTorima Diagnosticsへ。送信後、このチャットで「送った」と伝えてください。"/>
 <Switch android:id="@+id/fastAdMode"
  android:layout_width="match_parent" android:layout_height="wrap_content"
  android:minHeight="52dp"
