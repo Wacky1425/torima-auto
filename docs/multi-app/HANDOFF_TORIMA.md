@@ -101,3 +101,18 @@
 ### 最終確認（2026-10-23）
 - コードSHA `437607c5c03049a42924ce210a56ad257f688abc`、[QA Actions #39878094830](https://github.com/Wacky1425/torima-auto/actions/runs/39878094830) が成功。共通・更新ライブラリ・Torima QA/Debug単体テスト、署名QA APKビルド、実ID/版番号/署名/公開配布検証を通過。QA100005をアプリ内更新へ配布。実機は未検証。
 - 初回のBuildConfig参照によるコンパイル失敗はPackageManagerから実インストール情報を読む形へ修正済み。失敗版100003/100004は配布されていない。
+
+## 2026-10-23 Torima担当：学習位置の×出現前タップを防ぐ
+- ブランチ `dev/torima`、コードSHA `49fdb6f7bf6d067c86825e4ec202a8fe921c1f5c`。main/共通module/CIの変更なし。既存学習ファイル・QA ID/署名を維持。
+- 根拠：学習ノードのImageViewは×が描画される前にも同じbounds/classで存在し得る。画面一致だけではglyphの存在を保証しない。
+- 対策：学習アイコン/画像等の閉じる候補は、操作前に実画面から学習位置近傍の明暗両極性の×形状を確認。500ms〜4秒間隔の2画像が必要、最終確認から900msを超えた証拠は無効。消失/撮影失敗/別ルールは許可しない。通常操作・再試行より前に共通ガードを置き、2分未検出で停止。速度設定で省略しない。既存広告証拠/ガチャ誤操作防止も維持。
+- 学習ルールの管理（個別ON/OFF）を追加。チェックを外したノード/画像ルールは自動照合から除外。元の学習データを削除せずSharedPreferencesへ無効キーを保存。ノードと画像の両方が同じ位置を学習している場合は両方をOFFにする。
+- 診断ZIPに `11_学習ルール設定.json` / `12_学習位置の表示確認.json` を追加。
+- 変更：AutoFlow、LearnedActions、VisualLearnedActions、ScreenshotDiagnostics、PowlAccessibilityService、MainActivity、activity_main、DiagnosticBundleExporter、新規LearnedRuleManager/LearnedXPresence/回帰テスト。
+- 回帰テスト：空背景/塗り四角/＋を拒否、小さい白黒×の局所検出、1画像のみ/古い証拠/別ルール/消失を拒否。ローカルdiff check合格。ローカルGradleは配布ホストへのネットワーク制限で起動不可のためActionsで実行。
+- 制限：×の描画を認識できない広告や文字のみの閉じるは保守的に待機し得る。OPPO実機では未検証。次は更新後、×出現前に押さず、出現後に閉じるか確認。異常時は最新ZIPの12番と画面を確認する。
+
+### 配布確認
+- QA100006（3.14-qa.100006）を配布。QA Actions #39880406207、DEV #39880406118成功。共通/更新ライブラリ/Torima QA・Debugテスト、固定署名ビルド、公開配布検証が通過。
+- 配布asset 2,892,580 bytes、SHA-256 `02527916c8bd1c8b79dfb87b2a26e7ac680b098a253eeb9089f8545811d4bac7`。公開manifestを匿名取得しversionCode100006/sourceSha49fdb6fと一致確認。
+- 正式版releases/latestはv3.14/Release ID420174934を維持。実機未検証。ユーザーはQA内の更新、またはqa-torima-100006のAPKを上書きインストールし、×表示前待機→表示後の回収を確認する。

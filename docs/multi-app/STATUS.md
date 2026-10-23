@@ -112,3 +112,7 @@ Androidビルド: 未実行 / 合格 / 失敗
 ### 最終確認（2026-10-23）
 - コードSHA `437607c5c03049a42924ce210a56ad257f688abc`、[QA Actions #39878094830](https://github.com/Wacky1425/torima-auto/actions/runs/39878094830) が成功。共通・更新ライブラリ・Torima QA/Debug単体テスト、署名QA APKビルド、実ID/版番号/署名/公開配布検証を通過。QA100005をアプリ内更新へ配布。実機は未検証。
 - 初回のBuildConfig参照によるコンパイル失敗はPackageManagerから実インストール情報を読む形へ修正済み。失敗版100003/100004は配布されていない。
+
+## 2026-10-23 Torima：学習位置の×出現前タップ防止
+- `dev/torima` コード `49fdb6f7bf6d067c86825e4ec202a8fe921c1f5c`。学習位置の実画像×を2回確認し、未表示/消失/古い証拠では操作しない。学習ルールの個別ON/OFFと診断11/12を追加。既存学習データ互換を維持。
+- QA100006配布済み。QA Actions #39880406207、DEV #39880406118成功。公開manifestの版/sourceShaと公開APK assetを確認。main/正式v3.14は変更なし。OPPO実機は未検証。詳細はHANDOFF_TORIMA末尾。
