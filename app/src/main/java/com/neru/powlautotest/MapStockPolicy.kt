@@ -3,6 +3,9 @@ package com.neru.powlautotest
 /** Stock counts are independent completion evidence; missing rows are not empty. */
 internal object MapStockPolicy {
  enum class Phase { OFF, BADGE, OPEN_MAP, OPEN_STOCK, LIST, DETAIL, FIRST_AD, BOTTOM, SECOND_AD, RECEIVE, RETURN }
+ enum class EntryAction { TODAY, STOCK }
+ /** Today is optional: absence means the current map can open stock directly. */
+ fun entryAction(todayVisible:Boolean)=if(todayVisible)EntryAction.TODAY else EntryAction.STOCK
  fun count(labels:List<String>):Int? {
   val values=labels.mapNotNull { Regex("ストック中\\s*([0-9０-９]+)\\s*個").find(it)?.groupValues?.get(1) }
    .map { value->value.map { if(it in '０'..'９') '0'+(it-'０') else it }.joinToString("").toIntOrNull() }

@@ -4,6 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MapStockPolicyTest {
+ @Test fun todayIsOptionalAndOnlyPressedWhenVisible(){
+  assertEquals(MapStockPolicy.EntryAction.TODAY,MapStockPolicy.entryAction(true))
+  assertEquals(MapStockPolicy.EntryAction.STOCK,MapStockPolicy.entryAction(false))
+ }
+ @Test fun returningToTodayThenOpensStockWithoutRequiringTodayAgain(){
+  val actions=listOf(true,false,false).map{MapStockPolicy.entryAction(it)}
+  assertEquals(listOf(MapStockPolicy.EntryAction.TODAY,MapStockPolicy.EntryAction.STOCK,
+   MapStockPolicy.EntryAction.STOCK),actions)
+ }
+
  @Test fun readsStockCountWithoutUsingMaximumAsRemaining(){
   assertEquals(1,MapStockPolicy.count(listOf("ストック中1個（最大15個）")))
   assertEquals(0,MapStockPolicy.count(listOf("ストック中０個（最大15個）")))

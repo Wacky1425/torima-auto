@@ -1832,8 +1832,13 @@ class AutoFlow(
   }
   if(mapPhase==MapStockPolicy.Phase.OPEN_STOCK){
    if(list){mapGo(MapStockPolicy.Phase.LIST,now);next(900);return true}
-   if(stock!=null)return mapTap(snap,stock,"stock","宝箱ストックを開く",now)
-   return mapTap(snap,mapButton(snap,"今日"),"today","今日のマップに切り替える",now)
+   // 「今日」は過去日の表示から戻す時だけ現れる。ない場合はストックへ直接進む。
+   return when(MapStockPolicy.entryAction(labels.any{it=="今日"})){
+    MapStockPolicy.EntryAction.TODAY->
+     mapTap(snap,mapButton(snap,"今日"),"today","今日のマップに切り替える",now)
+    MapStockPolicy.EntryAction.STOCK->
+     mapTap(snap,stock,"stock","宝箱ストックを開く",now)
+   }
   }
   if(list && mapPhase in listOf(MapStockPolicy.Phase.LIST,MapStockPolicy.Phase.SECOND_AD,MapStockPolicy.Phase.RECEIVE,MapStockPolicy.Phase.RETURN)){
    videoAdSessionActive=false
