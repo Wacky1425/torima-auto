@@ -19,6 +19,7 @@ internal object DiagnosticBundleExporter {
   val temp=File(folder,"torima-diagnostics-v3.14.tmp")
   if(temp.exists())temp.delete()
   val resultText=HomeTrialJournal.report(ctx)
+  val installed=ctx.packageManager.getPackageInfo(ctx.packageName,0)
   try{
    ZipOutputStream(FileOutputStream(temp)).use{zip->
     fun writeTextEntry(name:String,content:String){
@@ -41,9 +42,9 @@ internal object DiagnosticBundleExporter {
     val screenshots=ScreenshotDiagnostics.appendToDiagnosticZip(ctx,zip)
     writeTextEntry("manifest.json",JSONObject().apply{
      put("formatVersion",1)
-     put("appVersion",BuildConfig.VERSION_NAME)
-     put("applicationId",BuildConfig.APPLICATION_ID)
-     put("versionCode",BuildConfig.VERSION_CODE)
+     put("appVersion",installed.versionName?:"unknown")
+     put("applicationId",ctx.packageName)
+     put("versionCode",androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(installed))
      put("createdAt",System.currentTimeMillis())
      put("screenshotCount",screenshots)
      put("nodeLearnedCount",LearnedActions.count(ctx))
