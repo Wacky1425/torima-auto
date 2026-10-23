@@ -137,3 +137,19 @@
 - 制限：異なるレイアウト/描画倍率/アイコンデザインでは保守的に未検出となり得る。最新ZIPの13番と画面で追跡。個人の地図画像は公開Gitへ保存していない。main/共通module/CI/QA署名/保存済み学習データは変更なし。
 
 - 配布確認：QA100008（3.14-qa.100008）公開。QA Actions #39882702602、DEV #39882702711成功。共通/更新/QA・Debug単体テスト、固定署名APKビルド/匿名配布検証通過。公開APK 2,902,752 bytes。正式latestはv3.14/Release ID420174934のまま。実機タップは未確認。次は操作バーをストックに重ねず、マップからストック一覧へ進むか確認。
+
+## 2026-10-23 Torima担当：操作バーなし撮影・Drive送信・学習の分離
+- `dev/torima`。機能コード `e15cca7e0b552ffa7ef0cfcef6941f9ffabea35d`、最終補強 `46831f59fdfd83bf10e21c937064fb838a8e31af`。main/共通module/CIの変更なし。QA署名/ID/既存学習データを維持。
+- 操作バー：画像解析と診断保存はバーをINVISIBLEにするlease取得後200ms待って撮影。完了/拒否/例外/3秒の解析撮影タイムアウト/15秒の診断タイムアウトで復元。二重解放防止、学習中の非表示状態を終了しない。撮影中はAutoFlowの入力を待機。ストック等の座標操作前はWindowManagerのNOT_TOUCHABLEを既存prepareHomeTouchで設定し、復元後のバーに入力が吸われる問題も防ぐ。
+- 状態文「バーを移動してください」をやめ、未検出/ソース確認/撮影失敗を診断へ記録。マップ起動時のノード情報が不足しても下部ナビが存在する場合は画像判定を試す。UNKNOWNだけでタップを許可しない。
+- Drive：Android ACTION_CREATE_DOCUMENTで初回だけGoogle Drive上の `torima-latest-diagnostics.zip` を選択。永続URI権限で、以後アプリの「Driveに診断を送信」から同じファイルへ書き込み。端末内保存プロバイダは拒否、write権限必須。権限取り消し/ファイル削除等は失敗表示し再設定。APKにGoogle/GitHubトークンやユーザーのDrive URLを埋め込まない。任意の自動送信/公開共有は行わず、明示ボタンでのみ送信。
+- ユーザーはChatGPT共有画面案を取り下げ、Driveへの直接送信を明示希望。接続済みDriveに専用Torima Diagnosticsフォルダを作り、connectorで空フォルダの読み取りまで検証。フォルダURL/IDは公開資料へ記載しない。ユーザーが同じGoogleアカウントを選び初回保存後、こちらで最新ZIPの日時/実版を読む。現時点でスマホからの書き込み/クラウド反映/ZIP読み取りは未検証。Drive providerへ書き込み完了とクラウド同期完了は区別して表示。
+- 学習：操作バー「学習」から広告の×/スキップ、アプリ内MAP/TODAY/STOCK、HOME動画の実タップ検証を明示選択。広告学習はHOME/MAP判定時に拒否。アプリ内MAP/TODAY/STOCKは位置を1回指定するだけ（合成タップなし）。広告学習の従来2段階とは別。ソース画面と役割を確認し、小さい画像特徴を `torima_app_navigation_rules.json` へ独立保存。広告のLearntActions/VisualLearnedActionsへ混ぜない。HOME動画は従来の成功検証方式を維持。
+- 自動使用：対応するmapPhaseでだけ登録画像を照合。HOME→MAP、MAP→TODAY/STOCKのソース制限/位置制限、現在の2フレームと900ms鮮度を要求。広告の×検出条件は流用しない。登録済みアプリ操作だけの削除あり。従来の広告ルールは移行/自動削除しない。
+- 新規AppNavigationRules/AppNavigationTeachOverlay/MainScreenReader/DriveDiagnosticTarget/AppNavigationRulesTest。AutoFlow、ScreenCollector、PowlAccessibilityService、ScreenshotDiagnostics、MainActivity、MapStockIconDetector、DiagnosticBundleExporter、activity_mainを変更。ZIPに14_アプリ内操作の登録.json、15_Drive送信履歴.jsonを追加。ZIP生成を同期化。
+- 回帰テスト：役割別ソースとMAP/ストックの位置制限、広告隅/地図中央の拒否、Drive以外/類似authorityの拒否。既存HOME/MAP/画像/広告ガードのテストもActions実行。ローカルdiff check・配布Pythonテスト2件合格。e15のDEV/QA Actions成功（QA100009）。最終468の結果は以下へ追記。
+- 端末未検証：OPPOのバー描画消去/復元、役割別登録、persistable Drive URIの書き込み、Drive providerオンライン同期、フォルダ上の最新ZIP読取。次は新版導入→Drive保存先指定→アプリ内ストック登録→開始→診断送信、ユーザー「送った」でconnectorから検証。
+
+### 最終配布確認
+- QA100010（3.14-qa.100010）、コード46831f59を配布。QA Actions #39884989958、DEV #39884989947成功。共通/更新ライブラリ/Torima QA・Debug単体テスト・固定署名ビルド・匿名配布検証通過。公開APK asset 2,912,736 bytes。公開manifestを匿名取得し実versionCode/sourceSha一致確認。正式latestはv3.14/Release ID420174934を維持。
+- 実機の初回Drive保存先指定・永続URI上書き・オンライン同期とconnectorの最新ZIP取得はユーザー操作待ち。実機成功済みとは扱わない。テスト済みコードと配布/フォルダ読み取り確認まで完了。
