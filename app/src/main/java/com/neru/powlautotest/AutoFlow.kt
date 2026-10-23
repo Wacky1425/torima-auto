@@ -159,6 +159,7 @@ class AutoFlow(
 
  private fun resetLiveVisual(){
   learnedXGate.reset()
+  mapVisualOnMap=false;mapVisualAt=0L
   liveVisualAt=0L;liveVisualSince=0L;liveVisualCount=0
   liveVisual=null;visualProbePending=false;visualProbeLast=0L
   visualLearned=null;visualLearnedSince=0L
@@ -1725,6 +1726,35 @@ class AutoFlow(
   update("停止：$reason")
  }
 
+ private var lastMainScreenEvidence=""
+ private fun mainScreen(snap:Snapshot):MainScreenPolicy.Result {
+  val bounds=Rect();snap.root.getBoundsInScreen(bounds)
+  val labels=snap.nodes.filter{it.node.isVisibleToUser && it.rect.width()>0 && it.rect.height()>0 &&
+   it.rect.height()<=bounds.height()*20/100}.flatMap { item->
+   var selected=item.node.isSelected
+   var parent=item.node.parent;var depth=0
+   while(parent!=null && depth<3){
+    val rect=Rect();parent.getBoundsInScreen(rect)
+    if(rect.height()>bounds.height()*20/100)break
+    selected=selected || parent.isSelected
+    parent=parent.parent;depth++
+   }
+   listOf(item.text,item.desc).filter{it.isNotBlank()}.map{
+    MainScreenPolicy.Label(it,item.rect.centerX()-bounds.left,item.rect.centerY()-bounds.top,selected)
+   }
+  }
+  val nodes=MainScreenPolicy.identify(labels,bounds.width(),bounds.height())
+  val result=if(nodes.screen==MainScreenPolicy.Screen.UNKNOWN && nodes.allowVisual && mapVisualOnMap &&
+   SystemClock.elapsedRealtime()-mapVisualAt in 0L..2500L)
+   MainScreenPolicy.Result(MainScreenPolicy.Screen.MAP,"画像：上部マップ見出し＋下部マップ黄色選択") else nodes
+  val evidence="${result.screen}: ${result.evidence}"
+  if(evidence!=lastMainScreenEvidence){
+   lastMainScreenEvidence=evidence
+   DiagnosticJournal.record(service,"main_screen","identified",org.json.JSONObject()
+    .put("screen",result.screen.name).put("evidence",result.evidence))
+  }
+  return result
+ }
  private fun mapLabels(snap:Snapshot)=snap.nodes.filter{it.node.isVisibleToUser}
   .flatMap{listOf(it.text.trim(),it.desc.trim())}.filter{it.isNotBlank()}
  private fun mapButton(snap:Snapshot,caption:String):Item? {
@@ -1732,6 +1762,7 @@ class AutoFlow(
   val w=bounds.width();val h=bounds.bottom
   fun allowed(r:Rect):Boolean = r.width()>0 && r.height()>0 &&
    r.width()<=w*95/100 && r.height()<=h*15/100 && when(caption){
+    "ホーム","HOME"->r.centerY()>h*85/100 && r.centerX()<w*30/100
     "マップ"->r.centerY()>h*85/100 && r.centerX() in (w*60/100)..(w*80/100)
     "ストック"->r.centerX()>w*60/100 && r.centerY() in (h*40/100)..(h*90/100)
     else->true
@@ -1772,6 +1803,7 @@ class AutoFlow(
  }
  private fun mapGo(phase:MapStockPolicy.Phase,now:Long){
   mapPhase=phase;mapSince=now;mapLastAction="";mapLastActionAt=0L
+  mapIconReads=0;mapIconPoint=null;mapIconAt=0L
   waitingKey=null;fallbackAttempted=false
  }
  private fun mapTap(snap:Snapshot,item:Item?,key:String,title:String,now:Long):Boolean {
@@ -1788,6 +1820,45 @@ class AutoFlow(
   update(title)
   if(!item.node.performAction(AccessibilityNodeInfo.ACTION_CLICK))gestureTap(item.rect,title)
   next(1000);return true
+ }
+ private var mapVisualOnMap=false
+ private var mapVisualAt=0L
+ private var mapIconPending=false
+ private var mapIconRequested=0L
+ private var mapIconAt=0L
+ private var mapIconReads=0
+ private var mapIconPoint:MapStockIconDetector.Point?=null
+ private fun openStockByImage(now:Long,allowTap:Boolean=true):Boolean {
+  val point=mapIconPoint
+  if(allowTap && mapPhase==MapStockPolicy.Phase.OPEN_STOCK && mapVisualOnMap &&
+   point!=null && mapIconReads>=2 && now-mapIconAt in 0L..900L){
+   if(mapLastAction!="stock_image"){
+    if(steps>=MAX_ACTIONS){stopWithReason("マップ操作回数が上限に到達");return true}
+    steps++;mapLastAction="stock_image";mapLastActionAt=now
+    update("MAPの上下表示と右下ストック宝箱を画像2枚で確認。ストックを開く")
+    gestureTap(Rect(point.x-8,point.y-8,point.x+8,point.y+8),"ストック宝箱")
+   }else update("ストック一覧への画面遷移待ち")
+   next(1000);return true
+  }
+  if(!mapIconPending && now-mapIconRequested>=1600L){
+   mapIconPending=true;mapIconRequested=now
+   val expected=generation
+   service.probeMapStock { result->
+    mapIconPending=false
+    if(!running || generation!=expected || mapPhase !in listOf(MapStockPolicy.Phase.OPEN_MAP,MapStockPolicy.Phase.OPEN_STOCK))return@probeMapStock
+    val stamp=SystemClock.elapsedRealtime();val old=mapIconPoint
+    mapVisualOnMap=result?.onMap==true;mapVisualAt=stamp
+    val hit=result?.stock
+    mapIconReads=if(hit==null)0 else if(old!=null && stamp-mapIconAt in 500L..4000L &&
+     kotlin.math.abs(hit.x-old.x)<=24 && kotlin.math.abs(hit.y-old.y)<=24)mapIconReads+1 else 1
+    mapIconPoint=hit;mapIconAt=stamp
+    DiagnosticJournal.record(service,"main_screen","stock_icon",org.json.JSONObject()
+     .put("onMap",mapVisualOnMap).put("found",hit!=null).put("frames",mapIconReads).put("x",hit?.x).put("y",hit?.y))
+    next(100)
+   }
+  }
+  update("MAPを確認。右下ストック宝箱を画像で照合中（$mapIconReads/2枚）。操作バーが重なる場合は移動してください")
+  next(900);return true
  }
  private fun handleMapStock(snap:Snapshot,now:Long):Boolean {
   if(now-mapSince>120_000L){
@@ -1825,19 +1896,33 @@ class AutoFlow(
     next(900);return true
    }
    MapStockPolicy.Phase.OPEN_MAP->{
-    if(snap.has("現在地") && snap.has("マップ"))mapGo(MapStockPolicy.Phase.OPEN_STOCK,now)
-    else return mapTap(snap,nav,"map","マップを開く",now)
+    val screen=mainScreen(snap)
+    when(screen.screen){
+     MainScreenPolicy.Screen.MAP->mapGo(MapStockPolicy.Phase.OPEN_STOCK,now)
+     MainScreenPolicy.Screen.HOME->return mapTap(snap,nav,"map","HOMEからマップを開く",now)
+     MainScreenPolicy.Screen.UNKNOWN->{
+      openStockByImage(now,false)
+      update("HOME/MAPの上下表示を画像でも確認中：${screen.evidence}")
+      return true
+     }
+    }
    }
    else->Unit
   }
   if(mapPhase==MapStockPolicy.Phase.OPEN_STOCK){
    if(list){mapGo(MapStockPolicy.Phase.LIST,now);next(900);return true}
+   val screen=mainScreen(snap)
+   if(screen.screen!=MainScreenPolicy.Screen.MAP){
+    openStockByImage(now,false)
+    update("ストック操作前にMAPの上下表示を画像でも再確認：${screen.evidence}")
+    return true
+   }
    // 「今日」は過去日の表示から戻す時だけ現れる。ない場合はストックへ直接進む。
    return when(MapStockPolicy.entryAction(labels.any{it=="今日"})){
     MapStockPolicy.EntryAction.TODAY->
      mapTap(snap,mapButton(snap,"今日"),"today","今日のマップに切り替える",now)
     MapStockPolicy.EntryAction.STOCK->
-     mapTap(snap,stock,"stock","宝箱ストックを開く",now)
+     if(stock!=null)mapTap(snap,stock,"stock","宝箱ストックを開く",now) else openStockByImage(now)
    }
   }
   if(list && mapPhase in listOf(MapStockPolicy.Phase.LIST,MapStockPolicy.Phase.SECOND_AD,MapStockPolicy.Phase.RECEIVE,MapStockPolicy.Phase.RETURN)){
@@ -2327,6 +2412,17 @@ class AutoFlow(
     next()
     return
    }
+   val main=mainScreen(snapshot)
+   if(mapPhase==MapStockPolicy.Phase.OFF && main.screen==MainScreenPolicy.Screen.MAP){
+    if(collection.isActive())collection.finish("STOPPED","MAPから再開。移動・歩数の完了は未確認")
+    collection.begin("map_stock","マップ宝箱ストック","表示中のMAPからストック回収")
+    videoAdSessionActive=false;gachaPhase=GachaSafety.Phase.NONE
+    mapIconReads=0;mapIconPoint=null
+    mapGo(MapStockPolicy.Phase.OPEN_STOCK,now)
+    update("上下の表示からMAPを確認。表示中のマップのストック回収を開始")
+    next(500);return
+   }
+   if(mapPhase==MapStockPolicy.Phase.OFF && main.screen==MainScreenPolicy.Screen.HOME)mapLastAction=""
    if(mapPhase!=MapStockPolicy.Phase.OFF){
     if(handleMapStock(snapshot,now))return
    }else if(monitorCollection(snapshot,now))return

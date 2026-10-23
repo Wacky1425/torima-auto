@@ -209,6 +209,32 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  }
 
 
+ /** Read only the stock-control descriptor; callbacks use full-display coordinates. */
+ fun probeMapStock(done:(MapStockIconDetector.Result?)->Unit){
+  val now=SystemClock.elapsedRealtime()
+  if(!captureSchedule.allowProbe() || busy || now-lastProbeRequest<1300L){done(null);return}
+  lastProbeRequest=now
+  captureForVisualTeaching{bitmap,_->
+   if(bitmap==null){done(null);return@captureForVisualTeaching}
+   val originalWidth=bitmap.width
+   io.execute{
+    val result=try{
+     val w=540;val h=(bitmap.height.toLong()*w/bitmap.width).toInt()
+     val scaled=Bitmap.createScaledBitmap(bitmap,w,h,true)
+     try{
+      val pixels=IntArray(w*h);scaled.getPixels(pixels,0,w,0,0,w,h)
+      val onMap=MapStockIconDetector.onMap(pixels,w,h)
+      val stock=if(onMap)MapStockIconDetector.detect(pixels,w,h) else null
+      MapStockIconDetector.Result(onMap,stock?.let{
+       MapStockIconDetector.Point(it.x*originalWidth/w,it.y*originalWidth/w)
+      })
+     }finally{if(scaled!==bitmap)scaled.recycle()}
+    }catch(_:Exception){null}finally{bitmap.recycle()}
+    service.mainExecutor.execute{done(result)}
+   }
+  }
+ }
+
  /** A local before-input glyph check. It never clicks, saves, or trusts scene identity. */
  fun probeLearnedX(x:Int,y:Int,done:(Boolean?)->Unit){
   val now=SystemClock.elapsedRealtime()
