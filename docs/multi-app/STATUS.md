@@ -108,3 +108,7 @@ Androidビルド: 未実行 / 合格 / 失敗
 - 次：新QAをアプリ内更新で取得し、右上×を位置指定→2回目案内→本人タップ。失敗時に09/10と最新画像がZIPに残るか確認。生ログ/ユーザー画面画像は公開Gitへ保存しない。
 
 - 補足：ZIP作成用のローカル関数`put(String,String)`がJSONObject内の文字列putを隠し、appVersion等がmanifestではなくZIPルートの別エントリになっていた問題も確認。ZIP関数をwriteTextEntryへ改名し、版情報がmanifest内へ入るよう修正。
+
+### 最終確認（2026-10-23）
+- コードSHA `437607c5c03049a42924ce210a56ad257f688abc`、[QA Actions #39878094830](https://github.com/Wacky1425/torima-auto/actions/runs/39878094830) が成功。共通・更新ライブラリ・Torima QA/Debug単体テスト、署名QA APKビルド、実ID/版番号/署名/公開配布検証を通過。QA100005をアプリ内更新へ配布。実機は未検証。
+- 初回のBuildConfig参照によるコンパイル失敗はPackageManagerから実インストール情報を読む形へ修正済み。失敗版100003/100004は配布されていない。
