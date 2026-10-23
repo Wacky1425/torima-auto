@@ -30,6 +30,8 @@ internal object DiagnosticBundleExporter {
     put("00_HOME_診断結果.txt",resultText)
     put("01_HOME_試行詳細.json",HomeTrialJournal.export(ctx))
     put("02_操作履歴.json",TeachOverlay.export(ctx))
+    put("09_学習診断.json",DiagnosticJournal.export(ctx,"teaching"))
+    put("10_撮影診断.json",DiagnosticJournal.export(ctx,"screenshots"))
     put("03_回収タスク履歴.json",CollectionRunStore.export(ctx))
     put("04_画面ノード記録.txt",ScreenCollector.export(ctx))
     put("05_学習済み操作.txt",LearnedActions.export(ctx))
@@ -39,7 +41,9 @@ internal object DiagnosticBundleExporter {
     val screenshots=ScreenshotDiagnostics.appendToDiagnosticZip(ctx,zip)
     put("manifest.json",JSONObject().apply{
      put("formatVersion",1)
-     put("appVersion","3.14")
+     put("appVersion",BuildConfig.VERSION_NAME)
+     put("applicationId",BuildConfig.APPLICATION_ID)
+     put("versionCode",BuildConfig.VERSION_CODE)
      put("createdAt",System.currentTimeMillis())
      put("screenshotCount",screenshots)
      put("nodeLearnedCount",LearnedActions.count(ctx))
@@ -65,6 +69,8 @@ internal object DiagnosticBundleExporter {
      "02～05には操作履歴、回収履歴、UI画面記録、学習済み操作をまとめています。\n" +
      "screenshots/ に保存されていた実際の前後画像と検出結果があります。高速実験は広告後の固定保護をスキップします。\n" +
      "HOME→広告確認と報酬獲得は別です。画面を識別できない場合は成功扱いしません。\n" +
+     "09_学習診断.json は位置指定・画像取得・指タップ待機・成功/失敗の専用記録です。\n" +
+     "10_撮影診断.json は撮影予約・保存結果・失敗理由です。\n" +
      "ZIP内には画面画像や操作記録が含まれます。共有相手は自分で選んでください。\n")
    }
    if(archive.exists())archive.delete()

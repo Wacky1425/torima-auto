@@ -85,6 +85,8 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   }
  }
  private val io=Executors.newSingleThreadExecutor()
+ private val captureSchedule=DiagnosticCaptureSchedule()
+ private val captureHandler=android.os.Handler(android.os.Looper.getMainLooper())
  private var busy=false
  private var lastRequest=0L
  private var lastProbeRequest=0L
@@ -102,7 +104,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
    done(null);return
   }
   val now=SystemClock.elapsedRealtime()
-  if(badgeProbeBusy || busy || now-badgeProbeAt<1_100L){
+  if(!captureSchedule.allowProbe() || badgeProbeBusy || busy || now-badgeProbeAt<1_100L){
    done(null);return
   }
   badgeProbeBusy=true
@@ -148,7 +150,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   val root=service.rootInActiveWindow
   if(root?.packageName?.toString()!=TARGET || Build.VERSION.SDK_INT<30){done(null,null);return}
   val now=SystemClock.elapsedRealtime()
-  if(busy || now-lastProbeRequest<1_300L ||
+  if(!captureSchedule.allowProbe() || busy || now-lastProbeRequest<1_300L ||
    (lastRequest>0 && now-lastRequest<1_300L)){done(null,null);return}
   busy=true;lastProbeRequest=now
   val windowId=root.windowId
@@ -245,6 +247,33 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  }
 
  fun capture(stage:String,nodeCount:Int,manual:Boolean,done:(String)->Unit){
+  if(!captureSchedule.request(SystemClock.elapsedRealtime())){
+   done("診断撮影を予約済み。現在の画像処理が終わるまで待機")
+   return
+  }
+  DiagnosticJournal.record(service,"screenshots","requested",JSONObject().put("screenStage",stage))
+  fun attempt(){
+   val now=SystemClock.elapsedRealtime()
+   if(captureSchedule.timedOut(now)){
+    captureSchedule.finish()
+    DiagnosticJournal.record(service,"screenshots","queue_timeout",JSONObject().put("busy",busy).put("screenStage",stage))
+    done("診断撮影を15秒待っても開始できませんでした。撮影診断に記録しました")
+    return
+   }
+   if(!captureSchedule.canCapture(busy,now,maxOf(lastRequest,lastProbeRequest,badgeProbeAt))){
+    captureHandler.postDelayed({attempt()},250L)
+    return
+   }
+   // Keep the reservation until completion so live probes cannot take the next slot.
+   captureNow(stage,nodeCount,manual){message->
+    captureSchedule.finish()
+    DiagnosticJournal.record(service,"screenshots","completed",JSONObject().put("screenStage",stage).put("result",message))
+    done(message)
+   }
+  }
+  attempt()
+ }
+ private fun captureNow(stage:String,nodeCount:Int,manual:Boolean,done:(String)->Unit){
   val root=service.rootInActiveWindow
   if(root?.packageName?.toString()!=TARGET){
    done("トリマが前面にないため、画像は取得していません")
@@ -262,10 +291,19 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   busy=true
   lastRequest=now
   val windowId=root.windowId
+  var delivered=false
+  fun deliver(message:String){
+   if(delivered)return
+   delivered=true;busy=false
+   done(message)
+  }
+  captureHandler.postDelayed({
+   if(!delivered)deliver("診断撮影が15秒以内に完了せず終了。遅延した結果は次の撮影を上書きしません")
+  },15_000L)
   fun onResult(error:String?=null,image:Bitmap?=null){
+   if(delivered){image?.recycle();return}
    if(image==null){
-    busy=false
-    done(error?:"画像を取得できませんでした")
+    deliver(error?:"画像を取得できませんでした")
     return
    }
    io.execute{
@@ -273,8 +311,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      catch(e:Exception){"画像の解析・保存に失敗：${e.javaClass.simpleName}"}
     finally{image.recycle()}
     service.mainExecutor.execute{
-     busy=false
-     done(result)
+     deliver(result)
     }
    }
   }

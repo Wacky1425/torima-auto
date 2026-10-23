@@ -22,7 +22,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** Explicit teach tap: captures the screen and selected position before one dispatched tap. */
+/** Position selection consumes the first touch; a second real touch is observed passively. */
 class TeachOverlay(
  private val service:PowlAccessibilityService,
  private val memory:LearnedActions,
@@ -130,7 +130,16 @@ class TeachOverlay(
  private var visualCapture:VisualLearnedActions.Captured?=null
  private var sourceNodeDescription=""
  private var teachId=0
+ private var selecting=false
  private var active=false
+ private fun journal(stage:String,detail:String="",x:Int?=null,y:Int?=null){
+  DiagnosticJournal.record(service,"teaching",stage,JSONObject().apply{
+   put("session",teachId);put("elapsed",SystemClock.elapsedRealtime())
+   put("detail",detail);put("overlayActive",active);put("awaitingPhysicalTap",awaitingPhysicalTap)
+   if(x!=null)put("x",x)
+   if(y!=null)put("y",y)
+  })
+ }
  private var awaitingPhysicalTap=false
  private var physicalTapStartedAt=0L
  private var physicalClickAt=0L
@@ -148,6 +157,7 @@ class TeachOverlay(
   homeSeparatorTop=initial?.items?.filter{
    it.node.text?.toString()?.trim()=="または" && it.bounds.width()>0
   }?.map{it.bounds.top}?.distinct()?.singleOrNull()?:0
+  selecting=false
   proposed=null
   changed=false
   outcomeEligible=false
@@ -167,7 +177,9 @@ class TeachOverlay(
     setBackgroundColor(Color.TRANSPARENT)
     isClickable=true
     setOnTouchListener{_,event->
-     if(event.actionMasked==MotionEvent.ACTION_UP){
+     if(event.actionMasked==MotionEvent.ACTION_DOWN)
+      journal("selection_down","位置指定用の膜が入力を消費",event.rawX.toInt(),event.rawY.toInt())
+     if(event.actionMasked==MotionEvent.ACTION_UP && !selecting){
       select(event.rawX.toInt(),event.rawY.toInt(),id)
      }
      true
@@ -199,6 +211,7 @@ class TeachOverlay(
    wm=manager
    touchLayer=layer
    active=true
+   journal("selection_ready","1回目は位置指定のみ。本画面へ入力しない")
    h.postDelayed({
     if(teachId==id&&active)cancelCapture("20秒経過したので学習を中止しました。")
    },20000)
@@ -223,6 +236,8 @@ class TeachOverlay(
   wm=null
  }
  fun cancelCapture(message:String="学習中止"):String{
+  if(active || awaitingPhysicalTap || selecting)journal("cancelled",message)
+  selecting=false
   teachId++
   removeLayer()
   awaitingPhysicalTap=false
@@ -237,7 +252,9 @@ class TeachOverlay(
   return message
  }
  private fun select(x:Int,y:Int,id:Int){
-  if(!active || teachId!=id)return
+  if(!active || selecting || teachId!=id)return
+  selecting=true
+  journal("selection_up","位置指定完了。合成タップは送信しない",x,y)
   // Do not send a gesture through Google Play or a different app.
   val root=before
   val p=memory.propose(root,x,y)
@@ -263,7 +280,10 @@ class TeachOverlay(
   homeTeachSucceeded=false
   val selectedName=p.label.lowercase()
   if(TeachRulePolicy.isForbidden(selectedName)){
+   journal("rejected","購入・インストール・シェア対象")
+   selecting=false
    removeLayer()
+   service.resumeTeachingBar()
    proposed=null
    status("購入・インストール・シェア対象は学習モードで押しません")
    return
@@ -277,7 +297,10 @@ class TeachOverlay(
      name.contains("持っている枚数"))
   }==true
   if(isUnsafeScreen && !p.safe){
+   journal("rejected","ガチャ・シェア・スキップ券画面")
+   selecting=false
    removeLayer()
+   service.resumeTeachingBar()
    proposed=null
    status("この画面はガチャ・シェア・スキップ券の可能性があるため、広告の画像学習を登録しません")
    return
@@ -285,7 +308,9 @@ class TeachOverlay(
   // The FIRST tap was intercepted to learn the coordinate. The original
   // app did not receive it. For stage 2 fully remove the selection window and
   // hide the collector, then let the actual finger touch Torima directly.
-  removeLayer()
+  // Retain the transparent touch-consuming layer until the BEFORE image is ready.
+  // A quick extra touch during capture is consumed, never forwarded to the app.
+  (touchLayer as? FrameLayout)?.getChildAt(0)?.visibility=View.INVISIBLE
   if(!service.suspendTeachingBar()){
    failPhysicalObservation("操作バーのタッチ透過に失敗。指タップを安全に通せないため学習を中止")
    return
@@ -296,20 +321,24 @@ class TeachOverlay(
   if(p.safe){
    startPhysicalObservation(p,id)
   }else{
+   journal("image_requested",sourceNodeDescription,x,y)
    service.captureVisualTeaching {bitmap,note->
     if(teachId!=id){
      bitmap?.recycle()
      return@captureVisualTeaching
     }
+    journal("image_received",note+" / bitmap="+(bitmap?.let{"${it.width}x${it.height}"}?:"null"),x,y)
     visualCapture=try{
      if(bitmap==null)null else service.visualLearnedActions.capture(
       bitmap,x,y,beforeCount,p.label)
-    }catch(_:Exception){null}
+    }catch(e:Exception){
+     journal("image_features_exception",e.javaClass.simpleName,x,y);null
+    }
     finally{bitmap?.recycle()}
     if(visualCapture==null){
      failPhysicalObservation(
-      "$sourceNodeDescription。画像の学習特徴を保存できません："+
-       if(bitmap==null)note else "画面が単色／押した位置が対応領域外")
+      "学習失敗："+(if(bitmap==null)note else
+       service.visualLearnedActions.captureFailureReason.ifBlank{"画像特徴の取得に失敗。学習診断を確認してください"}))
     }else{
      startPhysicalObservation(p,id)
     }
@@ -330,7 +359,11 @@ class TeachOverlay(
    failPhysicalObservation("画面がトリマ以外に切り替わったため学習を中止しました")
    return
   }
+  journal("source_ready",if(visualCapture!=null)"画像特徴取得済み" else "ノード取得済み",p.x,p.y)
+  removeLayer()
+  selecting=false
   awaitingPhysicalTap=true
+  journal("physical_wait","ここから本人の2回目の指操作を待機。指の生MotionEventは観測不可",p.x,p.y)
   physicalTapStartedAt=SystemClock.elapsedRealtime()
   physicalClickAt=0L
   changedSince=0L
@@ -379,6 +412,7 @@ class TeachOverlay(
  }
  private fun finishPhysicalObservation(p:LearnedActions.Proposal,id:Int,detail:String){
   if(teachId!=id || !awaitingPhysicalTap)return
+  journal("outcome_observed",detail,p.x,p.y)
   awaitingPhysicalTap=false
   service.resumeTeachingBar()
   status("指の操作を確認：$detail。学習を登録中")
@@ -386,6 +420,9 @@ class TeachOverlay(
   before=null
  }
  private fun failPhysicalObservation(detail:String){
+  journal("failed",detail,proposed?.x,proposed?.y)
+  selecting=false
+  removeLayer()
   awaitingPhysicalTap=false
   physicalTapStartedAt=0L
   physicalClickAt=0L
@@ -447,6 +484,7 @@ class TeachOverlay(
   // One-tap teaching: SAVE immediately after the observed outcome.
   // No hidden second 登録 action, and no growing pending-only examples.
   val learnedMessage=confirm()
+  journal("registration_result",learnedMessage,p.x,p.y)
   status(learnedMessage)
  }
  fun confirm():String {
@@ -483,6 +521,7 @@ class TeachOverlay(
     source!=null && rect.contains(p.x,p.y) &&
     rect.width() in 15..700 && rect.height() in 15..390){
     physicalClickAt=SystemClock.elapsedRealtime()
+    journal("click_event_observed","指定位置を含む小さいノードのクリック通知。入力元は断定しない",p.x,p.y)
    }
    val detail=source?.contentDescription?.toString()?.take(80)
     ?:source?.text?.toString()?.take(80)?:event.text.joinToString(" ").take(80)

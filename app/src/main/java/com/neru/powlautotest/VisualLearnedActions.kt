@@ -44,9 +44,16 @@ internal class VisualLearnedActions(private val ctx:Context){
   if(v==null || v.length()!=expected)return null
   return IntArray(expected){i->v.optInt(i,-1)}.takeIf{a->a.all{it in 0..255}}
  }
+ var captureFailureReason=""
+  private set
  fun capture(image:Bitmap,x:Int,y:Int,nodeCount:Int,label:String):Captured?{
-  if(image.width<300 || image.height<450 ||
-   x !in 0 until image.width || y !in 0 until image.height)return null
+  captureFailureReason=""
+  if(image.width<300 || image.height<450){
+   captureFailureReason="画像が小さすぎます（${image.width}×${image.height}）";return null
+  }
+  if(x !in 0 until image.width || y !in 0 until image.height){
+   captureFailureReason="指定位置が取得画像の外です（位置=$x,$y / 画像=${image.width}×${image.height}）";return null
+  }
   val width=VisualTemplateModel.CANONICAL_WIDTH
   val height=(image.height.toLong()*width/image.width).toInt()
   val small=Bitmap.createScaledBitmap(image,width,height,true)
@@ -55,12 +62,19 @@ internal class VisualLearnedActions(private val ctx:Context){
    small.getPixels(pixels,0,width,0,0,width,height)
    val px=(x.toLong()*width/image.width).toInt().coerceIn(0,width-1)
    val py=(y.toLong()*height/image.height).toInt().coerceIn(0,height-1)
-   val model=VisualTemplateModel.capture(pixels,width,height,px,py)?:return null
+   val model=VisualTemplateModel.capture(pixels,width,height,px,py)?:run{
+    val texture=VisualTemplateModel.patch(pixels,width,height,px,py,
+     VisualTemplateModel.NEAR_RADIUS,VisualTemplateModel.NEAR_GRID)?.texture
+    captureFailureReason="指定位置の画像特徴が不足（特徴量=$texture / 必要=${VisualTemplateModel.MIN_LOCAL_TEXTURE}）。小さい×や単色背景を確認してください"
+    return null
+   }
    // The UI only asks to teach an ad X / Skip. Never interpret a central
    // purchase CTA, a full-screen parent or bottom skip-ticket selection as it.
    val top=py<=height*34/100 && (px>=width*57/100 || px<=width*21/100)
    val bottom=py>=height*72/100 && py<=height*96/100
-   if(!top && !bottom)return null
+   if(!top && !bottom){
+    captureFailureReason="指定位置は画像学習の対応範囲外です（上隅または画面下部のみ）";return null
+   }
    Captured(model,x,y,if(top)"TOP_CLOSE_OR_SKIP" else "BOTTOM_AD_CLOSE",
     nodeCount,label.take(80))
   }finally{
