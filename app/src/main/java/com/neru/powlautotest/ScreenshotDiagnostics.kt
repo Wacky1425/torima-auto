@@ -270,7 +270,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
     try{
      val pixels=IntArray(w*h);small.getPixels(pixels,0,w,0,0,w,h)
      Pair(LearnedXPresence.visible(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height),
-      service.matchVisualLearning(pixels,w,h)?.let{it.copy(x=it.x*bitmap.width/w,y=it.y*bitmap.height/h)}))
+      service.matchVisualLearning(pixels,w,h)?.let{it.copy(x=it.x*bitmap.width/w,y=it.y*bitmap.height/h)})
     }finally{if(small!==bitmap)small.recycle()}
    }catch(_:Exception){null}finally{bitmap.recycle()}
    done(result?.first,result?.second)
