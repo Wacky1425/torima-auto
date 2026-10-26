@@ -8,15 +8,14 @@ internal object LearnedXPresence {
    val c=pixels[y*w+x]
    return ((c ushr 16 and 255)*30+(c ushr 8 and 255)*59+(c and 255)*11)/100
   }
-  for(y in maxOf(15,cy-12)..minOf(h-16,cy+12))
-   for(x in maxOf(15,cx-12)..minOf(w-16,cx+12))
+  for(y in maxOf(15,cy-22)..minOf(h-16,cy+22))
+   for(x in maxOf(15,cx-22)..minOf(w-16,cx+22))
     for(r in intArrayOf(3,4,5,6,8,10,12))for(inverse in listOf(false,true)) {
      fun ink(xx:Int,yy:Int):Int {val v=gray(xx,yy);return if(inverse)255-v else v}
-     if(ink(x,y)<170)continue
      val diagonals=intArrayOf(ink(x-r,y-r),ink(x+r,y-r),ink(x-r,y+r),ink(x+r,y+r))
      val axis=(ink(x-r,y)+ink(x+r,y)+ink(x,y-r)+ink(x,y+r))/4
-     if(diagonals.count{it>=170}>=3 && axis<120 &&
-       diagonals.minOrNull()!!+diagonals.average().toInt()-axis>=430)return true
+     if(ink(x,y)-axis>=50 && diagonals.all{it-axis>=45} &&
+       diagonals.average()-axis>=60)return true
     }
   return false
  }

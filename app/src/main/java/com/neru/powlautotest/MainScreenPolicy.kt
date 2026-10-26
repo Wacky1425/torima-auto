@@ -4,7 +4,7 @@ package com.neru.powlautotest
 internal object MainScreenPolicy {
  enum class Screen { HOME, MAP, UNKNOWN }
  data class Label(val text:String,val x:Int,val y:Int,val selected:Boolean=false)
- data class Result(val screen:Screen,val evidence:String,val allowVisual:Boolean=true)
+ data class Result(val screen:Screen,val evidence:String,val allowVisual:Boolean=true,val navigationPresent:Boolean=false)
  fun identify(labels:List<Label>,width:Int,height:Int):Result {
   if(width<=0 || height<=0)return Result(Screen.UNKNOWN,"画面サイズ不明")
   val valid=labels.filter{it.x in 0 until width && it.y in 0 until height}
@@ -27,6 +27,6 @@ internal object MainScreenPolicy {
    homeSelected || homeHeader->Screen.HOME
    else->Screen.UNKNOWN
   }
-  return Result(screen,"下部選択 HOME=$homeSelected MAP=$mapSelected / 上部 HOME=$homeHeader MAP=$mapHeader",!homeSelected && !homeHeader)
+  return Result(screen,"下部選択 HOME=$homeSelected MAP=$mapSelected / 上部 HOME=$homeHeader MAP=$mapHeader",!homeSelected && !homeHeader,true)
  }
 }

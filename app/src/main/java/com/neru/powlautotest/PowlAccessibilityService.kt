@@ -39,7 +39,7 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun probeMapStock(role:AppNavigationRules.Role,done:(MapStockIconDetector.Result?)->Unit){
   imageDiagnostics.probeMapStock(role,done)
  }
- internal fun probeLearnedX(x:Int,y:Int,onDone:(Boolean?)->Unit){
+ internal fun probeLearnedX(x:Int,y:Int,onDone:(Boolean?,VisualLearnedActions.Match?)->Unit){
   imageDiagnostics.probeLearnedX(x,y,onDone)
  }
  internal fun matchVisualLearning(pixels:IntArray,width:Int,height:Int):
@@ -195,22 +195,45 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun captureNavigationFrame(done:(android.graphics.Bitmap?,String)->Unit){imageDiagnostics.captureWithoutControlBar(done)}
  fun showLearningMenu():String {
   stopAutomaticOperation()
-  val choices=arrayOf("広告の×／スキップを学習（従来の2段階）","アプリ内：マップを開くを登録","アプリ内：今日に戻るを登録","アプリ内：ストックを開くを登録","アプリ内：HOME動画ボタンを学習（実タップ検証）","登録したアプリ内操作だけ削除")
+  val choices=arrayOf("広告の×／スキップを学習（従来の2段階）","アプリ内の操作を登録（名前・画面を指定）","アプリ内：HOME動画ボタンを学習","登録したアプリ内操作を確認")
   val dialog=android.app.AlertDialog.Builder(this).setTitle("学習する操作の種類")
    .setItems(choices){_,which->
     h.postDelayed({
-     if(which==0){navigationTeacher.cancel();reportNavigationTeaching(beginTeachTap())}
-     else if(which==4){navigationTeacher.cancel();reportNavigationTeaching(beginTeachTap(true))}
-     else if(which==5){AppNavigationRules.clear(this);reportNavigationTeaching("アプリ内操作だけ削除しました。広告の学習は保持")}
-     else {
-      teachOverlay.cancelCapture("アプリ内操作の登録へ切り替え")
-      reportNavigationTeaching(navigationTeacher.begin(AppNavigationRules.Role.values()[which-1]))
+     when(which){
+      0->{navigationTeacher.cancel();reportNavigationTeaching(beginTeachTap())}
+      1->showNavigationRegistration()
+      2->{navigationTeacher.cancel();reportNavigationTeaching(beginTeachTap(true))}
+      3->{
+       val list=AppNavigationRules.Role.values().joinToString("\n"){"${it.title}：${AppNavigationRules.title(this,it)}"}
+       val info=android.app.AlertDialog.Builder(this).setTitle("登録済みアプリ内操作")
+        .setMessage(list).setPositiveButton("閉じる",null)
+        .setNeutralButton("アプリ内登録だけ削除"){_,_->AppNavigationRules.clear(this);reportNavigationTeaching("アプリ内の登録を削除。広告学習は保持")}.create()
+       info.window?.setType(android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY);info.show()
+      }
      }
     },250L)
    }.setNegativeButton("キャンセル",null).create()
   dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
   dialog.show()
   return "アプリ内操作の登録／広告の×学習を選択"
+ }
+ private fun showNavigationRegistration(){
+  val box=android.widget.LinearLayout(this).apply{orientation=android.widget.LinearLayout.VERTICAL;setPadding(32,12,32,12)}
+  val role=android.widget.Spinner(this)
+  role.adapter=android.widget.ArrayAdapter(this,android.R.layout.simple_spinner_dropdown_item,AppNavigationRules.Role.values().map{it.title})
+  val name=android.widget.EditText(this).apply{hint="操作名（例：宝箱ストックを開く）";setSingleLine()}
+  val source=android.widget.EditText(this).apply{hint="今の画面名（例：MAP）";setSingleLine()}
+  val destination=android.widget.EditText(this).apply{hint="移動先（例：ストック一覧）";setSingleLine()}
+  box.addView(android.widget.TextView(this).apply{text="自動回収で使う用途を選び、名前を付けます。今の画面を登録後、ボタンの位置を1回選択。実画面は押しません。"})
+  listOf(role,name,source,destination).forEach{box.addView(it)}
+  val dialog=android.app.AlertDialog.Builder(this).setTitle("アプリ内の操作を登録").setView(box)
+   .setPositiveButton("ボタンの位置を選ぶ"){_,_->
+    val selected=AppNavigationRules.Role.values()[role.selectedItemPosition]
+    val definition=AppNavigationRules.definition(selected,name.text.toString(),source.text.toString(),destination.text.toString())
+    h.postDelayed({teachOverlay.cancelCapture("アプリ内操作の登録へ切り替え")
+     reportNavigationTeaching(navigationTeacher.begin(selected,definition))},250L)
+   }.setNegativeButton("キャンセル",null).create()
+  dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY);dialog.show()
  }
  fun beginTeachTap(homeOnly:Boolean=false):String {
   navigationTeacher.cancel()

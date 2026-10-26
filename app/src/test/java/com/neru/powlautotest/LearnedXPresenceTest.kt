@@ -35,6 +35,12 @@ class LearnedXPresenceTest {
    assertFalse(LearnedXPresence.visible(pixels,w,h,x-70,y))
   }
  }
+ @Test fun detectsGrayXAgainstItsLocalBackground(){
+  val w=540;val h=960;val pixels=IntArray(w*h){0xffffffff.toInt()}
+  for(d in -7..7)for(t in -1..1){pixels[(70+d+t)*w+490+d]=0xff888888.toInt();pixels[(70-d+t)*w+490+d]=0xff888888.toInt()}
+  assertTrue(LearnedXPresence.visible(pixels,w,h,508,54))
+  assertFalse(LearnedXPresence.visible(IntArray(w*h){0xff888888.toInt()},w,h,508,54))
+ }
  @Test fun rejectsFilledBoxAndPlus(){
   val w=540;val h=960;val x=490;val y=70
   for(box in listOf(false,true)){

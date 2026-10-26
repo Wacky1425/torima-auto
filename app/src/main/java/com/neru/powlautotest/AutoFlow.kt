@@ -1808,6 +1808,7 @@ class AutoFlow(
  }
  private var mapVisualOnMap=false
  private var mapVisualAt=0L
+ private var mapFailureScreenshotAt=0L
  private var mapIconSourceConfirmed=false
  private var mapIconRole=AppNavigationRules.Role.STOCK
  private var mapIconPending=false
@@ -1825,7 +1826,7 @@ class AutoFlow(
    if(mapLastAction!="navigation_image_${role.name}"){
     if(steps>=MAX_ACTIONS){stopWithReason("マップ操作回数が上限に到達");return true}
     steps++;mapLastAction="navigation_image_${role.name}";mapLastActionAt=now
-    update("${role.source}の上下表示と登録した操作を画像2枚で確認：${role.title}")
+    update("${role.source}の上下表示と登録した操作を画像2枚で確認：${AppNavigationRules.title(service,role)}")
     val expected=generation
     service.prepareHomeTouch(point.x,point.y){ready,note->
      if(!running || generation!=expected || mapIconRole!=role ||
@@ -1858,6 +1859,10 @@ class AutoFlow(
      .put("role",role.name).put("sourceConfirmed",mapIconSourceConfirmed).put("onMap",mapVisualOnMap).put("found",hit!=null).put("frames",mapIconReads).put("x",hit?.x).put("y",hit?.y))
     next(100)
    }
+  }
+  if(now-mapSince>5000L && now-mapFailureScreenshotAt>60000L && mapIconReads==0){
+   mapFailureScreenshotAt=now
+   service.saveVisualScreenshot("アプリ内操作未検出：${role.name} source=$mapIconSourceConfirmed",0,false)
   }
   update("${role.title}を画像照合中（$mapIconReads/2枚）。操作バーなしで撮影。未検出理由は診断へ記録")
   next(900);return true
@@ -2369,13 +2374,20 @@ class AutoFlow(
   if(!learnedXPending && now-learnedXLastRequest>=1_400L){
    learnedXPending=true;learnedXLastRequest=now
    val expected=generation
-   service.probeLearnedX(point.x,point.y){visible->
+   service.probeLearnedX(point.x,point.y){visible,freshMatch->
     learnedXPending=false
     if(!running || generation!=expected || learnedXGate.key!=key)return@probeLearnedX
     val stamp=SystemClock.elapsedRealtime()
-    learnedXGate.observe(key,visible==true,stamp)
+    val freshScene=decision.kind!="LEARNED_VISUAL" ||
+     (freshMatch!=null && key=="LEARNED_VISUAL:${freshMatch.id}" &&
+      kotlin.math.abs(freshMatch.x-point.x)<=32 && kotlin.math.abs(freshMatch.y-point.y)<=32)
+    if(decision.kind=="LEARNED_VISUAL"){
+     visualLearned=freshMatch;visualLearnedAt=stamp
+     if(freshScene)visualLearnedCount++ else visualLearnedCount=0
+    }
+    learnedXGate.observe(key,visible==true && freshScene,stamp)
     DiagnosticJournal.record(service,"learned_guard","x_observed",org.json.JSONObject()
-     .put("key",key).put("visible",visible?:org.json.JSONObject.NULL)
+     .put("key",key).put("visible",visible?:org.json.JSONObject.NULL).put("freshScene",freshScene)
      .put("x",point.x).put("y",point.y))
     next(100)
    }

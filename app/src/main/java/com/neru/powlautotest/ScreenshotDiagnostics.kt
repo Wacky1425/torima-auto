@@ -242,7 +242,8 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
       val pixels=IntArray(w*h);scaled.getPixels(pixels,0,w,0,0,w,h)
       val nodes=MainScreenReader.read(service.rootInActiveWindow)
       val onMap=nodes.screen==MainScreenPolicy.Screen.MAP ||
-       (nodes.allowVisual && nodes.screen==MainScreenPolicy.Screen.UNKNOWN && MapStockIconDetector.onMap(pixels,w,h))
+       (nodes.allowVisual && nodes.screen==MainScreenPolicy.Screen.UNKNOWN && (MapStockIconDetector.onMap(pixels,w,h) ||
+        (nodes.navigationPresent && AppNavigationRules.recognize(service,MainScreenPolicy.Screen.MAP,pixels,w,h))))
       val sourceConfirmed=if(role.source==MainScreenPolicy.Screen.MAP)onMap else nodes.screen==MainScreenPolicy.Screen.HOME
       val stock=if(sourceConfirmed)AppNavigationRules.match(service,role,pixels,w,h)?:
        (if(role==AppNavigationRules.Role.STOCK)MapStockIconDetector.detect(pixels,w,h) else null) else null
@@ -257,21 +258,22 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  }
 
  /** A local before-input glyph check. It never clicks, saves, or trusts scene identity. */
- fun probeLearnedX(x:Int,y:Int,done:(Boolean?)->Unit){
+ fun probeLearnedX(x:Int,y:Int,done:(Boolean?,VisualLearnedActions.Match?)->Unit){
   val now=SystemClock.elapsedRealtime()
-  if(!captureSchedule.allowProbe() || busy || now-lastProbeRequest<1_300L){done(null);return}
+  if(!captureSchedule.allowProbe() || busy || now-lastProbeRequest<1_300L){done(null,null);return}
   lastProbeRequest=now
-  captureForVisualTeaching{bitmap,_->
-   if(bitmap==null){done(null);return@captureForVisualTeaching}
+  captureWithoutControlBar{bitmap,_->
+   if(bitmap==null){done(null,null);return@captureWithoutControlBar}
    val result=try{
     val w=540;val h=(bitmap.height.toLong()*w/bitmap.width).toInt()
     val small=Bitmap.createScaledBitmap(bitmap,w,h,true)
     try{
      val pixels=IntArray(w*h);small.getPixels(pixels,0,w,0,0,w,h)
-     LearnedXPresence.visible(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height)
+     Pair(LearnedXPresence.visible(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height),
+      service.matchVisualLearning(pixels,w,h)?.let{it.copy(x=it.x*bitmap.width/w,y=it.y*bitmap.height/h)}))
     }finally{if(small!==bitmap)small.recycle()}
    }catch(_:Exception){null}finally{bitmap.recycle()}
-   done(result)
+   done(result?.first,result?.second)
   }
  }
 

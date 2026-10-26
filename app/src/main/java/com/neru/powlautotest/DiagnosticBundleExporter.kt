@@ -32,6 +32,7 @@ internal object DiagnosticBundleExporter {
     writeTextEntry("01_HOME_試行詳細.json",HomeTrialJournal.export(ctx))
     writeTextEntry("02_操作履歴.json",TeachOverlay.export(ctx))
     writeTextEntry("11_学習ルール設定.json",LearnedRuleManager.export(ctx))
+    writeTextEntry("16_アプリ内登録の診断.json",DiagnosticJournal.export(ctx,"navigation_teaching"))
     writeTextEntry("14_アプリ内操作の登録.json",AppNavigationRules.export(ctx))
     writeTextEntry("15_Drive送信履歴.json",DiagnosticJournal.export(ctx,"drive"))
     writeTextEntry("13_HOME_MAP判定.json",DiagnosticJournal.export(ctx,"main_screen"))

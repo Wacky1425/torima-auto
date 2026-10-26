@@ -15,6 +15,20 @@ internal object AppNavigationRules {
  }
  private fun file(ctx:Context)=File(ctx.filesDir,"torima_app_navigation_rules.json")
  fun export(ctx:Context)=try{file(ctx).takeIf{it.exists()}?.readText()?:"{}"}catch(_:Exception){"{}"}
+ data class Definition(val name:String,val screenName:String,val destination:String)
+ fun definition(role:Role,name:String="",screenName:String="",destination:String="")=Definition(
+  NavigationVisualPolicy.label(name,role.title),NavigationVisualPolicy.label(screenName,role.source.name),
+  NavigationVisualPolicy.label(destination,if(role==Role.STOCK)"ストック一覧" else "MAP"))
+ fun title(ctx:Context,role:Role):String=try{JSONObject(export(ctx)).optJSONObject(role.name)?.optString("name")?.ifBlank{role.title}?:role.title}catch(_:Exception){role.title}
+ fun recognize(ctx:Context,source:MainScreenPolicy.Screen,p:IntArray,w:Int,h:Int):Boolean=try{
+  val top=NavigationVisualPolicy.band(p,w,h,false);val bottom=NavigationVisualPolicy.band(p,w,h,true)
+  val rows=JSONObject(export(ctx))
+  Role.values().filter{it.source==source}.any{role->
+   val row=rows.optJSONObject(role.name)
+   fun array(key:String)=row?.optJSONArray(key)?.let{a->IntArray(a.length()){a.optInt(it)}}?:IntArray(0)
+   top!=null && bottom!=null && NavigationVisualPolicy.sameBand(array("screenTop"),top) && NavigationVisualPolicy.sameBand(array("screenBottom"),bottom)
+  }
+ }catch(_:Exception){false}
  fun clear(ctx:Context){file(ctx).writeText("{}")}
  fun allowed(role:Role,x:Int,y:Int,w:Int,h:Int):Boolean {
   if(w<=0 || h<=0 || x !in 0 until w || y !in 0 until h)return false
@@ -24,7 +38,7 @@ internal object AppNavigationRules {
    Role.TODAY->y in h*20/100..h*90/100
   }
  }
- fun register(ctx:Context,role:Role,bitmap:Bitmap,x:Int,y:Int):String {
+ fun register(ctx:Context,role:Role,bitmap:Bitmap,x:Int,y:Int,metadata:Definition=definition(role)):String {
   require(allowed(role,x,y,bitmap.width,bitmap.height)){"選択位置が${role.title}の対応範囲外です"}
   val w=540;val h=(bitmap.height.toLong()*w/bitmap.width).toInt()
   val small=Bitmap.createScaledBitmap(bitmap,w,h,true)
@@ -33,17 +47,21 @@ internal object AppNavigationRules {
    val nodes=MainScreenReader.read((ctx as PowlAccessibilityService).rootInActiveWindow)
    val imageMap=MapStockIconDetector.onMap(pixels,w,h)
    val source=if(nodes.screen==MainScreenPolicy.Screen.UNKNOWN && nodes.allowVisual && imageMap)
-    MainScreenPolicy.Screen.MAP else nodes.screen
+    MainScreenPolicy.Screen.MAP else if(nodes.screen==MainScreenPolicy.Screen.UNKNOWN && nodes.navigationPresent && nodes.allowVisual)
+     role.source else nodes.screen
    require(source==role.source){"${role.source}の上下表示を確認できません。正しい画面で登録してください"}
    val model=VisualTemplateModel.capture(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height)
     ?:error("ボタンの画像特徴が不足しています")
    val rows=JSONObject(export(ctx))
    rows.put(role.name,JSONObject().put("x",model.x).put("y",model.y).put("width",w).put("height",h)
     .put("near",JSONArray(model.near.toList())).put("context",JSONArray(model.context.toList()))
+    .put("name",metadata.name).put("screenName",metadata.screenName).put("destination",metadata.destination)
+    .put("screenTop",JSONArray(NavigationVisualPolicy.band(pixels,w,h,false)?.toList().orEmpty()))
+    .put("screenBottom",JSONArray(NavigationVisualPolicy.band(pixels,w,h,true)?.toList().orEmpty()))
     .put("source",role.source.name).put("registeredAt",System.currentTimeMillis()))
    file(ctx).writeText(rows.toString())
    DiagnosticJournal.record(ctx,"navigation_teaching","registered",JSONObject().put("role",role.name).put("source",source.name))
-   return "アプリ内操作を登録：${role.title}。広告の×学習とは別保存です（まだ実画面は押していません）"
+   return "アプリ内操作を登録：${metadata.name}（${metadata.screenName}→${metadata.destination}）。広告の×学習とは別保存です（まだ実画面は押していません）"
   }finally{if(small!==bitmap)small.recycle()}
  }
  fun match(ctx:Context,role:Role,pixels:IntArray,w:Int,h:Int):MapStockIconDetector.Point?=try{
@@ -52,7 +70,7 @@ internal object AppNavigationRules {
    val near=row.getJSONArray("near");val around=row.getJSONArray("context")
    val rule=VisualTemplateModel.Rule(row.getInt("x"),row.getInt("y"),row.getInt("width"),row.getInt("height"),
     IntArray(near.length()){near.getInt(it)},IntArray(around.length()){around.getInt(it)})
-   VisualTemplateModel.search(rule,pixels,w,h)?.takeIf{allowed(role,it.x,it.y,w,h)}?.let{MapStockIconDetector.Point(it.x,it.y)}
+   NavigationVisualPolicy.localControl(rule,pixels,w,h)?.takeIf{allowed(role,it.x,it.y,w,h)}?.let{MapStockIconDetector.Point(it.x,it.y)}
   }
  }catch(_:Exception){null}
 }
