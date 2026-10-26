@@ -13,7 +13,7 @@ internal object LearnedXPresence {
     for(r in intArrayOf(3,4,5,6,8,10,12))for(inverse in listOf(false,true)) {
      fun ink(xx:Int,yy:Int):Int {val v=gray(xx,yy);return if(inverse)255-v else v}
      val diagonals=intArrayOf(ink(x-r,y-r),ink(x+r,y-r),ink(x-r,y+r),ink(x+r,y+r))
-     val axis=(ink(x-r,y)+ink(x+r,y)+ink(x,y-r)+ink(x,y+r))/4
+     val axis=maxOf(ink(x-r,y),ink(x+r,y),ink(x,y-r),ink(x,y+r))
      if(ink(x,y)-axis>=50 && diagonals.all{it-axis>=45} &&
        diagonals.average()-axis>=60)return true
     }
