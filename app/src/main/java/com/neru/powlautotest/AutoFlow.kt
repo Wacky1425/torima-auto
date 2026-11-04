@@ -190,10 +190,10 @@ class AutoFlow(
    }
    visualLearned=learnedMatch
    visualLearnedAt=stamp
-   val candidate=markers.orEmpty().filter{it.score>=85 && it.region=="top-right"}
+   val candidate=markers.orEmpty().filter{AdCornerPolicy.accepted(it.kind,it.region,it.score)}
     .maxByOrNull{it.score}
    val old=liveVisual
-   if(candidate!=null && old!=null && candidate.kind==old.kind &&
+   if(candidate!=null && old!=null && candidate.kind==old.kind && candidate.region==old.region &&
     kotlin.math.abs(candidate.x-old.x)<=28 &&
     kotlin.math.abs(candidate.y-old.y)<=28){
     liveVisualCount++
@@ -1820,8 +1820,7 @@ class AutoFlow(
   if(mapIconRole!=role){mapIconRole=role;mapIconReads=0;mapIconPoint=null;mapIconSourceConfirmed=false}
   val point=mapIconPoint
   if(allowTap && mapIconSourceConfirmed &&
-   ((role==AppNavigationRules.Role.MAP && mapPhase==MapStockPolicy.Phase.OPEN_MAP) ||
-    (role!=AppNavigationRules.Role.MAP && mapPhase==MapStockPolicy.Phase.OPEN_STOCK)) &&
+   MapStockPolicy.rolePhaseAllowed(role,mapPhase) &&
    point!=null && mapIconReads>=2 && now-mapIconAt in 0L..900L){
    if(mapLastAction!="navigation_image_${role.name}"){
     if(steps>=MAX_ACTIONS){stopWithReason("マップ操作回数が上限に到達");return true}
@@ -1830,11 +1829,15 @@ class AutoFlow(
     val expected=generation
     service.prepareHomeTouch(point.x,point.y){ready,note->
      if(!running || generation!=expected || mapIconRole!=role ||
-      mapPhase !in listOf(MapStockPolicy.Phase.OPEN_MAP,MapStockPolicy.Phase.OPEN_STOCK))return@prepareHomeTouch
+      !MapStockPolicy.rolePhaseAllowed(role,mapPhase))return@prepareHomeTouch
      if(!ready){stopWithReason("ストック操作前に操作バーを透過できず停止：$note");return@prepareHomeTouch}
      if(SystemClock.elapsedRealtime()-mapIconAt>900L){
       mapLastAction="";mapIconReads=0;service.restoreHomeTouch();next(900)
       return@prepareHomeTouch
+     }
+     if(role==AppNavigationRules.Role.BOTTOM){
+      mapGo(MapStockPolicy.Phase.SECOND_AD,SystemClock.elapsedRealtime())
+      videoAdSessionActive=true;resetLiveVisual();resetStableAdClose()
      }
      gestureTap(Rect(point.x-8,point.y-8,point.x+8,point.y+8),role.title)
      h.postDelayed({if(generation==expected)service.restoreHomeTouch()},500L)
@@ -1847,7 +1850,7 @@ class AutoFlow(
    val expected=generation
    service.probeMapStock(role) { result->
     mapIconPending=false
-    if(!running || generation!=expected || mapIconRole!=role || mapPhase !in listOf(MapStockPolicy.Phase.OFF,MapStockPolicy.Phase.OPEN_MAP,MapStockPolicy.Phase.OPEN_STOCK))return@probeMapStock
+    if(!running || generation!=expected || mapIconRole!=role || mapPhase !in listOf(MapStockPolicy.Phase.OFF,MapStockPolicy.Phase.OPEN_MAP,MapStockPolicy.Phase.OPEN_STOCK,MapStockPolicy.Phase.FIRST_AD))return@probeMapStock
     val stamp=SystemClock.elapsedRealtime();val old=mapIconPoint
     mapVisualOnMap=result?.onMap==true;mapVisualAt=stamp
     mapIconSourceConfirmed=result?.sourceConfirmed==true
@@ -1977,6 +1980,10 @@ class AutoFlow(
     mapGo(MapStockPolicy.Phase.DETAIL,now)
    }
    return mapTap(snap,first,"row","ストック宝箱を1個開く（残り${count}個）",now)
+  }
+  if(mapPhase==MapStockPolicy.Phase.FIRST_AD && MapStockPolicy.bottomOffer(labels) &&
+   mapButton(snap,"宝箱の底のおもちゃをチェック")==null && trustedAdEvidence(snap)==null){
+   return openStockByImage(now,true,AppNavigationRules.Role.BOTTOM)
   }
   val decision=mapDecision(snap)
   if(decision!=null){

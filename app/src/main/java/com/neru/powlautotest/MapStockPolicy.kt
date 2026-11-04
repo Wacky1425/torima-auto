@@ -6,6 +6,13 @@ internal object MapStockPolicy {
  enum class EntryAction { TODAY, STOCK }
  /** Today is optional: absence means the current map can open stock directly. */
  fun entryAction(todayVisible:Boolean)=if(todayVisible)EntryAction.TODAY else EntryAction.STOCK
+ fun bottomOffer(labels:List<String>)=labels.any{it.contains("宝箱の底")} &&
+  labels.any{it.contains("このまま受け取る")}
+ fun rolePhaseAllowed(role:AppNavigationRules.Role,phase:Phase)=when(role){
+  AppNavigationRules.Role.MAP->phase==Phase.OPEN_MAP
+  AppNavigationRules.Role.TODAY,AppNavigationRules.Role.STOCK->phase==Phase.OPEN_STOCK
+  AppNavigationRules.Role.BOTTOM->phase==Phase.FIRST_AD
+ }
  fun count(labels:List<String>):Int? {
   val values=labels.mapNotNull { Regex("ストック中\\s*([0-9０-９]+)\\s*個").find(it)?.groupValues?.get(1) }
    .map { value->value.map { if(it in '０'..'９') '0'+(it-'０') else it }.joinToString("").toIntOrNull() }

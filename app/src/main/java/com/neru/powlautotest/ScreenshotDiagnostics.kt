@@ -104,7 +104,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
    done(null);return
   }
   val now=SystemClock.elapsedRealtime()
-  if(!captureSchedule.allowProbe() || badgeProbeBusy || busy || now-badgeProbeAt<1_100L){
+  if(cleanReserved() || !captureSchedule.allowProbe() || badgeProbeBusy || busy || now-badgeProbeAt<1_100L){
    done(null);return
   }
   badgeProbeBusy=true
@@ -134,6 +134,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
    }
   }
   try{
+   lastPlatformCaptureAt=SystemClock.elapsedRealtime()
    service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
     object:AccessibilityService.TakeScreenshotCallback{
      override fun onSuccess(result:AccessibilityService.ScreenshotResult){
@@ -150,7 +151,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   val root=service.rootInActiveWindow
   if(root?.packageName?.toString()!=TARGET || Build.VERSION.SDK_INT<30){done(null,null);return}
   val now=SystemClock.elapsedRealtime()
-  if(!captureSchedule.allowProbe() || busy || now-lastProbeRequest<1_300L ||
+  if(cleanReserved() || !captureSchedule.allowProbe() || busy || now-lastProbeRequest<1_300L ||
    (lastRequest>0 && now-lastRequest<1_300L)){done(null,null);return}
   busy=true;lastProbeRequest=now
   val windowId=root.windowId
@@ -165,10 +166,10 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      small.getPixels(pixels,0,width,0,0,width,height)
      if(small!==image)small.recycle()
      val fromNodesOrComponents=OverlayIconDetector.detect(pixels,width,height)
-     val pixelX=PixelAdCloseDetector.detectWhiteX(pixels,width,height)
-      ?.let{OverlayIconDetector.Marker("X",it.x,it.y,it.score,"top-right")}
-     val markers=(fromNodesOrComponents+listOfNotNull(pixelX))
-      .groupBy{it.kind}.values.mapNotNull{group->group.maxByOrNull{it.score}}
+     val pixelXs=PixelAdCloseDetector.detectCornerXs(pixels,width,height)
+      .map{(hit,region)->OverlayIconDetector.Marker("X",hit.x,hit.y,hit.score,region)}
+     val markers=(fromNodesOrComponents+pixelXs)
+      .groupBy{it.kind+":"+it.region}.values.mapNotNull{group->group.maxByOrNull{it.score}}
       .map{it.copy(x=it.x*image.width/width,y=it.y*image.height/height)}
      val learned=service.matchVisualLearning(pixels,width,height)?.let{
       it.copy(x=it.x*image.width/width,y=it.y*image.height/height)
@@ -183,7 +184,8 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
    }
   }
   fun display(){
-   try{service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
+   try{lastPlatformCaptureAt=SystemClock.elapsedRealtime()
+   service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
     object:AccessibilityService.TakeScreenshotCallback{
      override fun onSuccess(result:AccessibilityService.ScreenshotResult){
       finish(toSoftwareBitmap(result))
@@ -195,7 +197,8 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   // system when matching a taught visual rule, including system-bar offsets.
   if(VisualLearnedActions.count(service)>0)display()
   else if(Build.VERSION.SDK_INT>=34 && windowId>=0){
-   try{service.takeScreenshotOfWindow(windowId,service.mainExecutor,
+   try{lastPlatformCaptureAt=SystemClock.elapsedRealtime()
+   service.takeScreenshotOfWindow(windowId,service.mainExecutor,
     object:AccessibilityService.TakeScreenshotCallback{
      override fun onSuccess(result:AccessibilityService.ScreenshotResult){
       finish(toSoftwareBitmap(result))
@@ -209,27 +212,50 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  }
 
 
- /** Capture after the collector has left the compositor; restore on every terminal path. */
+ private data class CleanRequest(val at:Long,val done:(Bitmap?,String)->Unit)
+ private val cleanQueue=java.util.ArrayDeque<CleanRequest>()
+ private var cleanActive=false
+ private var lastPlatformCaptureAt=0L
+ private fun cleanReserved()=cleanActive || cleanQueue.isNotEmpty()
+ /** Reserve the next free screenshot slot, rather than failing with busy. */
  internal fun captureWithoutControlBar(done:(Bitmap?,String)->Unit){
+  if(cleanQueue.size>=3){done(null,"撮影予約が多いため今回の要求を終了");return}
+  cleanQueue.add(CleanRequest(SystemClock.elapsedRealtime(),done));drainCleanQueue()
+ }
+ private fun drainCleanQueue(){
+  if(cleanActive || cleanQueue.isEmpty())return
+  val request=cleanQueue.first
+  val now=SystemClock.elapsedRealtime()
+  if(CaptureSlotPolicy.expired(request.at,now)){
+   cleanQueue.removeFirst();request.done(null,"撮影予約が8秒で開始できず終了")
+   drainCleanQueue();return
+  }
+  if(busy || badgeProbeBusy){captureHandler.postDelayed({drainCleanQueue()},150L);return}
+  cleanActive=true;cleanQueue.removeFirst()
   val restore=service.hideControlBarForScreenshot()
   var finished=false
   fun finish(bitmap:Bitmap?,note:String){
    if(finished){bitmap?.recycle();return}
-   finished=true;restore()
+   finished=true;restore();cleanActive=false
    DiagnosticJournal.record(service,"screenshots","control_bar_excluded",JSONObject()
     .put("success",bitmap!=null).put("result",note))
-   done(bitmap,note)
+   try{request.done(bitmap,note)}finally{drainCleanQueue()}
   }
   captureHandler.postDelayed({if(!finished)finish(null,"操作バーなし撮影が3秒で完了せず終了")},3000L)
-  captureHandler.postDelayed({
-   if(!finished)captureForVisualTeaching{bitmap,note->finish(bitmap,note)}
-  },200L)
+  fun attempt(){
+   if(finished)return
+   if(!CaptureSlotPolicy.ready(busy || badgeProbeBusy,SystemClock.elapsedRealtime(),lastPlatformCaptureAt)){
+    captureHandler.postDelayed({attempt()},150L);return
+   }
+   captureRawFrame{bitmap,note->finish(bitmap,note)}
+  }
+  captureHandler.postDelayed({attempt()},200L)
  }
 
  /** Read only the stock-control descriptor; callbacks use full-display coordinates. */
  fun probeMapStock(role:AppNavigationRules.Role,done:(MapStockIconDetector.Result?)->Unit){
   val now=SystemClock.elapsedRealtime()
-  if(!captureSchedule.allowProbe() || busy || now-lastProbeRequest<1300L){done(null);return}
+  if(cleanReserved() || !captureSchedule.allowProbe() || now-lastProbeRequest<1300L){done(null);return}
   lastProbeRequest=now
   captureWithoutControlBar{bitmap,_->
    if(bitmap==null){done(null);return@captureWithoutControlBar}
@@ -244,7 +270,11 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
       val onMap=nodes.screen==MainScreenPolicy.Screen.MAP ||
        (nodes.allowVisual && nodes.screen==MainScreenPolicy.Screen.UNKNOWN && (MapStockIconDetector.onMap(pixels,w,h) ||
         (nodes.navigationPresent && AppNavigationRules.recognize(service,MainScreenPolicy.Screen.MAP,pixels,w,h))))
-      val sourceConfirmed=if(role.source==MainScreenPolicy.Screen.MAP)onMap else nodes.screen==MainScreenPolicy.Screen.HOME
+      val sourceConfirmed=when(role){
+       AppNavigationRules.Role.BOTTOM->MapStockPolicy.bottomOffer(AppNavigationRules.visibleLabels(service.rootInActiveWindow))
+       AppNavigationRules.Role.MAP->nodes.screen==MainScreenPolicy.Screen.HOME
+       else->onMap
+      }
       val stock=if(sourceConfirmed)AppNavigationRules.match(service,role,pixels,w,h)?:
        (if(role==AppNavigationRules.Role.STOCK)MapStockIconDetector.detect(pixels,w,h) else null) else null
       MapStockIconDetector.Result(onMap,stock?.let{
@@ -260,7 +290,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  /** A local before-input glyph check. It never clicks, saves, or trusts scene identity. */
  fun probeLearnedX(x:Int,y:Int,done:(Boolean?,VisualLearnedActions.Match?)->Unit){
   val now=SystemClock.elapsedRealtime()
-  if(!captureSchedule.allowProbe() || busy || now-lastProbeRequest<1_300L){done(null,null);return}
+  if(cleanReserved() || !captureSchedule.allowProbe() || now-lastProbeRequest<1_300L){done(null,null);return}
   lastProbeRequest=now
   captureWithoutControlBar{bitmap,_->
    if(bitmap==null){done(null,null);return@captureWithoutControlBar}
@@ -282,7 +312,9 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   * This is independent of ordinary diagnostic screenshot rate limits.
   * The caller must hide its teaching overlay and collector panel first.
   */
- fun captureForVisualTeaching(done:(Bitmap?,String)->Unit){
+ private var lastRawFrameAt=0L
+ fun captureForVisualTeaching(done:(Bitmap?,String)->Unit)=captureWithoutControlBar(done)
+ private fun captureRawFrame(done:(Bitmap?,String)->Unit){
   val root=service.rootInActiveWindow
   if(root?.packageName?.toString()!=TARGET){
    done(null,"学習元がトリマではないため画像を取得できません");return
@@ -294,8 +326,9 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   if(busy){
    done(null,"ほかの画像解析中。数秒後にもう一度学習してください");return
   }
-  busy=true
+  busy=true;lastRawFrameAt=SystemClock.elapsedRealtime()
   try{
+   lastPlatformCaptureAt=SystemClock.elapsedRealtime()
    service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
     object:AccessibilityService.TakeScreenshotCallback{
      override fun onSuccess(screenshot:AccessibilityService.ScreenshotResult){
@@ -328,7 +361,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
     done("診断撮影を15秒待っても開始できませんでした。撮影診断に記録しました")
     return
    }
-   if(!captureSchedule.canCapture(busy,now,maxOf(lastRequest,lastProbeRequest,badgeProbeAt))){
+   if(cleanReserved() || !captureSchedule.canCapture(busy,now,maxOf(lastRequest,lastProbeRequest,badgeProbeAt,lastPlatformCaptureAt))){
     captureHandler.postDelayed({attempt()},250L)
     return
    }
@@ -387,7 +420,8 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   }
   fun requestDisplay(){
    try{
-    service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
+    lastPlatformCaptureAt=SystemClock.elapsedRealtime()
+   service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
      object:AccessibilityService.TakeScreenshotCallback{
       override fun onSuccess(screenshot:AccessibilityService.ScreenshotResult){
        onResult(image=toSoftwareBitmap(screenshot))
@@ -402,7 +436,8 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   // On Android 14+ capture the app window, not the accessibility overlay.
   if(Build.VERSION.SDK_INT>=34 && windowId>=0){
    try{
-    service.takeScreenshotOfWindow(windowId,service.mainExecutor,
+    lastPlatformCaptureAt=SystemClock.elapsedRealtime()
+   service.takeScreenshotOfWindow(windowId,service.mainExecutor,
      object:AccessibilityService.TakeScreenshotCallback{
       override fun onSuccess(screenshot:AccessibilityService.ScreenshotResult){
        onResult(image=toSoftwareBitmap(screenshot))

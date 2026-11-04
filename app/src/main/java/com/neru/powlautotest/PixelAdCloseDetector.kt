@@ -18,6 +18,13 @@ internal object PixelAdCloseDetector {
  data class Hit(val x:Int,val y:Int,val score:Int)
  private fun whiteness(argb:Int):Int =
   min(argb ushr 16 and 255,min(argb ushr 8 and 255,argb and 255))
+ fun detectCornerXs(pixels:IntArray,width:Int,height:Int):List<Pair<Hit,String>> {
+  if(width<300 || height<450 || pixels.size!=width*height)return emptyList()
+  val mirrored=IntArray(pixels.size){i->pixels[(i/width)*width+width-1-i%width]}
+  val right=detectWhiteX(pixels,width,height)?.let{it to "top-right"}
+  val left=detectWhiteX(mirrored,width,height)?.let{it.copy(x=width-1-it.x) to "top-left"}
+  return listOfNotNull(right,left)
+ }
  fun detectWhiteX(pixels:IntArray,width:Int,height:Int):Hit?{
   if(width<300 || height<450 || pixels.size!=width*height)return null
   val x0=width*90/100
