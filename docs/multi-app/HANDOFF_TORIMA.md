@@ -174,3 +174,17 @@
 ### 配布確認（2026-10-26）
 - QA100013（3.14-qa.100013）公開。QA Actions #40288987738 / DEV #40288987736成功。共通/更新/Torima QA・Debug単体テストと固定署名ビルド・匿名配布検証通過。公開asset 2,918,012 bytes。公開manifestを匿名取得しversionCode100013とsourceSha e6c933e8一致を確認。正式latestはv3.14/Release ID420174934を維持。
 - 灰色×とnamed navigationの修正版は端末未検証。Driveの送信→取得は今回実機データで成功確認。今後は同じ保存先へ送信してもらい、manifest日時と版を読んでから診断する。
+
+## 2026-11-04 Torima担当：左上×・撮影予約・宝箱の底の登録
+- ブランチ `dev/torima`、コード `bd93f6ec4063ae6fe1dfd2d29223667e384f2a9a`。ユーザーが送信した最新Drive ZIP（manifest QA100013、2026-11-04 09:18 JST作成）を確認。Drive→診断取得は成功。歩数16→11の減少、MAP/STOCK登録成功、BOTTOMをMAP用途で登録しようとして撮影busyで失敗した記録あり。
+- 根拠：左上に大きい白Xが描画された広告がUNKNOWNのまま残る。コードはPixelAdCloseDetectorとAutoFlowの採用フィルタが右上限定。左右反転で既存白Xの同じ閾値を左上にも適用し、左はX/score445以上だけ採用。NEXTや弱いマークは許可しない。2フレーム/広告経路/ガチャ保護/鮮度は維持。
+- 撮影：captureWithoutControlBarを最大3件の予約キューへ変更。busyは即失敗させず最大8秒待機。予約中はlive probe/赤丸probe/診断撮影の割り込みを防ぐ。実プラットフォーム撮影開始時刻を全API経路で記録し600ms以上空ける。要求時刻で自分自身を連続撮影と判定しない。開始後3秒の結果期限、操作バーの復元、遅延callback破棄は維持。学習のcaptureForVisualTeachingも予約経路へ統一。
+- 専用用途BOTTOM「宝箱の底を見る」を追加。登録時に「宝箱の底」と「このまま受け取る」が見える宝箱オファーを要求。MAP用途や広告×として扱わない。ラベルと用途に応じた既定画面名/移動先（宝箱の中身→広告）を表示。既存MAP/STOCK登録は維持。
+- 自動使用：FIRST_ADフェーズで独立した宝箱オファーを確認し、既存ノードの対象がない場合に登録画像を照合。BOTTOMは周辺contextの一致も必要。現在の2画像一致と鮮度、透過準備後の再確認を通過してからSECOND_ADへ遷移。2本目の広告経路を明示し、繰り返しBOTTOMを押さない。残数減少/0確認は従来どおり。
+- 変更：AutoFlow、ScreenshotDiagnostics、PixelAdCloseDetector、AppNavigationRules、MapStockPolicy、新規AdCornerPolicy/CaptureSlotPolicy/NovemberRegressionTest。共通module・CI・main・QA署名/IDは変更なし。
+- 回帰テスト：強い左X採用/弱い左マーク・左NEXT拒否、左ピクセルX検出、単色拒否、撮影busy/実撮影間隔/予約期限、BOTTOMの独立文脈・許可フェーズ・位置制限。ローカルdiff check、配布Pythonテスト2件合格。AndroidはActions確認後追記。
+- 実機は修正版未検証。次は更新→宝箱の受け取り画面で用途BOTTOMを登録→広告の左X・ストック回収を実行→同じDrive保存先へ送信。旧誤用途の登録失敗例を削除させず、新しい用途で登録し直す。生ログ/ユーザー画面やDriveのIDを公開Gitへ保存しない。
+
+### 最終配布確認（2026-11-04）
+- QA100014（3.14-qa.100014）公開、ソースbd93f6ec。QA Actions #41746853232 / DEV #41746853276成功。共通/更新ライブラリ/QA・Debug単体テスト、固定署名ビルド、公開APK/更新manifestの匿名配布検証通過。asset 2,921,932 bytes。正式latestはv3.14/Release ID420174934を維持。integration/stagingとのcommon/integrated/設定/CI差分なしも確認。
+- 修正版のOPPO実機操作は未検証。既存登録・Drive保存先は保持。宝箱の受け取り画面で用途「宝箱の底を見る」を選んで新規登録し、左上×と2本目広告をテストして同じDriveファイルを更新してもらう。
