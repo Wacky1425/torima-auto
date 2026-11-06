@@ -200,3 +200,4 @@
 - 操作バーの「学習・報告」に、既存学習と別の「新しい操作を報告」を追加。任意メモ→位置を選択→実際に指で操作→操作後を保存。トリマが前面のときに操作バーを除外して撮影。前後と選択位置は診断ZIPの `operation-reports/` に最大5組追加し、既存Driveボタンで明示的に送信。報告を自動操作のルールとして再生しない。
 - 既存の回収ボタン登録は用途と任意の名前だけ。画面名・移動先は既定値を使い、認識条件や回収ループは変更しない。
 - 変更：MainActivity/activity_main、ScreenCollector、PowlAccessibilityService、AppNavigationRules、DiagnosticBundleExporter、OperationReportOverlay/Store。回帰テストはZIPに前後がそろうこと、未完了・古い組を除くこと。次は実機で操作報告→Drive送信を確認。
+- コード `b406eb04a99bdfcd223a0f1f32ac9757781bf33a`。DEV #42185368389・QA #42185368909 成功。QA100016配布フロー完了。新しいUIと報告の端末上の操作は未検証。正式版とmainは変更なし。
