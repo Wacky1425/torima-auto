@@ -29,9 +29,9 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun runHomeRecovery(done:(Boolean,Boolean,String)->Unit):Boolean=
   homeRecovery.start(done)
  internal fun cancelHomeRecovery(){homeRecovery.cancel()}
- internal fun probeOverlayIcons(
+ internal fun probeOverlayIcons(allowLocalX:Boolean,
   onDone:(List<OverlayIconDetector.Marker>?,VisualLearnedActions.Match?)->Unit){
-  imageDiagnostics.probeOverlay(onDone)
+  imageDiagnostics.probeOverlay(allowLocalX,onDone)
  }
  internal fun probeRewardBadges(onDone:(RewardBadgeDetector.Result?)->Unit){
   imageDiagnostics.probeRewardBadges(onDone)
@@ -39,12 +39,12 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun probeMapStock(role:AppNavigationRules.Role,done:(MapStockIconDetector.Result?)->Unit){
   imageDiagnostics.probeMapStock(role,done)
  }
- internal fun probeLearnedX(x:Int,y:Int,onDone:(Boolean?,VisualLearnedActions.Match?)->Unit){
-  imageDiagnostics.probeLearnedX(x,y,onDone)
+ internal fun probeLearnedX(x:Int,y:Int,allowLocalX:Boolean,onDone:(Boolean?,VisualLearnedActions.Match?)->Unit){
+  imageDiagnostics.probeLearnedX(x,y,allowLocalX,onDone)
  }
- internal fun matchVisualLearning(pixels:IntArray,width:Int,height:Int):
+ internal fun matchVisualLearning(pixels:IntArray,width:Int,height:Int,allowLocalX:Boolean):
   VisualLearnedActions.Match? =
-  visualLearnedActions.matchCanonical(pixels,width,height)
+  visualLearnedActions.matchCanonical(pixels,width,height,allowLocalX)
  internal fun isCapturingCleanScreenshot()=screenCollector.isCapturingScreenshot()
  internal fun hideControlBarForScreenshot():()->Unit=screenCollector.hideForScreenshot()
  internal fun suspendTeachingBar():Boolean=screenCollector.suspendForTeaching()

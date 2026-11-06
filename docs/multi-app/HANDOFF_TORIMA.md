@@ -188,3 +188,8 @@
 ### 最終配布確認（2026-11-04）
 - QA100014（3.14-qa.100014）公開、ソースbd93f6ec。QA Actions #41746853232 / DEV #41746853276成功。共通/更新ライブラリ/QA・Debug単体テスト、固定署名ビルド、公開APK/更新manifestの匿名配布検証通過。asset 2,921,932 bytes。正式latestはv3.14/Release ID420174934を維持。integration/stagingとのcommon/integrated/設定/CI差分なしも確認。
 - 修正版のOPPO実機操作は未検証。既存登録・Drive保存先は保持。宝箱の受け取り画面で用途「宝箱の底を見る」を選んで新規登録し、左上×と2本目広告をテストして同じDriveファイルを更新してもらう。
+
+## 2026-11-06 Torima担当：撮影枠の復帰と動く広告背景
+- `dev/torima`。DriveのQA100014診断で撮影の `busy=true` による連続タイムアウトと、広告学習の8秒予約切れを確認。OSから応答が返らない場合も、画像プローブと学習撮影を期限付きで終了し、次の予約を通す。遅延結果では次の予約を解除しない。最初に止まったOS側の理由は不明。
+- 広告経路を確認でき、ガチャ・通常画面を除外できる場合に限り、上隅の学習済み×をボタン近傍で照合する経路を追加。周囲の映像が変わっても、実際の×の形と直近2枚、操作時点の広告文脈を確認。広告文脈を確認できないときは従来の判定を維持。
+- 対象：AutoFlow、VisualTemplateModel、VisualLearnedActions、LearnedXPresence、ScreenshotDiagnostics、CaptureSlotPolicy、PowlAccessibilityService。回帰テストはNovemberRegressionTest。次はOPPOで広告×学習とアプリ内登録を各1回、続けて動く広告の×出現前後を実機確認。

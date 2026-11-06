@@ -92,6 +92,10 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  private var lastProbeRequest=0L
  private var badgeProbeBusy=false
  private var badgeProbeAt=0L
+ private fun recordCaptureTimeout(source:String){
+  DiagnosticJournal.record(service,"screenshots","capture_timeout",
+   JSONObject().put("source",source))
+ }
 
  /**
   * Probe the two tiny header red dots from the FULL DISPLAY, not a cropped
@@ -109,10 +113,22 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   }
   badgeProbeBusy=true
   badgeProbeAt=now
+  val completion=CaptureSlotPolicy.Completion()
+  fun deliver(result:RewardBadgeDetector.Result?){
+   if(!completion.claim())return
+   badgeProbeBusy=false
+   done(result)
+  }
+  captureHandler.postDelayed({
+   if(!completion.finished){
+    recordCaptureTimeout("badge_probe")
+    deliver(null)
+   }
+  },CaptureSlotPolicy.PROBE_TIMEOUT_MS)
   fun finish(image:Bitmap?){
+   if(completion.finished){image?.recycle();return}
    if(image==null){
-    badgeProbeBusy=false
-    done(null)
+    deliver(null)
     return
    }
    io.execute{
@@ -128,8 +144,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
     }catch(_:Exception){null}
     finally{image.recycle()}
     service.mainExecutor.execute{
-     badgeProbeBusy=false
-     done(result)
+     deliver(result)
     }
    }
   }
@@ -147,7 +162,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
 
 
  /** Scan overlay marks in RAM. No screenshots are persisted by this path. */
- fun probeOverlay(done:(List<OverlayIconDetector.Marker>?,VisualLearnedActions.Match?)->Unit){
+ fun probeOverlay(allowLocalX:Boolean,done:(List<OverlayIconDetector.Marker>?,VisualLearnedActions.Match?)->Unit){
   val root=service.rootInActiveWindow
   if(root?.packageName?.toString()!=TARGET || Build.VERSION.SDK_INT<30){done(null,null);return}
   val now=SystemClock.elapsedRealtime()
@@ -155,8 +170,21 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
    (lastRequest>0 && now-lastRequest<1_300L)){done(null,null);return}
   busy=true;lastProbeRequest=now
   val windowId=root.windowId
+  val completion=CaptureSlotPolicy.Completion()
+  fun deliver(markers:List<OverlayIconDetector.Marker>?,learned:VisualLearnedActions.Match?){
+   if(!completion.claim())return
+   busy=false
+   done(markers,learned)
+  }
+  captureHandler.postDelayed({
+   if(!completion.finished){
+    recordCaptureTimeout("overlay_probe")
+    deliver(null,null)
+   }
+  },CaptureSlotPolicy.PROBE_TIMEOUT_MS)
   fun finish(image:Bitmap?){
-   if(image==null){busy=false;done(null,null);return}
+   if(completion.finished){image?.recycle();return}
+   if(image==null){deliver(null,null);return}
    io.execute{
     val analysis=try{
      val width=540
@@ -171,19 +199,19 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      val markers=(fromNodesOrComponents+pixelXs)
       .groupBy{it.kind+":"+it.region}.values.mapNotNull{group->group.maxByOrNull{it.score}}
       .map{it.copy(x=it.x*image.width/width,y=it.y*image.height/height)}
-     val learned=service.matchVisualLearning(pixels,width,height)?.let{
+     val learned=service.matchVisualLearning(pixels,width,height,allowLocalX)?.let{
       it.copy(x=it.x*image.width/width,y=it.y*image.height/height)
      }
      Pair(markers,learned)
     }catch(_:Exception){null}
     finally{image.recycle()}
     service.mainExecutor.execute{
-     busy=false
-     done(analysis?.first,analysis?.second)
+     deliver(analysis?.first,analysis?.second)
     }
    }
   }
   fun display(){
+   if(completion.finished)return
    try{lastPlatformCaptureAt=SystemClock.elapsedRealtime()
    service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
     object:AccessibilityService.TakeScreenshotCallback{
@@ -288,7 +316,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  }
 
  /** A local before-input glyph check. It never clicks, saves, or trusts scene identity. */
- fun probeLearnedX(x:Int,y:Int,done:(Boolean?,VisualLearnedActions.Match?)->Unit){
+ fun probeLearnedX(x:Int,y:Int,allowLocalX:Boolean,done:(Boolean?,VisualLearnedActions.Match?)->Unit){
   val now=SystemClock.elapsedRealtime()
   if(cleanReserved() || !captureSchedule.allowProbe() || now-lastProbeRequest<1_300L){done(null,null);return}
   lastProbeRequest=now
@@ -300,7 +328,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
     try{
      val pixels=IntArray(w*h);small.getPixels(pixels,0,w,0,0,w,h)
      Pair(LearnedXPresence.visible(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height),
-      service.matchVisualLearning(pixels,w,h)?.let{it.copy(x=it.x*bitmap.width/w,y=it.y*bitmap.height/h)})
+      service.matchVisualLearning(pixels,w,h,allowLocalX)?.let{it.copy(x=it.x*bitmap.width/w,y=it.y*bitmap.height/h)})
     }finally{if(small!==bitmap)small.recycle()}
    }catch(_:Exception){null}finally{bitmap.recycle()}
    done(result?.first,result?.second)
@@ -312,7 +340,6 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   * This is independent of ordinary diagnostic screenshot rate limits.
   * The caller must hide its teaching overlay and collector panel first.
   */
- private var lastRawFrameAt=0L
  fun captureForVisualTeaching(done:(Bitmap?,String)->Unit)=captureWithoutControlBar(done)
  private fun captureRawFrame(done:(Bitmap?,String)->Unit){
   val root=service.rootInActiveWindow
@@ -322,28 +349,37 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   if(Build.VERSION.SDK_INT<30){
    done(null,"端末のAndroidが画像取得APIに非対応");return
   }
-  val now=SystemClock.elapsedRealtime()
   if(busy){
    done(null,"ほかの画像解析中。数秒後にもう一度学習してください");return
   }
-  busy=true;lastRawFrameAt=SystemClock.elapsedRealtime()
+  busy=true
+  val completion=CaptureSlotPolicy.Completion()
+  fun finish(image:Bitmap?,note:String){
+   if(!completion.claim()){image?.recycle();return}
+   busy=false
+   done(image,note)
+  }
+  captureHandler.postDelayed({
+   if(!completion.finished){
+    recordCaptureTimeout("clean_frame")
+    finish(null,"Androidの撮影応答がなく終了。もう一度登録できます")
+   }
+  },CaptureSlotPolicy.RAW_TIMEOUT_MS)
   try{
    lastPlatformCaptureAt=SystemClock.elapsedRealtime()
    service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
     object:AccessibilityService.TakeScreenshotCallback{
      override fun onSuccess(screenshot:AccessibilityService.ScreenshotResult){
-      busy=false
+      if(completion.finished){screenshot.hardwareBuffer.close();return}
       val image=toSoftwareBitmap(screenshot)
-      done(image,if(image==null)"画像バッファ取得失敗" else "タップ前の画面画像を取得")
+      finish(image,if(image==null)"画像バッファ取得失敗" else "タップ前の画面画像を取得")
      }
      override fun onFailure(errorCode:Int){
-      busy=false
-      done(null,"画面取得が拒否されました(code=$errorCode)")
+      finish(null,"画面取得が拒否されました(code=$errorCode)")
      }
     })
   }catch(e:Exception){
-   busy=false
-   done(null,"画像取得例外：${e.javaClass.simpleName}")
+   finish(null,"画像取得例外：${e.javaClass.simpleName}")
   }
  }
 

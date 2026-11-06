@@ -169,11 +169,11 @@ class AutoFlow(
   * Sample transient overlay glyphs, not screenshots of entire advertisers.
   * Never treat one screenshot or an icon alone as tap authorization.
   */
- private fun probeLiveOverlay(now:Long){
+ private fun probeLiveOverlay(now:Long,snap:Snapshot){
   if(visualProbePending || now-visualProbeLast<1_350L)return
   visualProbePending=true;visualProbeLast=now
   val expectedGeneration=generation
-  service.probeOverlayIcons { markers,learnedMatch ->
+  service.probeOverlayIcons(allowsMovingAdX(snap)) { markers,learnedMatch ->
    visualProbePending=false
    if(!running || generation!=expectedGeneration ||
      (markers==null && learnedMatch==null))return@probeOverlayIcons
@@ -207,6 +207,13 @@ class AutoFlow(
  /** TWO consecutive screenshots, local icon + surrounding scene, and
   * a known video-ad path. This is a LIVE learned action, not a saved photo.
   */
+ private fun allowsMovingAdX(snap:Snapshot):Boolean =
+  gachaPhase==GachaSafety.Phase.NONE &&
+   (videoAdSessionActive || trustedAdEvidence(snap)!=null) &&
+   mainScreen(snap).screen==MainScreenPolicy.Screen.UNKNOWN &&
+   !StableAdClosePolicy.hasGachaOrLoadingText(
+    snap.nodes.filter{it.node.isVisibleToUser}.flatMap{listOf(it.text,it.desc)})
+
  private fun visualLearnedDecision(snap:Snapshot):Decision?{
   val hit=visualLearned?:return null
   val now=SystemClock.elapsedRealtime()
@@ -223,10 +230,12 @@ class AutoFlow(
    snap.has("カードを1枚選んでください") ||
    snap.has("友達にシェアする") ||
    snap.has("動画スキップ券を使いますか"))return null
-  if(hit.confidence<VisualTemplateModel.MIN_TOTAL_SCORE)return null
+  if(hit.localOnly){
+   if(!allowsMovingAdX(snap))return null
+  }else if(hit.confidence<VisualTemplateModel.MIN_TOTAL_SCORE)return null
   return Decision("LEARNED_VISUAL","画像学習済み：${hit.title.take(26)}",
    "LEARNED_VISUAL:${hit.id}",null,
-   "画像一致 ${hit.confidence}/2000、近傍=${hit.near} 周囲=${hit.context} kind=${hit.type}",
+   "${if(hit.localOnly) "広告×の近傍一致" else "画像一致 ${hit.confidence}/2000"}、近傍=${hit.near} 周囲=${hit.context} kind=${hit.type}",
    Point(hit.x,hit.y),false,true)
  }
  private fun visualOverlayDecision(snap:Snapshot):Decision?{
@@ -594,7 +603,8 @@ class AutoFlow(
  private fun adEvidence(decision:Decision,snap:Snapshot,now:Long):String? =
   trustedAdEvidence(snap)?:stableAdCloseEvidence(decision,snap,now)?:
    if(decision.kind=="LEARNED_VISUAL" &&
-    (videoAdSessionActive || (visualLearned?.confidence?:0)>=1_750) &&
+    (if(visualLearned?.localOnly==true)allowsMovingAdX(snap)
+     else videoAdSessionActive || (visualLearned?.confidence?:0)>=1_750) &&
     visualLearnedCount>=2 && visualLearned?.id!=null &&
     SystemClock.elapsedRealtime()-visualLearnedAt<3_000L)
     "USER_TAUGHT_VISUAL_AD_BUTTON" else
@@ -2368,7 +2378,7 @@ class AutoFlow(
   return decision.registeredLearned || item.node.className?.toString()?.endsWith("ImageView")==true ||
    caption.trim() in setOf("close","close ad","×","✕","✖")
  }
- private fun confirmLearnedX(decision:Decision,now:Long):Boolean {
+ private fun confirmLearnedX(decision:Decision,snapshot:Snapshot,now:Long):Boolean {
   val key=decision.key
   learnedXGate.expect(key,now)
   if(learnedXGate.ready(key,now))return true
@@ -2381,12 +2391,12 @@ class AutoFlow(
   if(!learnedXPending && now-learnedXLastRequest>=1_400L){
    learnedXPending=true;learnedXLastRequest=now
    val expected=generation
-   service.probeLearnedX(point.x,point.y){visible,freshMatch->
+   service.probeLearnedX(point.x,point.y,decision.kind=="LEARNED_VISUAL" && allowsMovingAdX(snapshot)){visible,freshMatch->
     learnedXPending=false
     if(!running || generation!=expected || learnedXGate.key!=key)return@probeLearnedX
     val stamp=SystemClock.elapsedRealtime()
     val freshScene=decision.kind!="LEARNED_VISUAL" ||
-     (freshMatch!=null && key=="LEARNED_VISUAL:${freshMatch.id}" &&
+     (freshMatch!=null && (!freshMatch.localOnly || readCurrent()?.let{allowsMovingAdX(it)}==true) && key=="LEARNED_VISUAL:${freshMatch.id}" &&
       kotlin.math.abs(freshMatch.x-point.x)<=32 && kotlin.math.abs(freshMatch.y-point.y)<=32)
     if(decision.kind=="LEARNED_VISUAL"){
      visualLearned=freshMatch;visualLearnedAt=stamp
@@ -2399,7 +2409,7 @@ class AutoFlow(
     next(100)
    }
   }
-  update("学習位置の×を確認中：実際の表示が2枚で一致するまで押しません")
+  update("広告の×を確認中：ボタンが続けて見えたら押します")
   next(900)
   return false
  }
@@ -2478,7 +2488,7 @@ class AutoFlow(
    (VisualLearnedActions.count(service)>0 &&
      (videoAdSessionActive || initial.kind in listOf("AD_CLOSE","AD_SKIP",
       "AD_VISUAL_X","AD_VISUAL_NEXT"))))){
-    probeLiveOverlay(now)
+    probeLiveOverlay(now,snapshot)
    }
    val decision=choose(snapshot)
    if(decision.kind in listOf("HOME","HOME_WAIT","W_CHANCE","CARDS",
@@ -2588,7 +2598,7 @@ class AutoFlow(
     verifiedAdSince=0L
    }
    if(requiresVisibleLearnedX(decision)){
-    if(!confirmLearnedX(decision,now))return
+    if(!confirmLearnedX(decision,snapshot,now))return
    }else learnedXGate.reset()
    if(waitingKey!=null){
     if(waitingKey==decision.key){

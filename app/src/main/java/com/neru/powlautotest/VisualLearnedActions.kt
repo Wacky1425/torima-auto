@@ -39,7 +39,7 @@ internal class VisualLearnedActions(private val ctx:Context){
  data class Captured(val model:VisualTemplateModel.Rule,val originalX:Int,
   val originalY:Int,val type:String,val nodeCount:Int,val label:String)
  data class Match(val id:String,val x:Int,val y:Int,val confidence:Int,
-  val near:Int,val context:Int,val type:String,val title:String)
+  val near:Int,val context:Int,val type:String,val title:String,val localOnly:Boolean=false)
  private fun json(arr:IntArray)=JSONArray().apply{arr.forEach{put(it)}}
  private fun array(v:JSONArray?,expected:Int):IntArray?{
   if(v==null || v.length()!=expected)return null
@@ -113,9 +113,9 @@ internal class VisualLearnedActions(private val ctx:Context){
   slots.takeLast(MAX_RULES-1).forEach{out.put(it)}
   out.put(obj)
   file(ctx).writeText(out.toString(2),Charsets.UTF_8)
-  return "画像学習を登録しました（計${out.length()}件）。次回は×／スキップ付近の画像と周囲を照合して押します。"
+  return "画像学習を登録しました（計${out.length()}件）。次回は現在の広告と×ボタンの表示を確認してから押します。"
  }
- fun matchCanonical(pixels:IntArray,width:Int,height:Int):Match?{
+ fun matchCanonical(pixels:IntArray,width:Int,height:Int,allowLocalX:Boolean=false):Match?{
   val rules=read(ctx)
   val disabled=LearnedRuleManager.disabled(ctx)
   val candidates=ArrayList<Match>()
@@ -129,18 +129,20 @@ internal class VisualLearnedActions(private val ctx:Context){
    val rule=VisualTemplateModel.Rule(
     item.optInt("x"),item.optInt("y"),
     item.optInt("imageWidth"),item.optInt("imageHeight"),near,context)
-   val hit=VisualTemplateModel.search(rule,pixels,width,height)?:continue
+   val kind=item.optString("kind")
+   val hit=VisualTemplateModel.search(rule,pixels,width,height)?:
+    (if(allowLocalX && kind=="TOP_CLOSE_OR_SKIP")
+     VisualTemplateModel.searchLocalX(rule,pixels,width,height) else null)?:continue
    // The rule identifies a close-like region, not a random screen center.
    val px=hit.x.toDouble()/width
    val py=hit.y.toDouble()/height
-   val kind=item.optString("kind")
    val legal=if(kind=="TOP_CLOSE_OR_SKIP")
     py<=.34 && (px>=.57 || px<=.21)
    else kind=="BOTTOM_AD_CLOSE" && py in 0.72..0.96
    if(!legal)continue
    val candidate=Match(item.optString("id"),hit.x,hit.y,hit.score,
     hit.nearScore,hit.contextScore,kind,
-    item.optString("sourceLabel").ifBlank{"画像で学習した×／スキップ"})
+    item.optString("sourceLabel").ifBlank{"画像で学習した×／スキップ"},hit.contextScore==0)
    candidates.add(candidate)
   }
   // Multiple creatives can teach the SAME corner X. A close-score tie
