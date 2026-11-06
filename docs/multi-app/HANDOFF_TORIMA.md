@@ -193,3 +193,4 @@
 - `dev/torima`。DriveのQA100014診断で撮影の `busy=true` による連続タイムアウトと、広告学習の8秒予約切れを確認。OSから応答が返らない場合も、画像プローブと学習撮影を期限付きで終了し、次の予約を通す。遅延結果では次の予約を解除しない。最初に止まったOS側の理由は不明。
 - 広告経路を確認でき、ガチャ・通常画面を除外できる場合に限り、上隅の学習済み×をボタン近傍で照合する経路を追加。周囲の映像が変わっても、実際の×の形と直近2枚、操作時点の広告文脈を確認。広告文脈を確認できないときは従来の判定を維持。
 - 対象：AutoFlow、VisualTemplateModel、VisualLearnedActions、LearnedXPresence、ScreenshotDiagnostics、CaptureSlotPolicy、PowlAccessibilityService。回帰テストはNovemberRegressionTest。次はOPPOで広告×学習とアプリ内登録を各1回、続けて動く広告の×出現前後を実機確認。
+- コード `5ebfc3cc055f108cfd69a6e593bfbd45c03b5622`。DEV #42169309589 / QA #42169309476 成功。QA100015の固定署名ビルドと配布フロー完了。正式版v3.14 / main、保存済み学習データの形式は変更なし。修正版はOPPO未検証。
