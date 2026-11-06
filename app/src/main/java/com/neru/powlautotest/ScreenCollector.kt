@@ -296,7 +296,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
     LinearLayout.LayoutParams(0,dp(49),1f))
    primary.addView(control("■ 停止"){updateAutoStatus(service.stopAutomaticOperation())},
     LinearLayout.LayoutParams(0,dp(49),1f))
-   primary.addView(control("✦ 学習"){updateAutoStatus(service.showLearningMenu())},
+   primary.addView(control("学習・報告"){updateAutoStatus(service.showLearningMenu())},
     LinearLayout.LayoutParams(0,dp(49),1f))
    panel.addView(primary)
    val status=TextView(service).apply{
@@ -305,9 +305,10 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    }
    panel.addView(status);info=status
    bindDrag(status)
-   val detail=control("▾ 詳細・診断"){
+   val detail=control("▾ 記録ツール"){
     expanded=!expanded
     detailsPanel?.visibility=if(expanded)View.VISIBLE else View.GONE
+    refresh()
    }.apply{textSize=11f}
    panel.addView(detail)
    val extras=LinearLayout(service).apply{
@@ -318,8 +319,8 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
     orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
    }
    tools.addView(control("◀"){index=(index+stages.size-1)%stages.size;refresh()})
-   tools.addView(control("記録"){capture()})
-   tools.addView(control("画像"){saveImage()})
+   tools.addView(control("画面記録"){capture()})
+   tools.addView(control("撮影"){saveImage()})
    tools.addView(control("▶"){index=(index+1)%stages.size;refresh()})
    tools.addView(control("上下"){top=!top;position()})
    tools.addView(control("閉じる"){hide()})
@@ -345,7 +346,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
    wm=win;bar=panel;lp=params
    expanded=false
    refresh()
-   "画面収集バーを表示。トリマへ移動して画面ごとに記録してな。"
+   "操作バーを表示しました。トリマを開いて「開始」または「学習・報告」を選んでください。"
   }catch(e:Exception){
    bar=null;wm=null;lp=null;title=null;info=null
    "記録バーを表示できません: ${e.javaClass.simpleName}"
@@ -366,7 +367,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   bar?.let{try{wm?.updateViewLayout(it,p)}catch(_:Exception){}}
  }
  private fun refresh(){
-  title?.text="⠿ 長押し移動 | ${stages[index].first}"
+  title?.text=if(expanded)"⠿ 長押し移動 | ${stages[index].first}" else "⠿ 長押し移動 | Torima Auto"
   info?.text="状態: ${autoStatus.take(115)}"
  }
  private fun sanitized(value:CharSequence?):String{

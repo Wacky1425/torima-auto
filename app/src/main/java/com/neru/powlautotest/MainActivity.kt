@@ -3,6 +3,7 @@ import android.content.*
 import android.os.*
 import android.provider.Settings
 import android.widget.*
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.FileProvider
@@ -15,7 +16,7 @@ class MainActivity:AppCompatActivity(){
  private var lastShown=""
  private val refresh=object:Runnable{override fun run(){
   val s=PowlAccessibilityService.instance
-  state.text=if(s==null)"Service: 未接続" else "Service: 接続済み"
+  state.text=if(s==null)"アクセシビリティ：未接続" else "アクセシビリティ：接続済み"
   collectionOverview.text=CollectionRunStore.summary(this@MainActivity)
   findViewById<TextView>(R.id.visualDiagnosticsCount).text=
    "保存画像：${ScreenshotDiagnostics.count(this@MainActivity)}枚（最大${ScreenshotDiagnostics.MAX_SAVED_IMAGES}枚）"
@@ -65,7 +66,22 @@ class MainActivity:AppCompatActivity(){
    }
   }.start()
  }
+ private fun section(toggleId:Int,panelId:Int){
+  val button=findViewById<Button>(toggleId)
+  val panel=findViewById<View>(panelId)
+  val title=button.text.toString()
+  fun display(open:Boolean){
+   panel.visibility=if(open)View.VISIBLE else View.GONE
+   button.text=(if(open)"▴ " else "▾ ")+title
+  }
+  display(false)
+  button.setOnClickListener{display(panel.visibility!=View.VISIBLE)}
+ }
  override fun onCreate(b:Bundle?){super.onCreate(b);setContentView(R.layout.activity_main)
+  section(R.id.sharingToggle,R.id.sharingPanel)
+  section(R.id.settingsToggle,R.id.settingsPanel)
+  section(R.id.learningToggle,R.id.learningPanel)
+  section(R.id.advancedToggle,R.id.advancedPanel)
   findViewById<Button>(R.id.sendDriveDiagnostics).setOnClickListener{sendDriveDiagnostics()}
   findViewById<Button>(R.id.changeDriveDiagnosticTarget).setOnClickListener{pickDriveTarget()}
 
@@ -130,6 +146,10 @@ class MainActivity:AppCompatActivity(){
   findViewById<Button>(R.id.startCollector).setOnClickListener{
    val service=PowlAccessibilityService.instance
    val message=service?.showScreenCollector() ?:"アクセシビリティが未接続です。先に有効にしてください。"
+   if(service!=null && !message.startsWith("記録バーを表示できません")){
+    val torima=packageManager.getLaunchIntentForPackage("jp.co.incrementp.milemobile")
+    if(torima!=null)runCatching{startActivity(torima)}
+   }
    Toast.makeText(this,message,Toast.LENGTH_LONG).show()
   }
   findViewById<Button>(R.id.stopCollector).setOnClickListener{

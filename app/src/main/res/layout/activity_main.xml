@@ -1,86 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto v3.14" android:textSize="23sp"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:layout_marginTop="10dp" android:text="診断を送るなら、このボタン1つだけでOK。"
- android:textStyle="bold" android:textSize="16sp"/>
-<Button android:id="@+id/shareAllDiagnostics" android:layout_width="match_parent"
- android:layout_height="wrap_content" android:minHeight="58dp"
- android:text="診断をまとめて共有（ZIP 1個）"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="不具合調査が必要なときだけZIPを1個共有してください。操作バーには「開始・停止・学習」の3つを表示します。長押しでバーを移動でき、詳しい記録やテストは「詳細」にまとめました。"
- android:paddingBottom="8dp"/>
-<Button android:id="@+id/sendDriveDiagnostics" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Driveに診断を送信（初回のみ保存先設定）"/>
-<Button android:id="@+id/changeDriveDiagnosticTarget" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Driveの診断保存先を変更"/>
-<TextView android:id="@+id/driveDiagnosticStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="連携済みGoogleアカウントのTorima Diagnosticsへ。送信後、このチャットで「送った」と伝えてください。"/>
-<Switch android:id="@+id/fastAdMode"
- android:layout_width="match_parent" android:layout_height="wrap_content"
- android:minHeight="52dp"
- android:text="高速実験：広告終了後の保護・待機をOFF（初期ON）"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="検証用：広告を閉じた後の4秒保護・追加の画面安定待機を無効化。以前のようにガチャ読み込み中の×を押してキャンセルする危険があるため、問題が出たらOFFに戻してください。画像の×は複数回の検出で位置を確認してから押します。"
- android:paddingBottom="10dp"/>
-<Switch android:id="@+id/enableHomeRecovery"
- android:layout_width="match_parent" android:layout_height="wrap_content"
- android:minHeight="50dp" android:text="HOMEで進めない時に1回だけ自動復旧する"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="HOMEで2方式失敗 → 紫ボタン上の画面を少し下にスワイプ → 取り直したボタンを再タップ。進まなければトリマのアプリ情報から強制停止・再起動を試行 → 最大3方式で再確認。設定画面が判別できなければ通常の開き直しに切り替え、他のアプリは停止しません。"
- android:paddingBottom="8dp"/>
-<Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認"/>
-<TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true"/>
-<Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定"/>
-
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:layout_marginTop="16dp" android:text="回収タスク・実行記録" android:textSize="18sp"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="今回の基盤で管理する対象は『トリマのタンク動画』のみ。HOMEの残り回数とHOME遷移に成功した入力方式を記録し、0回を2度確認した場合だけ完了として停止します。未対応の回収対象は完了扱いしません。実行は最大3時間で安全停止。"/>
-<TextView android:id="@+id/collectionOverview" android:layout_width="match_parent"
- android:layout_height="wrap_content" android:padding="10dp"
- android:text="回収タスク：実行記録なし" android:textIsSelectable="true"/>
-<TextView android:id="@+id/homeExperimentInfo" android:layout_width="match_parent"
- android:layout_height="wrap_content" android:padding="8dp"
- android:text="HOME押し方：成功した方式はまだ未記録" android:textIsSelectable="true"/>
-<Button android:id="@+id/copyCollectionHistory" android:layout_width="match_parent"
- android:layout_height="wrap_content" android:text="回収タスク・所要時間の履歴をコピー"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="画面収集・安全な自動操作" android:textSize="18sp"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="どちらのタブから開始しても移動・歩数を確認します。歩数から開始した場合はアイコン上の赤丸を画像で2回確認し、移動に赤丸がなければ歩数を先に回収、移動に赤丸があれば移動を確認します。画像判定不能ならタブを開いて確認します。移動タンクの回収を終えると自動で「歩数」タブに移り、動画・ガチャを同じ流れで回収します。歩数も残り0回（または灰色の回収不可状態）を確認したら停止します。画面上のコンパクトなバーで「開始・停止・学習」を操作。バーを長押しして動かせます。「詳細」を開くと画面記録・画像・手動比較などの機能が表示されます。HOMEの紫ボタンが1回目で進まなければ、短い上スワイプでボタンの位置をずらし、新しい位置で再タップ。それでも進まなければ再起動復旧します。"/>
-<Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作バーを表示（開始・停止・学習）"/>
-<Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画面記録バーを終了"/>
-<Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:layout_marginTop="12dp" android:text="個別の画像診断（通常は上の一括共有だけでOK）" android:textSize="18sp"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="ノードがない広告も、学習時に押した近くの画像と周囲の特徴を登録できます。次回は連続2枚の現在画像を照合し、合致すれば登録位置をタップします。通常の診断画像は端末内のみ・最新24枚までです。"/>
-<TextView android:id="@+id/visualDiagnosticsCount" android:layout_width="match_parent"
- android:layout_height="wrap_content" android:text="画像記録：0枚"/>
-<Button android:id="@+id/shareVisualDiagnostics" android:layout_width="match_parent"
- android:layout_height="wrap_content" android:text="画像診断をZIPで共有（画像＋座標JSON）"/>
-<Button android:id="@+id/copyVisualDiagnostics" android:layout_width="match_parent"
- android:layout_height="wrap_content" android:text="画像診断の検出結果だけコピー"/>
-<Button android:id="@+id/clearVisualDiagnostics" android:layout_width="match_parent"
- android:layout_height="wrap_content" android:text="保存した画像診断を削除"/>
-<Button android:id="@+id/clearCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログを消去"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="学習操作・復帰ログ" android:textSize="18sp" android:layout_marginTop="12dp"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content"
- android:text="学習は2段階です。①透明な学習膜の上からボタンの位置を選択、②膜と操作バーが消えたら実際の指で同じ場所をタップ。指による本物の画面操作で遷移またはクリックが確認できれば、ノード／画像ルールとして自動登録します。左上の邪魔な案内パネルは廃止しました。識別できない場合は理由を出し、保留データは蓄積しません。"/>
-<Button android:id="@+id/copyActionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作履歴をコピー"/>
-<Button android:id="@+id/copyLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習済み操作をコピー"/>
-<Button android:id="@+id/manageLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習ルールの管理（個別ON／OFF）"/>
-<Button android:id="@+id/clearLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作をすべて削除"/>
- <Button android:id="@+id/clearLegacyPending" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="古い保留例だけ削除（学習済みは残す）"/>
-
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp"
- android:text="個別のHOME・広告テスト（従来版）" android:textSize="18sp"/>
-<Button android:id="@+id/checkHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME判定（タップなし）"/>
-<Button android:id="@+id/tapHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME判定＋1回だけタップ"/>
-<Button android:id="@+id/runSequence" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME→広告の×を閉じる（1回）"/>
-<Button android:id="@+id/stopSequence" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="広告待機を停止"/>
-<Button android:id="@+id/scanAd" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="15秒後に広告診断（タップなし）"/>
-<Button android:id="@+id/scanAdTap" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="15秒後に広告診断＋識別した×を1回タップ"/>
-<Button android:id="@+id/copyResults" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="診断結果をコピー"/>
-<TextView android:id="@+id/debugStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="サービス未接続"/>
-<TextView android:id="@+id/results" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="診断待ち" android:textIsSelectable="true"/>
-</LinearLayout></ScrollView>
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp" android:orientation="vertical">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto" android:textSize="24sp" android:layout_marginTop="0dp" />
+    <TextView android:id="@+id/debugStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="アクセシビリティ：未接続" />
+    <Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作バーを表示してトリマを開く" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="トリマの操作バーで「開始」「停止」「学習・報告」を選べます。" android:textSize="14sp" android:layout_marginTop="0dp" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="回収状況" android:textSize="18sp" android:layout_marginTop="12dp" />
+    <TextView android:id="@+id/collectionOverview" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp" android:text="回収タスク：実行記録なし" android:textIsSelectable="true" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="診断を送る" android:textSize="18sp" android:layout_marginTop="10dp" />
+    <Button android:id="@+id/sendDriveDiagnostics" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Driveに診断を送る" />
+    <TextView android:id="@+id/driveDiagnosticStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作報告もここから送れます。送信後、このチャットに「送った」と伝えてください。" />
+    <Button android:id="@+id/sharingToggle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="ほかの共有方法・保存先" />
+    <LinearLayout android:id="@+id/sharingPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone" android:paddingBottom="8dp">
+      <Button android:id="@+id/shareAllDiagnostics" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="58dp" android:text="共有メニューで診断を送る（ZIP）" />
+      <Button android:id="@+id/changeDriveDiagnosticTarget" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Driveの保存先を変更" />
+    </LinearLayout>
+    <Button android:id="@+id/settingsToggle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="設定・更新" />
+    <LinearLayout android:id="@+id/settingsPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone" android:paddingBottom="8dp">
+      <Button android:id="@+id/openSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アクセシビリティ設定を開く" />
+      <Button android:id="@+id/stopCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作バーを閉じる" />
+      <Button android:id="@+id/checkUpdate" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="アプリの更新を確認" />
+      <TextView android:id="@+id/updateStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="更新確認待ち" android:textIsSelectable="true" />
+      <Switch android:id="@+id/enableHomeRecovery" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="50dp" android:text="HOMEで進めないとき自動で復旧を試す" />
+      <Switch android:id="@+id/fastAdMode" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="52dp" android:text="高速実験：広告終了後の待機を省略" />
+      <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ガチャなどの遷移で誤操作が出る場合は高速実験をOFFにしてください。" android:textSize="14sp" android:layout_marginTop="0dp" />
+    </LinearLayout>
+    <Button android:id="@+id/learningToggle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="広告・HOMEの学習を管理" />
+    <LinearLayout android:id="@+id/learningPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone" android:paddingBottom="8dp">
+      <Button android:id="@+id/manageLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作を個別にON／OFF" />
+      <Button android:id="@+id/copyLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="学習した操作をコピー" />
+      <Button android:id="@+id/clearLearnedRules" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="広告・HOMEの学習をすべて削除…" />
+      <Button android:id="@+id/clearLegacyPending" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="古い保留例だけ削除…" />
+      <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="マップなどの登録は操作バーの「学習・報告」から確認できます。" android:textSize="14sp" android:layout_marginTop="0dp" />
+    </LinearLayout>
+    <Button android:id="@+id/advancedToggle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="詳細な記録・テスト" />
+    <LinearLayout android:id="@+id/advancedPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone" android:paddingBottom="8dp">
+      <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="個別の記録" android:textSize="16sp" android:layout_marginTop="0dp" />
+      <TextView android:id="@+id/homeExperimentInfo" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="8dp" android:text="HOME押し方：成功した方式はまだ未記録" android:textIsSelectable="true" />
+      <Button android:id="@+id/copyCollectionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="回収タスク・所要時間の履歴をコピー" />
+      <Button android:id="@+id/copyActionHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作履歴をコピー" />
+      <Button android:id="@+id/copyCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログをまとめてコピー" />
+      <TextView android:id="@+id/visualDiagnosticsCount" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画像記録：0枚" />
+      <Button android:id="@+id/shareVisualDiagnostics" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画像診断をZIPで共有（画像＋座標JSON）" />
+      <Button android:id="@+id/copyVisualDiagnostics" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="画像診断の検出結果だけコピー" />
+      <Button android:id="@+id/clearVisualDiagnostics" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="保存した画像診断を削除" />
+      <Button android:id="@+id/clearCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="収集ログを消去" />
+      <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="HOME・広告の個別テスト" android:textSize="16sp" android:layout_marginTop="8dp" />
+      <Button android:id="@+id/checkHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME判定（タップなし）" />
+      <Button android:id="@+id/tapHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME判定＋1回だけタップ" />
+      <Button android:id="@+id/runSequence" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5秒後にHOME→広告の×を閉じる（1回）" />
+      <Button android:id="@+id/stopSequence" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="広告待機を停止" />
+      <Button android:id="@+id/scanAd" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="15秒後に広告診断（タップなし）" />
+      <Button android:id="@+id/scanAdTap" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="15秒後に広告診断＋識別した×を1回タップ" />
+      <Button android:id="@+id/copyResults" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="診断結果をコピー" />
+      <TextView android:id="@+id/results" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="診断待ち" android:textIsSelectable="true" />
+    </LinearLayout>
+  </LinearLayout>
+</ScrollView>

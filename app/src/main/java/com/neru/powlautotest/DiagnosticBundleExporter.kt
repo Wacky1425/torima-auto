@@ -46,6 +46,7 @@ internal object DiagnosticBundleExporter {
     writeTextEntry("06_指タップ比較イベント.json",HomeManualComparison.export(ctx))
     writeTextEntry("07_HOME復旧履歴.json",HomeRecoveryJournal.export(ctx))
     val screenshots=ScreenshotDiagnostics.appendToDiagnosticZip(ctx,zip)
+    val operationReports=OperationReportStore.append(ctx,zip)
     writeTextEntry("manifest.json",JSONObject().apply{
      put("formatVersion",1)
      put("appVersion",installed.versionName?:"unknown")
@@ -55,7 +56,8 @@ internal object DiagnosticBundleExporter {
      put("screenshotCount",screenshots)
      put("nodeLearnedCount",LearnedActions.count(ctx))
      put("visualLearnedCount",VisualLearnedActions.count(ctx))
-     put("containsPersonalScreenImages",screenshots>0)
+     put("operationReportCount",operationReports)
+     put("containsPersonalScreenImages",screenshots>0 || operationReports>0)
      put("homeOutcomeSummary",HomeTrialJournal.shortSummary(ctx))
      put("fingerOutcomeSummary",HomeManualComparison.summary(ctx))
      put("homeRecoverySummary",HomeRecoveryJournal.summary(ctx))
@@ -78,6 +80,7 @@ internal object DiagnosticBundleExporter {
      "HOME→広告確認と報酬獲得は別です。画面を識別できない場合は成功扱いしません。\n" +
      "09_学習診断.json は位置指定・画像取得・指タップ待機・成功/失敗の専用記録です。\n" +
      "10_撮影診断.json は撮影予約・保存結果・失敗理由です。\n" +
+     "operation-reports/ には手動で報告した操作の前後画像・指定位置・メモがあります。\n" +
      "ZIP内には画面画像や操作記録が含まれます。共有相手は自分で選んでください。\n")
    }
    if(archive.exists())archive.delete()

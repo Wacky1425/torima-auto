@@ -163,6 +163,7 @@ class PowlAccessibilityService:AccessibilityService(){
   homeRecovery.cancel()
   manualHomeComparison.cancel()
   navigationTeacher.cancel()
+  operationReporter.cancel()
   teachOverlay.cancelCapture("サービス終了")
   stopSequence()
   screenCollector.hide()
@@ -180,13 +181,15 @@ class PowlAccessibilityService:AccessibilityService(){
  }
  fun hideScreenCollector():String {
   stopSequence()
+  operationReporter.cancel()
   screenCollector.hide()
-  val message="画面記録バーを終了。アプリで『収集ログをまとめてコピー』を押してください。"
+  val message="操作バーを閉じました。"
   report=message
   return message
  }
 
 
+ private val operationReporter by lazy{OperationReportOverlay(this)}
  private val navigationTeacher by lazy{AppNavigationTeachOverlay(this)}
  internal fun reportNavigationTeaching(message:String){
   report=message;screenCollector.updateAutoStatus(message)
@@ -195,19 +198,22 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun captureNavigationFrame(done:(android.graphics.Bitmap?,String)->Unit){imageDiagnostics.captureWithoutControlBar(done)}
  fun showLearningMenu():String {
   stopAutomaticOperation()
-  val choices=arrayOf("広告の×／スキップを学習（従来の2段階）","アプリ内の操作を登録（名前・画面を指定）","アプリ内：HOME動画ボタンを学習","登録したアプリ内操作を確認")
-  val dialog=android.app.AlertDialog.Builder(this).setTitle("学習する操作の種類")
+  operationReporter.cancel()
+  navigationTeacher.cancel()
+  val choices=arrayOf("広告の×／スキップを学習","回収で使うボタンを登録","HOMEの動画ボタンを学習","新しい操作を報告","登録済みの回収ボタンを確認")
+  val dialog=android.app.AlertDialog.Builder(this).setTitle("学習・操作報告")
    .setItems(choices){_,which->
     h.postDelayed({
      when(which){
       0->{navigationTeacher.cancel();reportNavigationTeaching(beginTeachTap())}
       1->showNavigationRegistration()
       2->{navigationTeacher.cancel();reportNavigationTeaching(beginTeachTap(true))}
-      3->{
-       val list=AppNavigationRules.Role.values().joinToString("\n"){"${it.title}：${AppNavigationRules.title(this,it)}"}
+      3->showOperationReportPrompt()
+      4->{
+       val list=AppNavigationRules.registeredSummary(this)
        val info=android.app.AlertDialog.Builder(this).setTitle("登録済みアプリ内操作")
         .setMessage(list).setPositiveButton("閉じる",null)
-        .setNeutralButton("アプリ内登録だけ削除"){_,_->AppNavigationRules.clear(this);reportNavigationTeaching("アプリ内の登録を削除。広告学習は保持")}.create()
+        .setNeutralButton("登録を削除…"){_,_->confirmNavigationClear()}.create()
        info.window?.setType(android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY);info.show()
       }
      }
@@ -215,21 +221,52 @@ class PowlAccessibilityService:AccessibilityService(){
    }.setNegativeButton("キャンセル",null).create()
   dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
   dialog.show()
-  return "アプリ内操作の登録／広告の×学習を選択"
+  return "学習・操作報告を選択"
+ }
+ private fun showOverlayDialog(dialog:android.app.AlertDialog){
+  dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+  dialog.show()
+ }
+ private fun confirmNavigationClear(){
+  showOverlayDialog(android.app.AlertDialog.Builder(this).setTitle("回収ボタンの登録をすべて削除？")
+   .setMessage("マップなどの登録を消します。広告の学習と操作報告は残ります。")
+   .setNegativeButton("キャンセル",null).setPositiveButton("削除"){_,_->
+    AppNavigationRules.clear(this);reportNavigationTeaching("回収ボタンの登録を削除しました")
+   }.create())
+ }
+ private fun showOperationReportPrompt(){
+  val memo=android.widget.EditText(this).apply{
+   hint="メモ（任意）";maxLines=3
+   filters=arrayOf(android.text.InputFilter.LengthFilter(240))
+  }
+  showOverlayDialog(android.app.AlertDialog.Builder(this).setTitle("新しい操作を報告")
+   .setMessage("押す位置を選んでから、トリマで実際に押します。操作の前後を診断に保存します。")
+   .setView(memo).setNegativeButton("キャンセル",null)
+   .setPositiveButton("ボタンの位置を選ぶ"){_,_->
+    val text=memo.text.toString()
+    h.postDelayed({teachOverlay.cancelCapture("操作報告に切り替え");operationReporter.begin(text)},250L)
+   }.create())
+ }
+ internal fun offerOperationReportSend(){
+  reportNavigationTeaching("操作報告を保存しました")
+  showOverlayDialog(android.app.AlertDialog.Builder(this).setTitle("操作報告を保存しました")
+   .setMessage("押す前後の画像、選んだ位置、メモが次の診断に入ります。")
+   .setNegativeButton("あとで",null).setPositiveButton("送信画面を開く"){_,_->
+    startActivity(android.content.Intent(this,MainActivity::class.java)
+     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP))
+   }.create())
  }
  private fun showNavigationRegistration(){
   val box=android.widget.LinearLayout(this).apply{orientation=android.widget.LinearLayout.VERTICAL;setPadding(32,12,32,12)}
   val role=android.widget.Spinner(this)
   role.adapter=android.widget.ArrayAdapter(this,android.R.layout.simple_spinner_dropdown_item,AppNavigationRules.Role.values().map{it.title})
   val name=android.widget.EditText(this).apply{hint="操作名（例：宝箱ストックを開く）";setSingleLine()}
-  val source=android.widget.EditText(this).apply{hint="今の画面名（例：MAP）";setSingleLine()}
-  val destination=android.widget.EditText(this).apply{hint="移動先（例：ストック一覧）";setSingleLine()}
-  box.addView(android.widget.TextView(this).apply{text="自動回収で使う用途を選び、名前を付けます。今の画面を登録後、ボタンの位置を1回選択。実画面は押しません。"})
-  listOf(role,name,source,destination).forEach{box.addView(it)}
+  box.addView(android.widget.TextView(this).apply{text="用途を選び、トリマでボタンの位置を1回選びます。名前は任意です。"})
+  listOf(role,name).forEach{box.addView(it)}
   val dialog=android.app.AlertDialog.Builder(this).setTitle("アプリ内の操作を登録").setView(box)
    .setPositiveButton("ボタンの位置を選ぶ"){_,_->
     val selected=AppNavigationRules.Role.values()[role.selectedItemPosition]
-    val definition=AppNavigationRules.definition(selected,name.text.toString(),source.text.toString(),destination.text.toString())
+    val definition=AppNavigationRules.definition(selected,name.text.toString())
     h.postDelayed({teachOverlay.cancelCapture("アプリ内操作の登録へ切り替え")
      reportNavigationTeaching(navigationTeacher.begin(selected,definition))},250L)
    }.setNegativeButton("キャンセル",null).create()
@@ -260,6 +297,7 @@ class PowlAccessibilityService:AccessibilityService(){
  }
  fun isAutomaticOperationRunning():Boolean=autoFlow.isRunning()
  fun startAutomaticOperation():String {
+  if(operationReporter.active)return "操作の報告を保存または中止してから開始してください"
   if(manualHomeComparison.isActive())
    return "指タップ比較の18秒間は自動操作を開始できません。比較終了後に開始してください"
   stopSequence()

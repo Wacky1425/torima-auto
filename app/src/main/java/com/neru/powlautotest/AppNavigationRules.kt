@@ -20,6 +20,11 @@ internal object AppNavigationRules {
  fun definition(role:Role,name:String="",screenName:String="",destination:String="")=Definition(
   NavigationVisualPolicy.label(name,role.title),NavigationVisualPolicy.label(screenName,if(role==Role.BOTTOM)"宝箱の中身" else role.source.name),
   NavigationVisualPolicy.label(destination,when(role){Role.STOCK->"ストック一覧";Role.BOTTOM->"広告";else->"MAP"}))
+ fun registeredSummary(ctx:Context):String=try{
+  val data=JSONObject(export(ctx))
+  Role.values().mapNotNull{role->data.optJSONObject(role.name)?.let{"${role.title}：${it.optString("name",role.title)}"}}
+   .joinToString("\n").ifBlank{"登録済みの回収ボタンはありません"}
+ }catch(_:Exception){"登録を読み込めませんでした"}
  fun title(ctx:Context,role:Role):String=try{JSONObject(export(ctx)).optJSONObject(role.name)?.optString("name")?.ifBlank{role.title}?:role.title}catch(_:Exception){role.title}
  fun recognize(ctx:Context,source:MainScreenPolicy.Screen,p:IntArray,w:Int,h:Int):Boolean=try{
   val top=NavigationVisualPolicy.band(p,w,h,false);val bottom=NavigationVisualPolicy.band(p,w,h,true)

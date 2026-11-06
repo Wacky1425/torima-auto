@@ -194,3 +194,9 @@
 - 広告経路を確認でき、ガチャ・通常画面を除外できる場合に限り、上隅の学習済み×をボタン近傍で照合する経路を追加。周囲の映像が変わっても、実際の×の形と直近2枚、操作時点の広告文脈を確認。広告文脈を確認できないときは従来の判定を維持。
 - 対象：AutoFlow、VisualTemplateModel、VisualLearnedActions、LearnedXPresence、ScreenshotDiagnostics、CaptureSlotPolicy、PowlAccessibilityService。回帰テストはNovemberRegressionTest。次はOPPOで広告×学習とアプリ内登録を各1回、続けて動く広告の×出現前後を実機確認。
 - コード `5ebfc3cc055f108cfd69a6e593bfbd45c03b5622`。DEV #42169309589 / QA #42169309476 成功。QA100015の固定署名ビルドと配布フロー完了。正式版v3.14 / main、保存済み学習データの形式は変更なし。修正版はOPPO未検証。
+
+## 2026-11-06 Torima担当：学習・操作報告と画面の整理
+- `dev/torima`。メインの常時表示を操作バー起動、回収状況、Drive送信中心に変更。代替共有、更新・設定、学習管理、詳細テストは折りたたみ。既存の設定・学習データと診断の保存先は保持。
+- 操作バーの「学習・報告」に、既存学習と別の「新しい操作を報告」を追加。任意メモ→位置を選択→実際に指で操作→操作後を保存。トリマが前面のときに操作バーを除外して撮影。前後と選択位置は診断ZIPの `operation-reports/` に最大5組追加し、既存Driveボタンで明示的に送信。報告を自動操作のルールとして再生しない。
+- 既存の回収ボタン登録は用途と任意の名前だけ。画面名・移動先は既定値を使い、認識条件や回収ループは変更しない。
+- 変更：MainActivity/activity_main、ScreenCollector、PowlAccessibilityService、AppNavigationRules、DiagnosticBundleExporter、OperationReportOverlay/Store。回帰テストはZIPに前後がそろうこと、未完了・古い組を除くこと。次は実機で操作報告→Drive送信を確認。
