@@ -29,8 +29,8 @@ internal object LearnedXPresence {
   fun expect(value:String,now:Long){
    if(key!=value){key=value;since=now;lastAt=0L;matches=0}
   }
-  fun observe(value:String,visible:Boolean,now:Long){
-   if(value!=key)return
+  fun observe(value:String,visible:Boolean?,now:Long){
+   if(value!=key || visible==null)return
    matches=if(!visible)0 else if(lastAt>0L && now-lastAt in 500L..4_000L)matches+1 else 1
    lastAt=now
   }

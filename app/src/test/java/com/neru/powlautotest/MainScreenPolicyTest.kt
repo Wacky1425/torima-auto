@@ -18,6 +18,16 @@ class MainScreenPolicyTest {
    MainScreenPolicy.Label("歩数",130,150),MainScreenPolicy.Label("マップ",270,600))
   assertEquals(MainScreenPolicy.Screen.HOME,MainScreenPolicy.identify(rows,540,1200).screen)
  }
+ @Test fun homeIdentitySurvivesMissingRewardButtonAndAnimatedBanner(){
+  val header=listOf(MainScreenPolicy.Label("移動",40,170),MainScreenPolicy.Label("歩数",130,170))
+  val first=MainScreenPolicy.identify(nav()+header,540,1200)
+  val changed=MainScreenPolicy.identify(nav()+header+listOf(
+   MainScreenPolicy.Label("広告",510,1050),MainScreenPolicy.Label("Google Play",130,1090)),540,1200)
+  assertEquals(MainScreenPolicy.Screen.HOME,first.screen)
+  assertEquals(first.screen,changed.screen)
+  assertEquals(MainScreenPolicy.Screen.UNKNOWN,MainScreenPolicy.identify(listOf(
+   MainScreenPolicy.Label("広告",510,1050)),540,1200).screen)
+ }
  @Test fun contradictionsAndAdWithoutNavigationAreNotMainScreens(){
   val result=MainScreenPolicy.identify(nav("home")+MainScreenPolicy.Label("マップ",270,100),540,1200)
   assertEquals(MainScreenPolicy.Screen.UNKNOWN,result.screen);assertFalse(result.allowVisual)

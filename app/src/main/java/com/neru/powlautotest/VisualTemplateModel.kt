@@ -66,7 +66,7 @@ internal object VisualTemplateModel {
  }
  // The moving-ad path uses a tighter position and stronger local match,
  // and requires the glyph itself on this frame. The caller proves ad context.
- fun searchLocalX(rule:Rule,pixels:IntArray,width:Int,height:Int):Hit?{
+ fun searchLocalX(rule:Rule,pixels:IntArray,width:Int,height:Int,allowSkip:Boolean=false):Hit?{
   if(width!=rule.width || kotlin.math.abs(height-rule.height)>8)return null
   var best:Hit?=null
   for(dy in -8..8 step 4)for(dx in -8..8 step 4){
@@ -74,7 +74,8 @@ internal object VisualTemplateModel {
    val local=patch(pixels,width,height,x,y,NEAR_RADIUS,NEAR_GRID)?:continue
    val score=similarity(rule.near,local.data)
    if(local.texture<MIN_LOCAL_TEXTURE || score<850 || score<=(best?.nearScore?:0))continue
-   if(!LearnedXPresence.visible(pixels,width,height,x,y,8))continue
+   if(!LearnedXPresence.visible(pixels,width,height,x,y,8) &&
+     !(allowSkip && SkipGlyphPresence.dismissVisible(pixels,width,height,x,y,true)))continue
    best=Hit(x,y,score,0,score)
   }
   return best

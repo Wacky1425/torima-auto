@@ -397,6 +397,7 @@ class AutoFlow(
   statusCallback("$value\n$progress")
  }
  private fun next(delay:Long=POLL_MS) {
+  h.removeCallbacks(poll)
   if(running)h.postDelayed(poll,delay)
  }
  private fun readCurrent():Snapshot?{
@@ -1220,6 +1221,12 @@ class AutoFlow(
     "現在タブ=${activeTab.name} / ボタン候補=${above.size} / " +
      "幅広ボタン=${wideButtons.size} / 下のボタン=${below.size} / " +
      "または=${separator!=null} / タンク=$tank")
+  }
+  // A transiently hidden reward control is still HOME, not an advertisement.
+  // In particular the collector can obscure the count after a recovery swipe.
+  if(mainScreen(snap).screen==MainScreenPolicy.Screen.HOME && !blockedRewardUi(snap)){
+   return Decision("HOME_WAIT","HOME／紫ボタンを再確認","HOME_WAIT:MAIN_SCREEN",null,
+    "上下のHOME表示を確認。現在の紫ボタンを特定するまで再判定／残り=${currentRemaining(snap)}")
   }
   val skipTargets=currentSkipTargets(snap)
   if(skipTargets.size==1){
@@ -2552,6 +2559,9 @@ class AutoFlow(
    service.probeLearnedX(point.x,point.y,decision.kind=="LEARNED_VISUAL" && allowsMovingAdX(snapshot),skip){visible,freshMatch->
     learnedXPending=false
     if(!running || generation!=expected || learnedXGate.key!=key)return@probeLearnedX
+    // No frame is not evidence of disappearance (another capture may own the slot).
+    // Preserve the last observation's original timestamp; never refresh it here.
+    if(visible==null){next(900);return@probeLearnedX}
     val stamp=SystemClock.elapsedRealtime()
     val freshScene=decision.kind!="LEARNED_VISUAL" ||
      (freshMatch!=null && (!freshMatch.localOnly || readCurrent()?.let{allowsMovingAdX(it)}==true) && key=="LEARNED_VISUAL:${freshMatch.id}" &&

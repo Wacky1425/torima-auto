@@ -136,7 +136,7 @@ internal class VisualLearnedActions(private val ctx:Context){
    val kind=item.optString("kind")
    val hit=VisualTemplateModel.search(rule,pixels,width,height)?:
     (if(allowLocalX && kind=="TOP_CLOSE_OR_SKIP")
-     VisualTemplateModel.searchLocalX(rule,pixels,width,height) else null)?:continue
+     VisualTemplateModel.searchLocalX(rule,pixels,width,height,allowSkip=true) else null)?:continue
    // The rule identifies a close-like region, not a random screen center.
    val px=hit.x.toDouble()/width
    val py=hit.y.toDouble()/height

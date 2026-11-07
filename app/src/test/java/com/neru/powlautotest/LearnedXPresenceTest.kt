@@ -14,6 +14,19 @@ class LearnedXPresenceTest {
   g.observe("rule",false,3700)
   assertFalse(g.ready("rule",3701))
  }
+ @Test fun unavailableCaptureDoesNotEraseOrRefreshActualEvidence(){
+  val g=LearnedXPresence.Gate()
+  g.expect("skip",1000)
+  g.observe("skip",true,2000)
+  g.observe("skip",null,2800)
+  g.observe("skip",true,3500)
+  assertTrue(g.ready("skip",3600))
+  g.observe("skip",null,4500)
+  assertFalse(g.ready("skip",4501)) // missing frame cannot extend tap authorization
+  g.observe("skip",false,4600)
+  g.observe("skip",true,6100)
+  assertFalse(g.ready("skip",6200)) // an actual disappearance still resets it
+ }
  @Test fun rejectsOldOrDifferentRuleEvidence(){
   val g=LearnedXPresence.Gate()
   g.expect("a",1000)

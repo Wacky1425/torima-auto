@@ -31,6 +31,27 @@ class SkipGlyphPresenceTest {
   val play=frame(false);draw(play,false,bar=false)
   assertFalse(SkipGlyphPresence.visible(play,w,h,504,90))
  }
+ @Test fun movingAdCanRevalidateTaughtSkipWithoutMatchingTheWholeCreative(){
+  val x=504;val y=90
+  fun creative(moved:Boolean,button:Boolean):IntArray{
+   val p=frame(false)
+   for(yy in 0 until h)for(xx in 0 until w){
+    if(kotlin.math.abs(xx-x)<=33 && kotlin.math.abs(yy-y)<=33)continue
+    if((xx<x)==moved)p[yy*w+xx]=0xff111111.toInt()
+   }
+   // A stable circular control rim supplies the taught local texture.
+   for(dy in -23..23)for(dx in -23..23)
+    if(dx*dx+dy*dy in 400..529)p[(y+dy)*w+x+dx]=0xff333333.toInt()
+   if(button)draw(p,false)
+   return p
+  }
+  val rule=checkNotNull(VisualTemplateModel.capture(creative(false,true),w,h,x,y))
+  val current=creative(true,true)
+  assertNull(VisualTemplateModel.search(rule,current,w,h))
+  assertNull(VisualTemplateModel.searchLocalX(rule,current,w,h))
+  assertNotNull(VisualTemplateModel.searchLocalX(rule,current,w,h,allowSkip=true))
+  assertNull(VisualTemplateModel.searchLocalX(rule,creative(true,false),w,h,allowSkip=true))
+ }
  @Test fun learnedSkipNeedsIndependentAdContextAndCannotEscapeGacha(){
   fun allowed(kind:String="LEARNED_VISUAL",registered:Boolean=true,ad:Boolean=true,blocked:Boolean=false,x:Int=1008,y:Int=180)=
    RewardAdPolicy.learnedSkipAllowed(kind,registered,ad,blocked,x,y,1080,2412)
