@@ -2577,7 +2577,9 @@ class AutoFlow(
   if(currentSkipAt(snap,point))return true
   val screen=service.resources.displayMetrics
   val visual=visualLearned
-  val proven=trustedAdEvidence(snap)!=null || videoAdSessionActive ||
+  val exactAd=DismissProbePolicy.exactRegisteredAd(decision.kind,decision.registeredLearned,
+   decision.exactLearned,mainScreen(snap).screen!=MainScreenPolicy.Screen.UNKNOWN,blockedRewardUi(snap))
+  val proven=trustedAdEvidence(snap)!=null || videoAdSessionActive || exactAd ||
    (decision.kind=="LEARNED_VISUAL" && visual!=null && !visual.localOnly && visual.confidence>=1750)
   val labels=snap.nodes.filter{it.node.isVisibleToUser}.flatMap{listOf(it.text,it.desc)}
   return RewardAdPolicy.learnedSkipAllowed(decision.kind,decision.registeredLearned,proven,
@@ -2608,7 +2610,9 @@ class AutoFlow(
   if(point==null){next(900);return false}
   // A taught finger point can be near the edge of a valid button. Its glyph
   // belongs to the CURRENT control, not necessarily directly under that point.
-  val glyphPoint=decision.target?.rect?.let{Point(it.centerX(),it.centerY())}?:point
+  val probe=DismissProbePolicy.point(DismissProbePolicy.Point(point.x,point.y),
+   decision.target?.rect?.let{DismissProbePolicy.Box(it.left,it.top,it.right,it.bottom)})
+  val glyphPoint=Point(probe.x,probe.y)
   if(!learnedXPending && now-learnedXLastRequest>=1_400L){
    learnedXPending=true;learnedXLastRequest=now
    val expected=generation
