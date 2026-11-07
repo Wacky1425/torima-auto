@@ -315,6 +315,31 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   }
  }
 
+ /** Detect only a currently visible HOME tank reward button, in display coordinates. */
+ fun probeHomeReward(done:(HomeRewardDetector.Box?)->Unit){
+  val now=SystemClock.elapsedRealtime()
+  if(cleanReserved() || !captureSchedule.allowProbe() || now-lastProbeRequest<1300L){done(null);return}
+  lastProbeRequest=now
+  captureWithoutControlBar{bitmap,_->
+   if(bitmap==null){done(null);return@captureWithoutControlBar}
+   val source=MainScreenReader.read(service.rootInActiveWindow).screen==MainScreenPolicy.Screen.HOME
+   val result=try{
+    if(!source)null else {
+     val w=540;val h=(bitmap.height.toLong()*w/bitmap.width).toInt()
+     val small=Bitmap.createScaledBitmap(bitmap,w,h,true)
+     try{
+      val pixels=IntArray(w*h);small.getPixels(pixels,0,w,0,0,w,h)
+      HomeRewardDetector.detect(pixels,w,h)?.let{
+       HomeRewardDetector.Box(it.left*bitmap.width/w,it.top*bitmap.height/h,
+        it.right*bitmap.width/w,it.bottom*bitmap.height/h)
+      }
+     }finally{if(small!==bitmap)small.recycle()}
+    }
+   }catch(_:Exception){null}finally{bitmap.recycle()}
+   done(result)
+  }
+ }
+
  /** A local before-input glyph check. It never clicks, saves, or trusts scene identity. */
  fun probeLearnedX(x:Int,y:Int,allowLocalX:Boolean,allowSkip:Boolean,done:(Boolean?,VisualLearnedActions.Match?)->Unit){
   val now=SystemClock.elapsedRealtime()

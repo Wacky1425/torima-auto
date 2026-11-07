@@ -155,11 +155,48 @@ class AutoFlow(
   val detail:String="",
   val touch:Point?=null,
   val exactLearned:Boolean=false,
-  val registeredLearned:Boolean=false
+  val registeredLearned:Boolean=false,
+  val visualHome:Boolean=false
  )
 
+ private var homeImage:HomeRewardDetector.Box?=null
+ private var homeImageAt=0L
+ private var homeImageReads=0
+ private var homeImagePending=false
+ private var homeImageRequested=0L
+ private fun visualHomeTarget(snap:Snapshot):Item? {
+  val hit=homeImage?:return null
+  if(homeImageReads<2 || SystemClock.elapsedRealtime()-homeImageAt !in 0L..1200L ||
+   mainScreen(snap).screen!=MainScreenPolicy.Screen.HOME || blockedRewardUi(snap) ||
+   currentRemaining(snap)==0 || rewardPhase!=RewardTabPolicy.Phase.MOVE)return null
+  if(snap.nodes.any{it.node.isVisibleToUser && it.node.isClickable && !it.node.isEnabled &&
+    it.rect.contains((hit.left+hit.right)/2,(hit.top+hit.bottom)/2) &&
+    it.rect.width()>=service.resources.displayMetrics.widthPixels*68/100})return null
+  return Item(snap.root,"画像で確認した紫ボタン","",Rect(hit.left,hit.top,hit.right,hit.bottom))
+ }
+ private fun probeHomeReward(now:Long){
+  if(homeImagePending || now-homeImageRequested<1600L)return
+  homeImagePending=true;homeImageRequested=now
+  val expected=generation
+  service.probeHomeReward{hit->
+   homeImagePending=false
+   if(!running || generation!=expected)return@probeHomeReward
+   val stamp=SystemClock.elapsedRealtime();val previous=homeImage
+   val current=readCurrent()
+   val valid=current!=null && mainScreen(current).screen==MainScreenPolicy.Screen.HOME &&
+    !blockedRewardUi(current) && currentRemaining(current)!=0
+   homeImageReads=if(hit==null || !valid)0 else if(previous!=null &&
+    stamp-homeImageAt in 500L..4000L && HomeRewardDetector.same(previous,hit))homeImageReads+1 else 1
+   homeImage=if(valid)hit else null;homeImageAt=stamp
+   DiagnosticJournal.record(service,"home_image","button",org.json.JSONObject()
+    .put("found",homeImage!=null).put("frames",homeImageReads)
+    .put("bounds",homeImage?.toString()))
+   next(100)
+  }
+ }
  private fun resetLiveVisual(){
   learnedXGate.reset()
+  homeImage=null;homeImageReads=0;homeImageAt=0L
   mapVisualOnMap=false;mapVisualAt=0L
   liveVisualAt=0L;liveVisualSince=0L;liveVisualCount=0
   liveVisual=null;visualProbePending=false;visualProbeLast=0L
@@ -1159,12 +1196,14 @@ class AutoFlow(
   // New mode has one reward control and no "または". Never fall back to
   // a remembered screen coordinate: derive its bounds between current anchors.
   if(taipaAnchors(snap)!=null){
-   val button=taipaVideoButton(snap,true)
+   val nodeButton=taipaVideoButton(snap,true)
+   val button=nodeButton?:visualHomeTarget(snap)
    val remaining=currentRemaining(snap)
    return Decision(if(button!=null && remaining!=0)"HOME" else "HOME_WAIT",
-    "タイパモード／紫ボタン","HOME:MOVE:TAIPA:$remaining",
+    "タイパモード／紫ボタン","HOME:MOVE:TAIPA:${if(nodeButton==null) "IMAGE:" else ""}$remaining",
     if(remaining!=0)button else null,
-    "HOME上下表示＋タイパ表示＋残回数を確認。現在のボタン候補=${button!=null}／残り=$remaining")
+    "HOME上下表示＋タイパ表示＋残回数を確認。現在のボタン候補=${button!=null}／残り=$remaining",
+    visualHome=button!=null && nodeButton==null)
   }
   // Identify the top reward-video button from its position above the "または"
   // separator, not fixed vertical pixels. The two large buttons must be distinct.
@@ -1222,11 +1261,16 @@ class AutoFlow(
      "幅広ボタン=${wideButtons.size} / 下のボタン=${below.size} / " +
      "または=${separator!=null} / タンク=$tank")
   }
+  val imageButton=visualHomeTarget(snap)
+  if(imageButton!=null)return Decision("HOME","タイパ／画像で確認した紫ボタン",
+   "HOME:MOVE:TAIPA:IMAGE:${currentRemaining(snap)}",imageButton,
+   "現在のHOME＋移動選択＋紫ボタンと上下の黄色表示を画像2枚で確認",
+   visualHome=true)
   // A transiently hidden reward control is still HOME, not an advertisement.
   // In particular the collector can obscure the count after a recovery swipe.
   if(mainScreen(snap).screen==MainScreenPolicy.Screen.HOME && !blockedRewardUi(snap)){
-   return Decision("HOME_WAIT","HOME／紫ボタンを再確認","HOME_WAIT:MAIN_SCREEN",null,
-    "上下のHOME表示を確認。現在の紫ボタンを特定するまで再判定／残り=${currentRemaining(snap)}")
+   return Decision("HOME_WAIT","HOME／紫ボタンを画像で確認中","HOME_WAIT:MAIN_SCREEN",null,
+    "上下のHOME表示を確認。現在の紫ボタンを画像で確認 ${homeImageReads}/2枚／残り=${currentRemaining(snap)}")
   }
   val skipTargets=currentSkipTargets(snap)
   if(skipTargets.size==1){
@@ -1391,10 +1435,17 @@ class AutoFlow(
    homeTrace("dispatch",trial.id,
     "mode=${trial.mode} xy=(${xy.x},${xy.y}) freshBounds=${rect.toShortString()} " +
      "freshNodes=${freshSnap?.count} remaining=${fresh.detail.take(100)}")
+   if(fresh.visualHome && trial.mode!=HomeTouchTrials.Mode.GESTURE){
+    homeTrialInFlight=false
+    HomeTrialJournal.outcome(service,trial.id,HomeOutcomePolicy.ABORTED,
+     "画像で取得したボタンにはノード/親クリックを使わず、次のジェスチャーで再確認")
+    return@prepareHomeTouch
+   }
    when(trial.mode){
     HomeTouchTrials.Mode.GESTURE->{
      update("$label／タッチ (${xy.x},${xy.y}) ${trial.durationMs}ms")
      gestureTap(rect,"HOME試行 ${trial.id}",trial.durationMs,xy,trial.tinyDriftPx)
+     if(fresh.visualHome){homeImage=null;homeImageReads=0}
     }
     HomeTouchTrials.Mode.NODE_CLICK->{
      val ok=active.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
@@ -1630,6 +1681,7 @@ class AutoFlow(
    homeExperimentStartedAt=now
    homeExperimentStartingCount=CollectionTaskPolicy.remaining(decision.detail)
    homeTrialList=HomeTouchTrials.ordered(HomeTouchProfile.bestTrialId(service))
+   if(decision.visualHome)homeTrialList=homeTrialList.filter{it.mode==HomeTouchTrials.Mode.GESTURE}
    if(homeRecoveryAttempts>0 && HomeRecoveryPolicy.enabled(service))
     homeTrialList=homeTrialList.take(HomeRecoveryPolicy.POST_RESTART_TRIALS)
    homeTrialIndex=0
@@ -1669,7 +1721,7 @@ class AutoFlow(
    val sinceLast=if(homeLastTrialAt>0L) now-homeLastTrialAt else 0L
    // One failed HOME tap -> a short swipe-up before *any* second button
    // hypothesis or force-stop. Do not count a mere gesture callback as success.
-   if(HomeSwipeRecoveryPolicy.shouldTry(
+   if(!decision.visualHome && HomeSwipeRecoveryPolicy.shouldTry(
      HomeRecoveryPolicy.enabled(service),homeRecoveryAttempts,
      homeSwipeAttempted,decision.kind,decision.target!=null,
      homeTrialIndex,homeTrialInFlight,sinceLast)){
@@ -2655,6 +2707,8 @@ class AutoFlow(
     }
    }
    val initial=choose(snapshot)
+   if(initial.kind=="HOME_WAIT" && main.screen==MainScreenPolicy.Screen.HOME &&
+    !blockedRewardUi(snapshot) && rewardPhase==RewardTabPolicy.Phase.MOVE)probeHomeReward(now)
    if(initial.kind in listOf("UNKNOWN","OPAQUE"))handleReportedRetry(snapshot,now)
    if(!requiresVisibleLearnedX(initial) && (gachaPhase==GachaSafety.Phase.AWAIT_REWARD ||
     initial.kind in listOf("UNKNOWN","OPAQUE","AD_VISUAL_X","AD_VISUAL_NEXT") ||
