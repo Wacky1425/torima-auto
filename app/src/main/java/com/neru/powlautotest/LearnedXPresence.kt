@@ -34,6 +34,7 @@ internal object LearnedXPresence {
    matches=if(!visible)0 else if(lastAt>0L && now-lastAt in 500L..4_000L)matches+1 else 1
    lastAt=now
   }
+  fun observedFrames(value:String)=if(value==key)matches else 0
   fun ready(value:String,now:Long)=value==key && matches>=2 && now-lastAt in 0L..900L
   fun reset(){key="";since=0L;lastAt=0L;matches=0}
  }

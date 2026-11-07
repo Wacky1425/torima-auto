@@ -24,6 +24,16 @@ class SkipGlyphPresenceTest {
    assertTrue(SkipGlyphPresence.dismissVisible(p,w,h,504,90,true))
   }
  }
+ @Test fun fingerPointNearControlEdgeDoesNotHideTheCenteredGlyph(){
+  val p=frame(false);draw(p,false)
+  // Stored 1080px node: (972,144)-(1044,216), tap=(1008,148).
+  // On the 540px frame the valid tap is at y=74, but the glyph is at y=90.
+  assertTrue(SkipGlyphPresence.visible(p,w,h,504,74))
+  assertTrue(SkipGlyphPresence.visible(p,w,h,486,90))
+  assertTrue(SkipGlyphPresence.visible(p,w,h,522,90))
+  assertTrue(SkipGlyphPresence.visible(p,w,h,504,108))
+  assertFalse(SkipGlyphPresence.visible(p,w,h,504,145))
+ }
  @Test fun rejectsEmptyRectangleAndPlayWithoutStopBar(){
   assertFalse(SkipGlyphPresence.visible(frame(false),w,h,504,90))
   val square=frame(false);draw(square,false,square=true)

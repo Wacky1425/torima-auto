@@ -110,6 +110,7 @@ class AutoFlow(
  private var visualProbeLast=0L
  // A visual X with no SDK metadata needs a known video-ad entry path.
  private val learnedXGate=LearnedXPresence.Gate()
+ private var learnedXNote=""
  private var learnedXPending=false
  private var learnedXLastRequest=0L
  private var videoAdSessionActive=false
@@ -2596,6 +2597,7 @@ class AutoFlow(
  }
  private fun confirmLearnedX(decision:Decision,snapshot:Snapshot,now:Long):Boolean {
   val key=decision.key
+  if(learnedXGate.key!=key)learnedXNote=""
   learnedXGate.expect(key,now)
   if(learnedXGate.ready(key,now))return true
   if(now-learnedXGate.since>=120_000L){
@@ -2604,16 +2606,19 @@ class AutoFlow(
   }
   val point=decision.touch?:decision.target?.rect?.let{Point(it.centerX(),it.centerY())}
   if(point==null){next(900);return false}
+  // A taught finger point can be near the edge of a valid button. Its glyph
+  // belongs to the CURRENT control, not necessarily directly under that point.
+  val glyphPoint=decision.target?.rect?.let{Point(it.centerX(),it.centerY())}?:point
   if(!learnedXPending && now-learnedXLastRequest>=1_400L){
    learnedXPending=true;learnedXLastRequest=now
    val expected=generation
-   val skip=mayProbeSkip(decision,snapshot,point)
-   service.probeLearnedX(point.x,point.y,decision.kind=="LEARNED_VISUAL" && allowsMovingAdX(snapshot),skip){visible,freshMatch->
+   val skip=mayProbeSkip(decision,snapshot,glyphPoint)
+   service.probeLearnedX(glyphPoint.x,glyphPoint.y,decision.kind=="LEARNED_VISUAL" && allowsMovingAdX(snapshot),skip){visible,freshMatch->
     learnedXPending=false
     if(!running || generation!=expected || learnedXGate.key!=key)return@probeLearnedX
     // No frame is not evidence of disappearance (another capture may own the slot).
     // Preserve the last observation's original timestamp; never refresh it here.
-    if(visible==null){next(900);return@probeLearnedX}
+    if(visible==null){learnedXNote="撮影待ち。図形の確認は未完了";next(900);return@probeLearnedX}
     val stamp=SystemClock.elapsedRealtime()
     val freshScene=decision.kind!="LEARNED_VISUAL" ||
      (freshMatch!=null && (!freshMatch.localOnly || readCurrent()?.let{allowsMovingAdX(it)}==true) && key=="LEARNED_VISUAL:${freshMatch.id}" &&
@@ -2623,17 +2628,24 @@ class AutoFlow(
      if(freshScene)visualLearnedCount++ else visualLearnedCount=0
     }
     val current=readCurrent()
-    val sameControl=current!=null && (if(skip)mayProbeSkip(decision,current,point)
-     else !currentSkipAt(current,point))
+    val sameControl=current!=null && (if(skip)mayProbeSkip(decision,current,glyphPoint)
+     else !currentSkipAt(current,glyphPoint))
     learnedXGate.observe(key,visible==true && freshScene && sameControl,stamp)
+    learnedXNote=when{
+     !visible->if(decision.target!=null)"ボタン中央の×／スキップがまだ見えません" else "登録位置の×／スキップがまだ見えません"
+     !freshScene->"図形は確認。登録画像との再照合中"
+     !sameControl->"図形は確認。現在の広告画面を再確認中"
+     else->"現在の図形を${learnedXGate.observedFrames(key)}/2枚で確認"
+    }
     DiagnosticJournal.record(service,"learned_guard","x_observed",org.json.JSONObject()
      .put("key",key).put("visible",visible?:org.json.JSONObject.NULL).put("freshScene",freshScene)
      .put("control",if(skip)"X_OR_SKIP_GLYPH" else "X_GLYPH").put("sameControl",sameControl)
-     .put("x",point.x).put("y",point.y))
+     .put("x",point.x).put("y",point.y)
+     .put("glyphX",glyphPoint.x).put("glyphY",glyphPoint.y))
     next(100)
    }
   }
-  update("広告の×／スキップを確認中：ボタンが続けて見えたら押します")
+  update("広告の×／スキップを確認中：${learnedXNote.ifBlank{"現在のボタンを2枚の画像で確認します"}}")
   next(900)
   return false
  }
@@ -2815,7 +2827,7 @@ class AutoFlow(
      LearnedClosePolicy.STABLE_FOR_MS else 1_700L
     if(now-verifiedAdSince<stableWait){
      update(if(decision.registeredLearned)
-      "登録済み操作を照合完了。画面安定を約1.4秒確認してからタップ"
+      "登録した操作の候補が一致。現在の×／スキップ表示を確認してからタップ"
      else "閉じる操作の安定待ち：$proofSource。1.7秒継続してから操作")
      next(850)
      return

@@ -2,14 +2,14 @@ package com.neru.powlautotest
 
 /** Outlined triangle + vertical stop bar (▷|). Only inspected near a verified control. */
 internal object SkipGlyphPresence {
- fun visible(p:IntArray,w:Int,h:Int,cx:Int,cy:Int):Boolean{
+ fun visible(p:IntArray,w:Int,h:Int,cx:Int,cy:Int,tolerance:Int=22):Boolean{
   if(w<300 || h<450 || p.size!=w*h || cx !in 0 until w || cy !in 0 until h)return false
   fun gray(x:Int,y:Int):Int{
    val c=p[y*w+x]
    return ((c ushr 16 and 255)*30+(c ushr 8 and 255)*59+(c and 255)*11)/100
   }
-  for(y in maxOf(20,cy-10)..minOf(h-21,cy+10))
-   for(x in maxOf(6,cx-20)..minOf(w-40,cx+4))
+  for(y in maxOf(20,cy-tolerance)..minOf(h-21,cy+tolerance))
+   for(x in maxOf(6,cx-tolerance-12)..minOf(w-40,cx+tolerance))
     for(r in 5..9)for(gap in 3..6)for(inverse in listOf(false,true)){
      val tip=x+2*r-1;val bar=tip+gap
      val bg=gray(x-4,y)
