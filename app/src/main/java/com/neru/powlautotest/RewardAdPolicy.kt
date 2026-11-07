@@ -19,6 +19,13 @@ internal object RewardAdPolicy {
    right-left in 20..(w*30/100) && bottom-top in 20..(h*12/100) &&
    (right<=w*25/100 || left>=w*70/100)
 
+ fun learnedSkipAllowed(kind:String,registered:Boolean,adProven:Boolean,
+  blocked:Boolean,x:Int,y:Int,w:Int,h:Int):Boolean =
+  registered && adProven && !blocked &&
+   kind in setOf("LEARNED_VISUAL","LEARNED_ICON","LEARNED","LEARNED_TEXT") &&
+   w>0 && h>0 && y in 0..h*20/100 &&
+   (x in 0..w*25/100 || x in w*70/100 until w)
+
  class AdAfterResult {
   private var since=0L
   private var samples=0

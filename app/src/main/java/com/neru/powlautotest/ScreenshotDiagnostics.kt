@@ -327,9 +327,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
     val small=Bitmap.createScaledBitmap(bitmap,w,h,true)
     try{
      val pixels=IntArray(w*h);small.getPixels(pixels,0,w,0,0,w,h)
-     Pair(if(allowSkip)
-      OverlayIconDetector.skipVisibleAt(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height)
-     else LearnedXPresence.visible(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height),
+     Pair(SkipGlyphPresence.dismissVisible(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height,allowSkip),
       service.matchVisualLearning(pixels,w,h,allowLocalX)?.let{it.copy(x=it.x*bitmap.width/w,y=it.y*bitmap.height/h)})
     }finally{if(small!==bitmap)small.recycle()}
    }catch(_:Exception){null}finally{bitmap.recycle()}

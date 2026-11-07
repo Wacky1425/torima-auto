@@ -2513,6 +2513,19 @@ class AutoFlow(
  private fun currentSkipAt(snap:Snapshot,point:Point):Boolean =
   currentSkipTargets(snap).any{it.rect.contains(point.x,point.y)}
 
+ private fun mayProbeSkip(decision:Decision,snap:Snapshot,point:Point):Boolean{
+  if(currentSkipAt(snap,point))return true
+  val screen=service.resources.displayMetrics
+  val visual=visualLearned
+  val proven=trustedAdEvidence(snap)!=null || videoAdSessionActive ||
+   (decision.kind=="LEARNED_VISUAL" && visual!=null && !visual.localOnly && visual.confidence>=1750)
+  val labels=snap.nodes.filter{it.node.isVisibleToUser}.flatMap{listOf(it.text,it.desc)}
+  return RewardAdPolicy.learnedSkipAllowed(decision.kind,decision.registeredLearned,proven,
+   StableAdClosePolicy.hasGachaOrLoadingText(labels) ||
+    gachaPhase in listOf(GachaSafety.Phase.AWAIT_CARDS,GachaSafety.Phase.AWAIT_RESULT),
+   point.x,point.y,screen.widthPixels,screen.heightPixels)
+ }
+
  private fun requiresVisibleLearnedX(decision:Decision):Boolean {
   if(decision.kind in listOf("AD_SKIP","LEARNED_ICON","LEARNED_VISUAL"))return true
   if(decision.kind !in listOf("LEARNED","LEARNED_TEXT","AD_CLOSE"))return false
@@ -2535,7 +2548,7 @@ class AutoFlow(
   if(!learnedXPending && now-learnedXLastRequest>=1_400L){
    learnedXPending=true;learnedXLastRequest=now
    val expected=generation
-   val skip=currentSkipAt(snapshot,point)
+   val skip=mayProbeSkip(decision,snapshot,point)
    service.probeLearnedX(point.x,point.y,decision.kind=="LEARNED_VISUAL" && allowsMovingAdX(snapshot),skip){visible,freshMatch->
     learnedXPending=false
     if(!running || generation!=expected || learnedXGate.key!=key)return@probeLearnedX
@@ -2548,12 +2561,12 @@ class AutoFlow(
      if(freshScene)visualLearnedCount++ else visualLearnedCount=0
     }
     val current=readCurrent()
-    val sameControl=current!=null && (if(skip)currentSkipAt(current,point)
+    val sameControl=current!=null && (if(skip)mayProbeSkip(decision,current,point)
      else !currentSkipAt(current,point))
     learnedXGate.observe(key,visible==true && freshScene && sameControl,stamp)
     DiagnosticJournal.record(service,"learned_guard","x_observed",org.json.JSONObject()
      .put("key",key).put("visible",visible?:org.json.JSONObject.NULL).put("freshScene",freshScene)
-     .put("control",if(skip)"SKIP_GLYPH" else "X_GLYPH").put("sameControl",sameControl)
+     .put("control",if(skip)"X_OR_SKIP_GLYPH" else "X_GLYPH").put("sameControl",sameControl)
      .put("x",point.x).put("y",point.y))
     next(100)
    }
