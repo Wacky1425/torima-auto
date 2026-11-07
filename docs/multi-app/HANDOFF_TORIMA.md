@@ -209,3 +209,4 @@
 - 左上のSkipというノード情報だけでは、スクショではボタンが出ていない場面もある。現行の小さい上隅Skipノード＋広告SDK構造＋タイマー不存在＋現在画像の二重矢印を2回確認する経路を追加。×と矢印を混同しない。文字だけのSkipの画像認識は未対応。
 - ガチャ結果後にapp-interstitial-slot/mys-creative/mys-wrapper/application-canvas/playable-containerが揃う広告構造を追加。AWAIT_REWARDで明確な広告を2回確認し、元のガチャ・通常画面がなければ、閉じる候補がまだなくても広告待機へ移る。AWAIT_CARDS/AWAIT_RESULT保護は解除しない。
 - 対象：AutoFlow、RewardAdPolicy、ReportedRetryModel、OperationReportStore、OverlayIconDetector、ScreenshotDiagnostics、PowlAccessibilityService、StableAdClosePolicy。単体回帰：新旧再チャレンジ／曖昧ラベル拒否、SDKの必要構造、ガチャ段階と反復証拠、矢印とX・空白の区別、3領域照合と動く中央の独立性。修正版OPPOは未検証。
+- コード `0cde8b89b704af4dcff2de27eb9546ad4f693205`。QA100017、QA #42352184042 / DEV #42352184111 成功。公開APK 2,939,208 bytes、更新manifestのversionCode/sourceSha/SHA256と匿名取得APKを照合。正式latestはv3.14。integration/stagingとの差分で共通/統合/設定/CIに変更なし。次は同じQAへ上書きし、登録し直さず再チャレンジ→広告→結果の流れを実機確認。失敗時は同じDriveへ送信。
