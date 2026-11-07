@@ -28,12 +28,25 @@ class SkipGlyphPresenceTest {
   val p=frame(false);draw(p,false)
   val control=DismissProbePolicy.Box(486,72,522,108)
   val tap=DismissProbePolicy.Point(504,74)
-  assertFalse(SkipGlyphPresence.visible(p,w,h,tap.x,tap.y))
+  assertTrue(SkipGlyphPresence.visible(p,w,h,tap.x,tap.y))
   val probe=DismissProbePolicy.point(tap,control)
   assertEquals(DismissProbePolicy.Point(504,90),probe)
   assertTrue(SkipGlyphPresence.visible(p,w,h,probe.x,probe.y))
   assertEquals(DismissProbePolicy.Point(504,74),tap)
   assertEquals(tap,DismissProbePolicy.point(tap,null))
+ }
+ @Test fun controlCenterCanBeOffsetFromTheActualSkipIcon(){
+  val p=frame(false);draw(p,false)
+  for((x,y) in listOf(492 to 96,496 to 97,504 to 74,486 to 90,522 to 90))
+   assertTrue("probe=$x,$y",SkipGlyphPresence.visible(p,w,h,x,y))
+  assertFalse(SkipGlyphPresence.visible(p,w,h,504,145))
+ }
+ @Test fun rejectsAnEmptyCircularRimAtEveryNearbyProbePosition(){
+  val p=frame(false)
+  for(dy in -23..23)for(dx in -23..23)
+   if(dx*dx+dy*dy in 400..529)p[(90+dy)*w+504+dx]=0xff333333.toInt()
+  for(dy in -8..8 step 4)for(dx in -8..8 step 4)
+   assertFalse("offset=$dx,$dy",SkipGlyphPresence.visible(p,w,h,504+dx,90+dy))
  }
  @Test fun rejectsEmptyRectangleAndPlayWithoutStopBar(){
   assertFalse(SkipGlyphPresence.visible(frame(false),w,h,504,90))

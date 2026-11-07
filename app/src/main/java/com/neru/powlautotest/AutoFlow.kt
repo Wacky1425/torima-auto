@@ -2555,8 +2555,9 @@ class AutoFlow(
    }finally{image.recycle()}
   }
  }
- private fun currentSkipTargets(snap:Snapshot):List<Item>{
-  if(trustedAdEvidence(snap)==null)return emptyList()
+ private fun currentSkipTargets(snap:Snapshot,requireAdProof:Boolean=true):List<Item>{
+  if((requireAdProof && trustedAdEvidence(snap)==null) ||
+   mainScreen(snap).screen!=MainScreenPolicy.Screen.UNKNOWN)return emptyList()
   val visible=snap.nodes.filter{it.node.isVisibleToUser}
   if(StableAdClosePolicy.hasGachaOrLoadingText(visible.flatMap{listOf(it.text,it.desc)}))return emptyList()
   val screen=service.resources.displayMetrics
@@ -2575,6 +2576,12 @@ class AutoFlow(
 
  private fun mayProbeSkip(decision:Decision,snap:Snapshot,point:Point):Boolean{
   if(currentSkipAt(snap,point))return true
+  // A currently matched user-taught Skip caption is specific evidence even
+  // when the creative changed enough to lose the old exact screen signature.
+  if(DismissProbePolicy.registeredCaptionSkip(decision.kind,decision.registeredLearned) &&
+   decision.target!=null && currentSkipTargets(snap,false).any{
+    it.rect==decision.target.rect && it.rect.contains(point.x,point.y)
+   })return true
   val screen=service.resources.displayMetrics
   val visual=visualLearned
   val exactAd=DismissProbePolicy.exactRegisteredAd(decision.kind,decision.registeredLearned,
@@ -2636,7 +2643,8 @@ class AutoFlow(
      else !currentSkipAt(current,glyphPoint))
     learnedXGate.observe(key,visible==true && freshScene && sameControl,stamp)
     learnedXNote=when{
-     !visible->if(decision.target!=null)"ボタン中央の×／スキップがまだ見えません" else "登録位置の×／スキップがまだ見えません"
+     !visible->if(!skip)"現在の×は未確認。スキップは広告画面の確認待ち" else
+      "${if(glyphPoint.x<service.resources.displayMetrics.widthPixels/2) "左" else "右"}側の確認位置で×／スキップがまだ見えません"
      !freshScene->"図形は確認。登録画像との再照合中"
      !sameControl->"図形は確認。現在の広告画面を再確認中"
      else->"現在の図形を${learnedXGate.observedFrames(key)}/2枚で確認"
