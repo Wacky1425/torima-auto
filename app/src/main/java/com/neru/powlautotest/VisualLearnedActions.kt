@@ -113,7 +113,11 @@ internal class VisualLearnedActions(private val ctx:Context){
   slots.takeLast(MAX_RULES-1).forEach{out.put(it)}
   out.put(obj)
   file(ctx).writeText(out.toString(2),Charsets.UTF_8)
-  return "画像学習を登録しました（計${out.length()}件）。次回は現在の広告と×ボタンの表示を確認してから押します。"
+  return "画像学習の候補を保存しました（計${out.length()}件）。"+
+   (if(afterPackage==TeachingOutcomePolicy.PLAY || afterPackage==TeachingOutcomePolicy.GMS)
+    "Google Playへ移動しました。広告を閉じた成功とは扱いません。"
+    else "画面変化だけでは広告を閉じた成功とは扱いません。")+
+   "自動実行では現在の×／スキップ表示を再確認します。"
  }
  fun matchCanonical(pixels:IntArray,width:Int,height:Int,allowLocalX:Boolean=false):Match?{
   val rules=read(ctx)

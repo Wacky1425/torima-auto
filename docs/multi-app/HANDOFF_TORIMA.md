@@ -210,3 +210,10 @@
 - ガチャ結果後にapp-interstitial-slot/mys-creative/mys-wrapper/application-canvas/playable-containerが揃う広告構造を追加。AWAIT_REWARDで明確な広告を2回確認し、元のガチャ・通常画面がなければ、閉じる候補がまだなくても広告待機へ移る。AWAIT_CARDS/AWAIT_RESULT保護は解除しない。
 - 対象：AutoFlow、RewardAdPolicy、ReportedRetryModel、OperationReportStore、OverlayIconDetector、ScreenshotDiagnostics、PowlAccessibilityService、StableAdClosePolicy。単体回帰：新旧再チャレンジ／曖昧ラベル拒否、SDKの必要構造、ガチャ段階と反復証拠、矢印とX・空白の区別、3領域照合と動く中央の独立性。修正版OPPOは未検証。
 - コード `0cde8b89b704af4dcff2de27eb9546ad4f693205`。QA100017、QA #42352184042 / DEV #42352184111 成功。公開APK 2,939,208 bytes、更新manifestのversionCode/sourceSha/SHA256と匿名取得APKを照合。正式latestはv3.14。integration/stagingとの差分で共通/統合/設定/CIに変更なし。次は同じQAへ上書きし、登録し直さず再チャレンジ→広告→結果の流れを実機確認。失敗時は同じDriveへ送信。
+
+## 2026-11-07 Torima担当：動画から確認できたタイパHOME対応
+- `dev/torima`。ユーザー動画でタイパモードの紫ボタン1個＋直下の残回数表示を確認。従来の「または」や下の報酬ボタンを必須にしない専用経路を追加。現在のHOME上下表示・タイパモードの文字と残回数の位置を確認し、その間にある一意の幅広ボタンだけを使う。現在のボタンが取得できなければHOME_WAITで待機。広告/ガチャ/マップは除外し、保存座標で補わない。
+- 残回数をtext/description両方から取得。タイパでの残回数観測と0複数回確認、歩数への切り替えも単独ボタン構成に対応。タイパのHOME試行は現在のボタン内相対点を使い、旧画面の学習位置は使わない。従来の2ボタン経路と保存データは保持。
+- Drive書き込みはクラウド送信完了を保証しないため案内を明確化。同期待ち時のZIP共有代替を記載。広告の画像学習保存も「広告閉鎖成功」と混同しない案内へ変更。
+- 17時台の最新診断は接続先から未取得。Driveに見えるのは15:40/QA100016の旧版。診断未確認部分を推測で対応済みとはしない。タイパのラベル/クリックノードを実端末が公開しなければ、今回の保守的な専用経路でも待機になる。
+- 変更：AutoFlow、TaipaHomePolicy、新規テスト、DriveDiagnosticTarget、VisualLearnedActions。回帰は1ボタン・移動後の相対位置・MAP/広告/誤配置拒否。次はタイパのHOME認識と残数減少、Drive同期後の診断を実機確認。

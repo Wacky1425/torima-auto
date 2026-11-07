@@ -765,6 +765,7 @@ class AutoFlow(
   val emptyMove=snap.has("たくさん移動してマイルを獲得しよう")
   val fromNodes=RewardTabPolicy.selectedTab(
    selectedMove,selectedSteps,stepHero,emptyMove)
+  if(taipaAnchors(snap)!=null && !selectedSteps)return RewardTabPolicy.Tab.MOVE
   if(fromNodes!=RewardTabPolicy.Tab.UNKNOWN)return fromNodes
   val image=badgeLast
   val now=SystemClock.elapsedRealtime()
@@ -780,6 +781,35 @@ class AutoFlow(
    image!=null && now-badgeLastObservedAt<3_500L)
     image.selected else RewardTabPolicy.Tab.UNKNOWN
  }
+
+ private fun taipaAnchors(snap:Snapshot):Pair<Int,Int>?{
+  val screen=service.resources.displayMetrics
+  val labels=snap.nodes.filter{it.node.isVisibleToUser}
+  val mode=labels.filter{
+   TaipaHomePolicy.modeLabel(it.text) || TaipaHomePolicy.modeLabel(it.desc)
+  }.minByOrNull{it.rect.width().toLong()*it.rect.height()}?:return null
+  val count=labels.filter{
+   CollectionTaskPolicy.remaining(it.text)!=null || CollectionTaskPolicy.remaining(it.desc)!=null
+  }.minByOrNull{it.rect.width().toLong()*it.rect.height()}?:return null
+  val h=maxOf(screen.heightPixels,snap.root.let{val r=Rect();it.getBoundsInScreen(r);r.bottom})
+  return if(TaipaHomePolicy.verified(
+    mainScreen(snap).screen==MainScreenPolicy.Screen.HOME,mode.rect.bottom,
+    count.rect.top,screen.widthPixels,h,blockedRewardObservation(snap)))
+   Pair(mode.rect.bottom,count.rect.top) else null
+ }
+ private fun taipaVideoButton(snap:Snapshot,enabled:Boolean):Item?{
+  val anchors=taipaAnchors(snap)?:return null
+  val screen=service.resources.displayMetrics
+  val bounds=Rect();snap.root.getBoundsInScreen(bounds)
+  val h=maxOf(screen.heightPixels,bounds.bottom)
+  return snap.nodes.filter{
+   it.node.isVisibleToUser && it.node.isClickable && (!enabled || it.node.isEnabled) &&
+    TaipaHomePolicy.button(TaipaHomePolicy.Box(it.rect.left,it.rect.top,it.rect.right,it.rect.bottom),
+     anchors.first,anchors.second,screen.widthPixels,h)
+  }.distinctBy{it.rect.toShortString()}.singleOrNull()
+ }
+ private fun rewardHomeLayout(snap:Snapshot):Boolean =
+  rewardSeparator(snap)!=null || taipaAnchors(snap)!=null
 
  private fun rewardSeparator(snap:Snapshot):Item?=
   snap.nodes.filter{it.node.isVisibleToUser &&
@@ -804,7 +834,7 @@ class AutoFlow(
 
  private fun currentRemaining(snap:Snapshot):Int? =
   snap.nodes.asSequence().filter{it.node.isVisibleToUser}
-   .mapNotNull{CollectionTaskPolicy.remaining(it.text)}.firstOrNull()
+   .mapNotNull{CollectionTaskPolicy.remaining(it.text)?:CollectionTaskPolicy.remaining(it.desc)}.firstOrNull()
 
  private fun blockedRewardObservation(snap:Snapshot):Boolean=
   gachaPhase!=GachaSafety.Phase.NONE ||
@@ -813,6 +843,7 @@ class AutoFlow(
    snap.has("持っている枚数") ||
    snap.has("ガチャWチャンスに挑戦") ||
    snap.has("動画を見て再チャレンジ") ||
+   snap.has("ガチャに再チャレンジ") ||
    snap.has("動画スキップ券を使いますか") ||
    snap.has("読み込み中")
 
@@ -871,7 +902,7 @@ class AutoFlow(
   if(tabSwitchInFlight)return true
   val previous=selectedRewardTab(snap)
   if(previous==RewardTabPolicy.Tab.UNKNOWN || previous==desired ||
-   rewardSeparator(snap)==null || blockedRewardObservation(snap))return false
+   !rewardHomeLayout(snap) || blockedRewardObservation(snap))return false
   if(tabSwitchAttempts>=RewardTabPolicy.MAX_STEP_SWITCH_TAPS){
    update("${desired.name}タブへの切り替え確認中。連打せず待機")
    return true
@@ -896,7 +927,7 @@ class AutoFlow(
    }
    val fresh=readCurrent()
    if(fresh==null || selectedRewardTab(fresh)!=previous ||
-    rewardSeparator(fresh)==null || blockedRewardObservation(fresh)){
+    !rewardHomeLayout(fresh) || blockedRewardObservation(fresh)){
     tabSwitchInFlight=false
     update("タブ操作前に画面が変わったので旧位置を押さず再判定")
     next(850)
@@ -965,7 +996,7 @@ class AutoFlow(
    snap.has("歩数") && snap.has("移動")
   if(badgeInspectionDone || rewardPhase!=RewardTabPolicy.Phase.MOVE ||
    (active!=RewardTabPolicy.Tab.STEPS && !headerUnknown) ||
-   rewardSeparator(snap)==null || blockedRewardObservation(snap))return false
+   !rewardHomeLayout(snap) || blockedRewardObservation(snap))return false
   if(badgeInspectionSince==0L)badgeInspectionSince=now
   val result=badgeLast
   if(result!=null && badgeReadCount>=2 &&
@@ -1122,6 +1153,16 @@ class AutoFlow(
    return Decision("CARD_RESULT","カード結果","CARD_RESULT",cardResult.singleOrNull(),
     "結果ボタン＋閉じる文字を確認／候補=${cardResult.size}")
   }
+  // New mode has one reward control and no "または". Never fall back to
+  // a remembered screen coordinate: derive its bounds between current anchors.
+  if(taipaAnchors(snap)!=null){
+   val button=taipaVideoButton(snap,true)
+   val remaining=currentRemaining(snap)
+   return Decision(if(button!=null && remaining!=0)"HOME" else "HOME_WAIT",
+    "タイパモード／紫ボタン","HOME:MOVE:TAIPA:$remaining",
+    if(remaining!=0)button else null,
+    "HOME上下表示＋タイパ表示＋残回数を確認。現在のボタン候補=${button!=null}／残り=$remaining")
+  }
   // Identify the top reward-video button from its position above the "または"
   // separator, not fixed vertical pixels. The two large buttons must be distinct.
   val activeTab=selectedRewardTab(snap)
@@ -1263,7 +1304,7 @@ class AutoFlow(
   fun pointFor(rect:Rect):Point=when(trial.position){
    HomeTouchTrials.Position.UPPER_BUTTON_RIGHT_CENTER->HomeTouchProfile.rightCenter(rect)
    HomeTouchTrials.Position.UPPER_BUTTON_CENTER->Point(rect.centerX(),rect.centerY())
-   HomeTouchTrials.Position.LEARNED->HomeTouchProfile.current(service,rect)
+   HomeTouchTrials.Position.LEARNED->if(decision.key.contains(":TAIPA:"))HomeTouchProfile.rightCenter(rect) else HomeTouchProfile.current(service,rect)
   }
   val point=pointFor(bounds)
   if(!bounds.contains(point.x,point.y) ||
@@ -2102,7 +2143,7 @@ class AutoFlow(
    if(inspectBadgesWhenStartingOnSteps(snap,now))return true
    // If the user started from the step tab, return to MOVE before processing.
    // Similarly recover the step tab if they manually selected MOVE mid-run.
-   if(divider!=null && tab!=RewardTabPolicy.Tab.UNKNOWN){
+   if(rewardHomeLayout(snap) && tab!=RewardTabPolicy.Tab.UNKNOWN){
     if(tabSwitchStartedAt==0L)tabSwitchStartedAt=now
     if(now-tabSwitchStartedAt>RewardTabPolicy.STEP_SWITCH_TIMEOUT_MS){
      stopWithReason("${desired.name}タブに28秒間戻れず停止")
@@ -2113,12 +2154,12 @@ class AutoFlow(
    return false
   }
   if(tabSwitchStartedAt!=0L)resetTabSwitch()
-  if(divider==null || !collection.isActive()){
+  if(!rewardHomeLayout(snap) || !collection.isActive()){
    clearEmptyObservation()
    return false
   }
   val count=currentRemaining(snap)
-  val videoEnabled=upperVideoButtonEnabled(snap,divider)
+  val videoEnabled=if(divider!=null)upperVideoButtonEnabled(snap,divider) else taipaVideoButton(snap,true)!=null
   val moveEmptyPrompt=snap.has("たくさん移動してマイルを獲得しよう")
   val stepHero=snap.has("今日の歩数") ||
    (snap.has("今日の") && snap.has("歩数"))
@@ -2577,7 +2618,7 @@ class AutoFlow(
    }else if(monitorCollection(snapshot,now))return
    // The advertisement/gacha loop must never click a purple HOME button
    // when an incomplete reward-tab change is still in progress.
-   if(mapPhase==MapStockPolicy.Phase.OFF && rewardSeparator(snapshot)!=null && !blockedRewardObservation(snapshot)){
+   if(mapPhase==MapStockPolicy.Phase.OFF && rewardHomeLayout(snapshot) && !blockedRewardObservation(snapshot)){
     val selected=selectedRewardTab(snapshot)
     val desired=if(rewardPhase==RewardTabPolicy.Phase.STEPS)
      RewardTabPolicy.Tab.STEPS else RewardTabPolicy.Tab.MOVE

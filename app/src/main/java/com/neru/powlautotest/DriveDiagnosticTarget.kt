@@ -28,7 +28,7 @@ internal object DriveDiagnosticTarget {
   ctx.contentResolver.openOutputStream(uri,"wt")?.use{output->
    file.inputStream().use{it.copyTo(output)};output.flush()
   }?:error("Driveの保存先を開けません。保存先を再設定してください")
-  val message="Driveへの書き込み完了（${file.length()} bytes）。オンライン同期後に確認できます"
+  val message="Driveアプリに保存済み（${file.length()} bytes）。クラウドへの送信完了は未確認です。Driveで「アップロード中」が消えてから、このチャットにお知らせください。進まない場合は「ほかの共有方法」からZIPを直接共有できます。"
   prefs(ctx).edit().putLong("lastWrittenAt",System.currentTimeMillis()).putLong("bytes",file.length()).apply()
   DiagnosticJournal.record(ctx,"drive","written",org.json.JSONObject().put("bytes",file.length()).put("file",FILE_NAME))
   return message
