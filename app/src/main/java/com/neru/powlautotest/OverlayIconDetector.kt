@@ -24,10 +24,16 @@ internal object OverlayIconDetector {
   val b=c and 255
   return (r*30+g*59+b*11)/100
  }
- fun detect(pixels:IntArray,width:Int,height:Int):List<Marker>{
+ fun detect(pixels:IntArray,width:Int,height:Int):List<Marker> =
+  detectRegion(pixels,width,height,false)
+ fun skipVisibleAt(pixels:IntArray,width:Int,height:Int,x:Int,y:Int):Boolean =
+  detectRegion(pixels,width,height,x<width/2).any{
+   it.kind=="NEXT" && abs(it.x-x)<=24 && abs(it.y-y)<=22
+  }
+ private fun detectRegion(pixels:IntArray,width:Int,height:Int,left:Boolean):List<Marker>{
   if(width<300 || height<450 || pixels.size!=width*height)return emptyList()
-  val x0=width*75/100
-  val x1=width*99/100
+  val x0=if(left)width/100 else width*75/100
+  val x1=if(left)width*25/100 else width*99/100
   val y0=max(14,height*2/100)
   val y1=min(height*14/100,width*56/100)
   val visited=BooleanArray(width*y1)
@@ -80,7 +86,7 @@ internal object OverlayIconDetector {
   }
   val chevrons=blobs.filter{b->
    val occ=b.area.toDouble()/(b.width*b.height)
-   b.x>=width*85/100 && b.y<=height*10/100 &&
+   (left || b.x>=width*85/100) && b.y<=height*10/100 &&
     b.width in 7..17 && b.height in 18..34 &&
     b.width*100 in (28*b.height)..(70*b.height) &&
     occ in .15.. .42
@@ -99,7 +105,7 @@ internal object OverlayIconDetector {
      bright(tip,middle) && !bright(left,middle)
    }
    if(check(a)&&check(b)){
-    results.add(Marker("NEXT",b.cx,b.cy,170,"top-right"))
+    results.add(Marker("NEXT",b.cx,b.cy,170,if(left)"top-left" else "top-right"))
    }
   }
   return results.groupBy{it.kind}.values.mapNotNull{it.maxByOrNull{v->v.score}}

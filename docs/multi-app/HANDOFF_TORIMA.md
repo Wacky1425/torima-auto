@@ -201,3 +201,11 @@
 - 既存の回収ボタン登録は用途と任意の名前だけ。画面名・移動先は既定値を使い、認識条件や回収ループは変更しない。
 - 変更：MainActivity/activity_main、ScreenCollector、PowlAccessibilityService、AppNavigationRules、DiagnosticBundleExporter、OperationReportOverlay/Store。回帰テストはZIPに前後がそろうこと、未完了・古い組を除くこと。次は実機で操作報告→Drive送信を確認。
 - コード `b406eb04a99bdfcd223a0f1f32ac9757781bf33a`。DEV #42185368389・QA #42185368909 成功。QA100016配布フロー完了。新しいUIと報告の端末上の操作は未検証。正式版とmainは変更なし。
+
+## 2026-11-07 Torima担当：報告済み再チャレンジ・広告スキップ・ガチャ後広告
+- `dev/torima`。QA100016の11/7診断で「ガチャに再チャレンジ」報告が2組届くこと、撮影応答回復後の登録継続を確認。新ボタン名は既存の「動画を見て再チャレンジ」条件に合わずUNKNOWN。新旧の正確なラベルと幅広ボタンを認識。子の文字ラベルから親のクリック対象も確認。
+- 文字を取得できない同じ再チャレンジ画面は、端末内に残る今回の報告からボタン・オファー上部・受け取りボタンの3領域を確認して操作。開発で確認したメモ名の報告のみ対応する明示的実装で、任意の報告を自動昇格しない。動く中央広告を除き、現在の2画像・前面Torima・ガチャカード段階の除外・回数上限・遷移タイムアウトを維持。元画像や個人情報をpublic Gitへ保存しない。端末から報告が消えた場合は文字認識経路のみ。
+- 実診断画像の再チャレンジ2画像は3領域とも990以上で一致し、保存済みの別広告画像は一致しないことをローカルで確認。これは実機自動入力の検証とは別。
+- 左上のSkipというノード情報だけでは、スクショではボタンが出ていない場面もある。現行の小さい上隅Skipノード＋広告SDK構造＋タイマー不存在＋現在画像の二重矢印を2回確認する経路を追加。×と矢印を混同しない。文字だけのSkipの画像認識は未対応。
+- ガチャ結果後にapp-interstitial-slot/mys-creative/mys-wrapper/application-canvas/playable-containerが揃う広告構造を追加。AWAIT_REWARDで明確な広告を2回確認し、元のガチャ・通常画面がなければ、閉じる候補がまだなくても広告待機へ移る。AWAIT_CARDS/AWAIT_RESULT保護は解除しない。
+- 対象：AutoFlow、RewardAdPolicy、ReportedRetryModel、OperationReportStore、OverlayIconDetector、ScreenshotDiagnostics、PowlAccessibilityService、StableAdClosePolicy。単体回帰：新旧再チャレンジ／曖昧ラベル拒否、SDKの必要構造、ガチャ段階と反復証拠、矢印とX・空白の区別、3領域照合と動く中央の独立性。修正版OPPOは未検証。

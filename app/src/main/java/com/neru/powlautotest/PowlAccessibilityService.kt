@@ -39,8 +39,8 @@ class PowlAccessibilityService:AccessibilityService(){
  internal fun probeMapStock(role:AppNavigationRules.Role,done:(MapStockIconDetector.Result?)->Unit){
   imageDiagnostics.probeMapStock(role,done)
  }
- internal fun probeLearnedX(x:Int,y:Int,allowLocalX:Boolean,onDone:(Boolean?,VisualLearnedActions.Match?)->Unit){
-  imageDiagnostics.probeLearnedX(x,y,allowLocalX,onDone)
+ internal fun probeLearnedX(x:Int,y:Int,allowLocalX:Boolean,allowSkip:Boolean,onDone:(Boolean?,VisualLearnedActions.Match?)->Unit){
+  imageDiagnostics.probeLearnedX(x,y,allowLocalX,allowSkip,onDone)
  }
  internal fun matchVisualLearning(pixels:IntArray,width:Int,height:Int,allowLocalX:Boolean):
   VisualLearnedActions.Match? =

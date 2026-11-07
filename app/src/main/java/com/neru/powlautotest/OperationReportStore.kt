@@ -43,6 +43,26 @@ internal object OperationReportStore {
   }finally{temp.deleteRecursively()}
  }
 
+ // This one memo was reviewed in development and explicitly assigned to RETRY.
+ // Other operation reports remain diagnostics and never become automatic rules.
+ @Synchronized fun reviewedRetryModels(ctx:Context):List<ReportedRetryModel.Model> =
+  reports(ctx).mapNotNull{dir->
+   try{
+    val report=JSONObject(File(dir,"report.json").readText())
+    if(report.optString("memo").trim()!="ガチャに再チャレンジ")return@mapNotNull null
+    val image=android.graphics.BitmapFactory.decodeFile(File(dir,"before.jpg").path)?:return@mapNotNull null
+    try{
+     val w=540;val h=image.height*w/image.width
+     val scaled=Bitmap.createScaledBitmap(image,w,h,true)
+     try{
+      val pixels=IntArray(w*h);scaled.getPixels(pixels,0,w,0,0,w,h)
+      ReportedRetryModel.capture(pixels,w,h,
+       report.getInt("selectedX")*w/report.getInt("sourceWidth"),
+       report.getInt("selectedY")*h/report.getInt("sourceHeight"))
+     }finally{if(scaled!==image)scaled.recycle()}
+    }finally{image.recycle()}
+   }catch(_:Exception){null}
+  }.take(2)
  @Synchronized fun append(ctx:Context,zip:ZipOutputStream):Int=appendReports(reports(ctx),zip)
  internal fun appendReports(newestFirst:List<File>,zip:ZipOutputStream):Int{
   val names=listOf("report.json","before.jpg","after.jpg")

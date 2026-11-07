@@ -316,7 +316,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  }
 
  /** A local before-input glyph check. It never clicks, saves, or trusts scene identity. */
- fun probeLearnedX(x:Int,y:Int,allowLocalX:Boolean,done:(Boolean?,VisualLearnedActions.Match?)->Unit){
+ fun probeLearnedX(x:Int,y:Int,allowLocalX:Boolean,allowSkip:Boolean,done:(Boolean?,VisualLearnedActions.Match?)->Unit){
   val now=SystemClock.elapsedRealtime()
   if(cleanReserved() || !captureSchedule.allowProbe() || now-lastProbeRequest<1_300L){done(null,null);return}
   lastProbeRequest=now
@@ -327,7 +327,9 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
     val small=Bitmap.createScaledBitmap(bitmap,w,h,true)
     try{
      val pixels=IntArray(w*h);small.getPixels(pixels,0,w,0,0,w,h)
-     Pair(LearnedXPresence.visible(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height),
+     Pair(if(allowSkip)
+      OverlayIconDetector.skipVisibleAt(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height)
+     else LearnedXPresence.visible(pixels,w,h,x*w/bitmap.width,y*h/bitmap.height),
       service.matchVisualLearning(pixels,w,h,allowLocalX)?.let{it.copy(x=it.x*bitmap.width/w,y=it.y*bitmap.height/h)})
     }finally{if(small!==bitmap)small.recycle()}
    }catch(_:Exception){null}finally{bitmap.recycle()}

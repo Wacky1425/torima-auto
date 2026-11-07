@@ -19,7 +19,7 @@ internal object StableAdClosePolicy {
  private val GACHA_TERMS=listOf(
   "ガチャWチャンスに挑戦","カードを1枚選んでください",
   "友達にシェアする","動画スキップ券を使いますか",
-  "動画スキップ","持っている枚数","動画を見て再チャレンジ",
+  "動画スキップ","持っている枚数","動画を見て再チャレンジ","ガチャに再チャレンジ",
   "ガチャ演出","読み込み中","ロード中"
  )
  fun hasGachaOrLoadingText(labels:Collection<String>):Boolean =

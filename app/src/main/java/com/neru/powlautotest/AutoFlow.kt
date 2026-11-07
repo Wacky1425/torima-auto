@@ -63,6 +63,7 @@ class AutoFlow(
  private var playRecoveryStep=0
  private var playRecoveryAt=0L
  private var playRecoveryAttempts=0
+ private val adAfterResult=RewardAdPolicy.AdAfterResult()
  private var running=false
  private var generation=0
  private var steps=0
@@ -320,6 +321,8 @@ class AutoFlow(
   learnedTextSeenAt=0L
   gachaPhase=GachaSafety.Phase.NONE
   gachaPhaseSince=0L
+  adAfterResult.reset()
+  retryReportReads=0;retryReportPressedAt=0L;retryReportPending=false
   cardResultVisibleSince=0L
   verifiedAdKey=""
   verifiedAdSince=0L
@@ -362,6 +365,7 @@ class AutoFlow(
   resetBadgeInspection()
   playRecoveryStep=0
   gachaPhase=GachaSafety.Phase.NONE
+  adAfterResult.reset()
   resetLiveVisual()
   resetStableAdClose()
   videoAdSessionActive=false
@@ -434,6 +438,9 @@ class AutoFlow(
   * Require independent ad SDK or advertiser metadata to enable learned X rules.
   */
  private fun trustedAdEvidence(snap:Snapshot):String?{
+  val activeIds=snap.nodes.filter{it.node.isVisibleToUser}.map{it.node.viewIdResourceName.orEmpty()}
+  if(RewardAdPolicy.playableFrame(activeIds))return "PLAYABLE_INTERSTITIAL"
+
   val visible=snap.nodes.filter{it.node.isVisibleToUser && it.rect.width()>0 &&
    it.rect.height()>0}
   val sdkIa=visible.any{it.desc=="IAInterstitialView"} &&
@@ -623,6 +630,17 @@ class AutoFlow(
  }
  private fun gachaProtects(decision:Decision,now:Long,snapshot:Snapshot):Boolean{
   if(gachaPhase==GachaSafety.Phase.NONE)return false
+  val appControls=snapshot.nodes.filter{it.node.isVisibleToUser}.flatMap{listOf(it.text,it.desc)}
+  val appUi=StableAdClosePolicy.hasGachaOrLoadingText(appControls) ||
+   appControls.any{it.contains("このまま受け取る") || it.contains("友達にシェア")} ||
+   mainScreen(snapshot).screen!=MainScreenPolicy.Screen.UNKNOWN
+  if(adAfterResult.observe(gachaPhase,trustedAdEvidence(snapshot)!=null,appUi,now-gachaPhaseSince,now)){
+   gachaPhase=GachaSafety.Phase.NONE
+   videoAdSessionActive=true
+   learnedXGate.reset();resetLiveVisual()
+   update("ガチャ結果後の広告を連続確認。終了ボタンが出るまで広告として待機")
+   return false
+  }
   val adProof=adEvidence(decision,snapshot,now)
   val actualAd=GachaSafety.canDismissProvenAdAfterResult(
    gachaPhase,decision.kind,adProof!=null || registeredLearnedCloseTrusted(decision,snapshot),
@@ -669,6 +687,7 @@ class AutoFlow(
  private fun markGachaAction(kind:String,now:Long){
   gachaPhase=GachaSafety.newPhaseAfter(kind)?:gachaPhase
   gachaPhaseSince=now
+  adAfterResult.reset()
   cardResultVisibleSince=0L
   lastGachaBucket=-1L
   lastGachaCandidate=""
@@ -1060,10 +1079,18 @@ class AutoFlow(
    return Decision("W_CHANCE","Wチャンス","W_CHANCE",hits.singleOrNull(),
     "『ガチャWチャンスに挑戦』候補=${hits.size}")
   }
-  if(snap.has("動画を見て再チャレンジ")){
-   val hits=snap.exactClickable("動画を見て再チャレンジ")
-   return Decision("RETRY","再チャレンジ","RETRY",hits.singleOrNull(),
-    "『動画を見て再チャレンジ』候補=${hits.size}")
+  val retryLabel=RewardAdPolicy.retryLabel(n.filter{it.node.isVisibleToUser}.flatMap{listOf(it.text,it.desc)})
+  if(retryLabel!=null){
+   val captions=n.filter{it.node.isVisibleToUser && (it.text.trim()==retryLabel || it.desc.trim()==retryLabel)}
+   val hits=n.filter{button->button.canPress && captions.any{
+    button.rect.contains(it.rect.centerX(),it.rect.centerY())
+   }}.distinctBy{it.rect.toShortString()}.filter{
+    it.rect.width()>=service.resources.displayMetrics.widthPixels*55/100 &&
+     it.rect.height() in 45..240 &&
+     it.rect.centerY()>service.resources.displayMetrics.heightPixels*50/100
+   }
+   return Decision("RETRY","ガチャに再チャレンジ","RETRY",hits.singleOrNull(),
+    "現在の再チャレンジ表示と幅広ボタンを確認／候補=${hits.size}")
   }
   val cardHeading=snap.has("カードを1枚選んでください")
   if(cardHeading){
@@ -1150,6 +1177,12 @@ class AutoFlow(
     "現在タブ=${activeTab.name} / ボタン候補=${above.size} / " +
      "幅広ボタン=${wideButtons.size} / 下のボタン=${below.size} / " +
      "または=${separator!=null} / タンク=$tank")
+  }
+  val skipTargets=currentSkipTargets(snap)
+  if(skipTargets.size==1){
+   val skip=skipTargets.single()
+   return Decision("AD_SKIP","広告のスキップ","AD_SKIP:${skip.rect.toShortString()}",skip,
+    "現在の広告・Skip対象を確認。スキップの図形を確認後に操作")
   }
   // A registered rule is more specific than the generic close-button guess.
   // Its target is already matched by screen features, ID/class and bounds.
@@ -2369,12 +2402,80 @@ class AutoFlow(
   update("広告後の${current}を確認。通常の判定に復帰")
   return false
  }
+ private val retryReportModels by lazy{OperationReportStore.reviewedRetryModels(service)}
+ private var retryReportReads=0
+ private var retryReportLastAt=0L
+ private var retryReportPressedAt=0L
+ private var retryReportPending=false
+ private fun reportedRetryAllowed(snap:Snapshot):Boolean =
+  mapPhase==MapStockPolicy.Phase.OFF &&
+   gachaPhase !in listOf(GachaSafety.Phase.AWAIT_CARDS,GachaSafety.Phase.AWAIT_RESULT) &&
+   !snap.has("動画スキップ") && !snap.has("カードを1枚選んでください") &&
+   !snap.has("友達にシェアする") && !snap.has("ガチャWチャンスに挑戦")
+ private fun handleReportedRetry(snap:Snapshot,now:Long){
+  if(retryReportModels.isEmpty() || !reportedRetryAllowed(snap) ||
+   retryReportPending || now-retryReportLastAt<3500L)return
+  retryReportPending=true;retryReportLastAt=now
+  val expected=generation
+  service.captureNavigationFrame{image,_->
+   retryReportPending=false
+   if(image==null)return@captureNavigationFrame
+   try{
+    if(!running || generation!=expected)return@captureNavigationFrame
+    val w=540;val h=image.height*w/image.width
+    val scaled=android.graphics.Bitmap.createScaledBitmap(image,w,h,true)
+    val hit=try{
+     val pixels=IntArray(w*h);scaled.getPixels(pixels,0,w,0,0,w,h)
+     retryReportModels.firstOrNull{ReportedRetryModel.matches(it,pixels,w,h)}
+    }finally{if(scaled!==image)scaled.recycle()}
+    val current=readCurrent()
+    if(hit==null || current==null || !reportedRetryAllowed(current)){
+     retryReportReads=0;retryReportPressedAt=0L;return@captureNavigationFrame
+    }
+    val stamp=SystemClock.elapsedRealtime()
+    if(retryReportPressedAt>0L){
+     if(stamp-retryReportPressedAt>=13_000L)stopWithReason("報告済み再チャレンジを押した後も画面が変わりません")
+     return@captureNavigationFrame
+    }
+    retryReportReads++
+    if(retryReportReads<2)return@captureNavigationFrame
+    if(steps>=MAX_ACTIONS){stopWithReason("自動操作の回数上限に達しました");return@captureNavigationFrame}
+    retryReportPressedAt=stamp;steps++
+    gachaPhase=GachaSafety.Phase.NONE;adAfterResult.reset()
+    videoAdSessionActive=true;resetLiveVisual()
+    waitingKey="RETRY";waitingSince=stamp;fallbackAttempted=false
+    val point=Point(hit.x*image.width/w,hit.y*image.height/h)
+    DiagnosticJournal.record(service,"navigation_teaching","reviewed_retry",org.json.JSONObject()
+     .put("x",point.x).put("y",point.y).put("source","reviewed_operation_report"))
+    update("報告済みの再チャレンジ画面を2枚確認。紫のボタンを押して広告へ")
+    gestureTap(Rect(point.x-10,point.y-10,point.x+10,point.y+10),"ガチャに再チャレンジ",120L,point)
+   }finally{image.recycle()}
+  }
+ }
+ private fun currentSkipTargets(snap:Snapshot):List<Item>{
+  if(trustedAdEvidence(snap)==null)return emptyList()
+  val visible=snap.nodes.filter{it.node.isVisibleToUser}
+  if(StableAdClosePolicy.hasGachaOrLoadingText(visible.flatMap{listOf(it.text,it.desc)}))return emptyList()
+  val screen=service.resources.displayMetrics
+  return visible.filter{button->
+   button.canPress && listOf(button.text,button.desc).any{RewardAdPolicy.isSkipLabel(it)} &&
+    RewardAdPolicy.skipBounds(button.rect.left,button.rect.top,button.rect.right,button.rect.bottom,
+     screen.widthPixels,maxOf(screen.heightPixels,button.rect.bottom)) &&
+    visible.none{other->
+     button.rect.contains(other.rect.centerX(),other.rect.centerY()) &&
+      listOf(other.text,other.desc).any{Regex("""[0-9０-９]+(?:秒|s)?""").matches(it.trim())}
+    }
+  }.distinctBy{it.rect.toShortString()}
+ }
+ private fun currentSkipAt(snap:Snapshot,point:Point):Boolean =
+  currentSkipTargets(snap).any{it.rect.contains(point.x,point.y)}
+
  private fun requiresVisibleLearnedX(decision:Decision):Boolean {
-  if(decision.kind in listOf("LEARNED_ICON","LEARNED_VISUAL"))return true
+  if(decision.kind in listOf("AD_SKIP","LEARNED_ICON","LEARNED_VISUAL"))return true
   if(decision.kind !in listOf("LEARNED","LEARNED_TEXT","AD_CLOSE"))return false
   val item=decision.target?:return false
   val caption=(item.text+" "+item.desc).lowercase()
-  if(caption.contains("skip") || caption.contains("スキップ"))return false
+  if(RewardAdPolicy.isSkipLabel(item.text) || RewardAdPolicy.isSkipLabel(item.desc))return true
   return decision.registeredLearned || item.node.className?.toString()?.endsWith("ImageView")==true ||
    caption.trim() in setOf("close","close ad","×","✕","✖")
  }
@@ -2391,7 +2492,8 @@ class AutoFlow(
   if(!learnedXPending && now-learnedXLastRequest>=1_400L){
    learnedXPending=true;learnedXLastRequest=now
    val expected=generation
-   service.probeLearnedX(point.x,point.y,decision.kind=="LEARNED_VISUAL" && allowsMovingAdX(snapshot)){visible,freshMatch->
+   val skip=currentSkipAt(snapshot,point)
+   service.probeLearnedX(point.x,point.y,decision.kind=="LEARNED_VISUAL" && allowsMovingAdX(snapshot),skip){visible,freshMatch->
     learnedXPending=false
     if(!running || generation!=expected || learnedXGate.key!=key)return@probeLearnedX
     val stamp=SystemClock.elapsedRealtime()
@@ -2402,14 +2504,18 @@ class AutoFlow(
      visualLearned=freshMatch;visualLearnedAt=stamp
      if(freshScene)visualLearnedCount++ else visualLearnedCount=0
     }
-    learnedXGate.observe(key,visible==true && freshScene,stamp)
+    val current=readCurrent()
+    val sameControl=current!=null && (if(skip)currentSkipAt(current,point)
+     else !currentSkipAt(current,point))
+    learnedXGate.observe(key,visible==true && freshScene && sameControl,stamp)
     DiagnosticJournal.record(service,"learned_guard","x_observed",org.json.JSONObject()
      .put("key",key).put("visible",visible?:org.json.JSONObject.NULL).put("freshScene",freshScene)
+     .put("control",if(skip)"SKIP_GLYPH" else "X_GLYPH").put("sameControl",sameControl)
      .put("x",point.x).put("y",point.y))
     next(100)
    }
   }
-  update("広告の×を確認中：ボタンが続けて見えたら押します")
+  update("広告の×／スキップを確認中：ボタンが続けて見えたら押します")
   next(900)
   return false
  }
@@ -2483,6 +2589,7 @@ class AutoFlow(
     }
    }
    val initial=choose(snapshot)
+   if(initial.kind in listOf("UNKNOWN","OPAQUE"))handleReportedRetry(snapshot,now)
    if(!requiresVisibleLearnedX(initial) && (gachaPhase==GachaSafety.Phase.AWAIT_REWARD ||
     initial.kind in listOf("UNKNOWN","OPAQUE","AD_VISUAL_X","AD_VISUAL_NEXT") ||
    (VisualLearnedActions.count(service)>0 &&
