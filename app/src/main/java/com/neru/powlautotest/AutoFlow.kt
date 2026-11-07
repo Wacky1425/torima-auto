@@ -794,7 +794,7 @@ class AutoFlow(
   val h=maxOf(screen.heightPixels,snap.root.let{val r=Rect();it.getBoundsInScreen(r);r.bottom})
   return if(TaipaHomePolicy.verified(
     mainScreen(snap).screen==MainScreenPolicy.Screen.HOME,mode.rect.bottom,
-    count.rect.top,screen.widthPixels,h,blockedRewardObservation(snap)))
+    count.rect.top,screen.widthPixels,h,blockedRewardUi(snap)))
    Pair(mode.rect.bottom,count.rect.top) else null
  }
  private fun taipaVideoButton(snap:Snapshot,enabled:Boolean):Item?{
@@ -837,7 +837,9 @@ class AutoFlow(
    .mapNotNull{CollectionTaskPolicy.remaining(it.text)?:CollectionTaskPolicy.remaining(it.desc)}.firstOrNull()
 
  private fun blockedRewardObservation(snap:Snapshot):Boolean=
-  gachaPhase!=GachaSafety.Phase.NONE ||
+  gachaPhase!=GachaSafety.Phase.NONE || blockedRewardUi(snap)
+
+ private fun blockedRewardUi(snap:Snapshot):Boolean=
    snap.has("友達にシェアする") ||
    snap.has("カードを1枚選んでください") ||
    snap.has("持っている枚数") ||
