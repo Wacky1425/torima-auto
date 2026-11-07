@@ -14,6 +14,8 @@ internal object RewardAdPolicy {
    ("playable-container" in parts || "playable-with-exit-no-banner" in parts)
  }
  fun isSkipLabel(value:String)=value.trim().lowercase() in setOf("skip","スキップ",">>","≫")
+ fun combinedCloseOrSkipId(value:String)=
+  value.substringAfterLast('/').substringAfterLast(':').lowercase()=="close-or-skip-button"
  fun skipBounds(left:Int,top:Int,right:Int,bottom:Int,w:Int,h:Int):Boolean =
   w>0 && h>0 && left>=0 && top>=0 && right<=w && bottom<=h*20/100 &&
    right-left in 20..(w*30/100) && bottom-top in 20..(h*12/100) &&

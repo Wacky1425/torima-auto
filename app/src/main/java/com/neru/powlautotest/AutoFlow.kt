@@ -2555,14 +2555,15 @@ class AutoFlow(
    }finally{image.recycle()}
   }
  }
- private fun currentSkipTargets(snap:Snapshot,requireAdProof:Boolean=true):List<Item>{
+ private fun currentSkipTargets(snap:Snapshot,requireAdProof:Boolean=true,registeredCombined:Boolean=false):List<Item>{
   if((requireAdProof && trustedAdEvidence(snap)==null) ||
    mainScreen(snap).screen!=MainScreenPolicy.Screen.UNKNOWN)return emptyList()
   val visible=snap.nodes.filter{it.node.isVisibleToUser}
   if(StableAdClosePolicy.hasGachaOrLoadingText(visible.flatMap{listOf(it.text,it.desc)}))return emptyList()
   val screen=service.resources.displayMetrics
   return visible.filter{button->
-   button.canPress && listOf(button.text,button.desc).any{RewardAdPolicy.isSkipLabel(it)} &&
+   button.canPress && (listOf(button.text,button.desc).any{RewardAdPolicy.isSkipLabel(it)} ||
+     (registeredCombined && RewardAdPolicy.combinedCloseOrSkipId(button.node.viewIdResourceName.orEmpty()))) &&
     RewardAdPolicy.skipBounds(button.rect.left,button.rect.top,button.rect.right,button.rect.bottom,
      screen.widthPixels,maxOf(screen.heightPixels,button.rect.bottom)) &&
     visible.none{other->
@@ -2579,7 +2580,7 @@ class AutoFlow(
   // A currently matched user-taught Skip caption is specific evidence even
   // when the creative changed enough to lose the old exact screen signature.
   if(DismissProbePolicy.registeredCaptionSkip(decision.kind,decision.registeredLearned) &&
-   decision.target!=null && currentSkipTargets(snap,false).any{
+   decision.target!=null && currentSkipTargets(snap,false,true).any{
     it.rect==decision.target.rect && it.rect.contains(point.x,point.y)
    })return true
   val screen=service.resources.displayMetrics

@@ -2,6 +2,13 @@ package com.neru.powlautotest
 import org.junit.Assert.*
 import org.junit.Test
 class DismissProbePolicyTest {
+ @Test fun aCombinedControlIdIsSpecificAndNotAnArbitraryCloseCaption(){
+  assertTrue(RewardAdPolicy.combinedCloseOrSkipId("close-or-skip-button"))
+  assertTrue(RewardAdPolicy.combinedCloseOrSkipId("ad:id/close-or-skip-button"))
+  assertFalse(RewardAdPolicy.combinedCloseOrSkipId("Close button"))
+  assertFalse(RewardAdPolicy.combinedCloseOrSkipId("install"))
+  assertFalse(RewardAdPolicy.combinedCloseOrSkipId("close-or-skip-button-cta"))
+ }
  @Test fun onlyCurrentRegisteredAdActionsCanUseTheCaptionEvidence(){
   assertTrue(DismissProbePolicy.registeredCaptionSkip("LEARNED",true))
   assertTrue(DismissProbePolicy.registeredCaptionSkip("LEARNED_TEXT",true))
