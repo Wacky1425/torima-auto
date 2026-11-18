@@ -272,3 +272,5 @@
 - 画像の撮影要求/受信・通知をすべてuptimeMillisで保存。同一前面区間の、受信がイベントより前/要求がイベントより後の画像だけを4秒以内で対応付ける。撮影中のフレームや欠落は前後と偽らずnull。windowBoundsAtRequestで画像と画面上ノードの座標系を区別。経過3分・500通知・90画像で制限、JPEG1枚最大256KB、直近2セッションのみ保持。約1秒ごとのチェックポイントと終了保存、サービス終了時INTERRUPTEDを保存。自動学習/自動ルールへ昇格しない。
 - 17_手動操作の記録.jsonとmanual-recordings/を既存診断ZIPへ同梱。従来のDrive送信/ZIP共有に同梱されるが自動送信はしない。最終保存中/記録中の送信・ZIP作成はUIで待つ案内を出す。
 - 変更：ManualOperationRecorder/Policy/Store、PowlAccessibilityService、ScreenCollector、ScreenshotDiagnostics、DiagnosticBundleExporter、MainActivity、操作バー説明/サービスイベント設定。単体回帰：撮影中フレームの不正前後付け、時刻同値/古い/不正フレーム、アプリ退場再入場、連続操作の時刻、他アプリ除外、上限/スクロール通知統合、直近2回のZIP、途中/未知ファイルの除外、画像なし記録。OPPO実機は未検証。次は手動記録→広告Skip/紫ボタンを実際に押す→保存→Drive送信を確認。
+- コード `b4f03c132554edfff62e3be5078e842379dc3a72`。QA100027、QA #44208094211 / DEV #44208094309成功。共通/更新ライブラリ/QA・Debug単体テストと固定署名QAビルド通過。正式latestはv3.14/420174934を維持。共通/統合/設定/CIに変更なし。Androidウィンドウ画像とクリック/スクロール通知がOPPOで届くかは実機確認待ち。
+- 公開manifestのversionCode/sourceShaと匿名取得APKのSHA256を照合、APK 2,964,076 bytesを確認。既存学習を残して同じQAへ上書きし、手動記録→実操作→保存→Drive送信の実機テストへ進む。
