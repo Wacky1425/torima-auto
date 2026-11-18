@@ -4,7 +4,7 @@
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Torima Auto" android:textSize="24sp" android:layout_marginTop="0dp" />
     <TextView android:id="@+id/debugStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="アクセシビリティ：未接続" />
     <Button android:id="@+id/startCollector" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="操作バーを表示してトリマを開く" />
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="トリマの操作バーで「開始」「停止」「学習・報告」を選べます。" android:textSize="14sp" android:layout_marginTop="0dp" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="トリマの操作バーで「開始」「停止」「学習・報告」を選べます。手動で進めた流れを残すときは「手動操作を記録」を押してください。" android:textSize="14sp" android:layout_marginTop="0dp" />
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="回収状況" android:textSize="18sp" android:layout_marginTop="12dp" />
     <TextView android:id="@+id/collectionOverview" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp" android:text="回収タスク：実行記録なし" android:textIsSelectable="true" />
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="診断を送る" android:textSize="18sp" android:layout_marginTop="10dp" />

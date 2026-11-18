@@ -52,6 +52,9 @@ class MainActivity:AppCompatActivity(){
  }
  private var driveSending=false
  private fun sendDriveDiagnostics(){
+  if(PowlAccessibilityService.instance?.isManualRecordingBusy()==true){
+   Toast.makeText(this,"操作バーの「手動記録を保存」が終わってから送信してください",Toast.LENGTH_LONG).show();return
+  }
   if(driveSending)return
   if(DriveDiagnosticTarget.target(this)==null){pickDriveTarget();return}
   driveSending=true
@@ -111,6 +114,10 @@ class MainActivity:AppCompatActivity(){
   }
   findViewById<Button>(R.id.openSettings).setOnClickListener{startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}
   findViewById<Button>(R.id.shareAllDiagnostics).setOnClickListener{
+   if(PowlAccessibilityService.instance?.isManualRecordingBusy()==true){
+    Toast.makeText(this,"操作バーの「手動記録を保存」が終わってから共有してください",Toast.LENGTH_LONG).show()
+    return@setOnClickListener
+   }
    // Freeze the journal so the report and images describe the same trial run.
    PowlAccessibilityService.instance?.let{
     if(it.isAutomaticOperationRunning())it.stopAutomaticOperation()

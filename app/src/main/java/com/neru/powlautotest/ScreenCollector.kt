@@ -85,6 +85,21 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  private var lastDraggedAt=0L
  private var expanded=false
  private var detailsPanel:LinearLayout?=null
+ private var primaryPanel:View?=null
+ private var detailToggle:View?=null
+ private var manualButton:TextView?=null
+ private fun refreshRecording(){
+  val active=service.isManualRecordingActive()
+  val busy=service.isManualRecordingBusy()
+  manualButton?.text=if(active)"■ 手動記録を保存" else if(busy)"保存中…" else "● 手動操作を記録"
+  manualButton?.isEnabled=active || !busy
+  primaryPanel?.visibility=if(busy)View.GONE else View.VISIBLE
+  detailToggle?.visibility=if(busy)View.GONE else View.VISIBLE
+  detailsPanel?.visibility=if(expanded && !busy)View.VISIBLE else View.GONE
+  title?.text=if(busy){if(active)"⠿ 手動記録中（長押しで移動）" else "⠿ 手動記録を保存中"}
+   else if(expanded)"⠿ 長押し移動 | ${stages[index].first}" else "⠿ 長押し移動 | Torima Auto"
+ }
+
  private var title:TextView?=null
  private var info:TextView?=null
  private val homeHandler=Handler(Looper.getMainLooper())
@@ -207,6 +222,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  fun isVisible():Boolean=bar!=null
  fun updateAutoStatus(text:String){
   autoStatus=text
+  refreshRecording()
   info?.text="状態: ${autoStatus.take(115)}"
  }
  private fun dp(n:Int)=(n*service.resources.displayMetrics.density+0.5f).toInt()
@@ -298,7 +314,10 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
     LinearLayout.LayoutParams(0,dp(49),1f))
    primary.addView(control("学習・報告"){updateAutoStatus(service.showLearningMenu())},
     LinearLayout.LayoutParams(0,dp(49),1f))
-   panel.addView(primary)
+   panel.addView(primary);primaryPanel=primary
+   val manual=control("● 手動操作を記録"){updateAutoStatus(service.toggleManualRecording())}
+   manual.textSize=12f;manualButton=manual
+   panel.addView(manual,LinearLayout.LayoutParams(-1,dp(38)))
    val status=TextView(service).apply{
     textSize=11f;setTextColor(Color.rgb(215,228,242));maxLines=2
     setPadding(dp(8),dp(4),dp(8),dp(4))
@@ -310,7 +329,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
     detailsPanel?.visibility=if(expanded)View.VISIBLE else View.GONE
     refresh()
    }.apply{textSize=11f}
-   panel.addView(detail)
+   panel.addView(detail);detailToggle=detail
    val extras=LinearLayout(service).apply{
     orientation=LinearLayout.VERTICAL;visibility=View.GONE
    }
@@ -356,7 +375,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
   service.stopAutomaticOperation()
   restoreHomeTouch()
   val view=bar
-  bar=null;lp=null;title=null;info=null;detailsPanel=null
+  bar=null;lp=null;title=null;info=null;detailsPanel=null;primaryPanel=null;detailToggle=null;manualButton=null
   if(view!=null)try{wm?.removeView(view)}catch(_:Exception){}
   wm=null
  }
@@ -369,6 +388,7 @@ class ScreenCollector(private val service:PowlAccessibilityService) {
  private fun refresh(){
   title?.text=if(expanded)"⠿ 長押し移動 | ${stages[index].first}" else "⠿ 長押し移動 | Torima Auto"
   info?.text="状態: ${autoStatus.take(115)}"
+  refreshRecording()
  }
  private fun sanitized(value:CharSequence?):String{
   return (value?.toString()?:"")

@@ -240,7 +240,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  }
 
 
- private data class CleanRequest(val at:Long,val done:(Bitmap?,String)->Unit)
+ private data class CleanRequest(val at:Long,val done:(Bitmap?,String)->Unit,val windowOnly:Boolean=false)
  private val cleanQueue=java.util.ArrayDeque<CleanRequest>()
  private var cleanActive=false
  private var lastPlatformCaptureAt=0L
@@ -249,6 +249,12 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
  internal fun captureWithoutControlBar(done:(Bitmap?,String)->Unit){
   if(cleanQueue.size>=3){done(null,"撮影予約が多いため今回の要求を終了");return}
   cleanQueue.add(CleanRequest(SystemClock.elapsedRealtime(),done));drainCleanQueue()
+ }
+ /** Window screenshots exclude our overlay without hiding its Stop button. */
+ internal fun captureManualWindow(done:(Bitmap?,String)->Unit){
+  if(Build.VERSION.SDK_INT<34){done(null,"操作を妨げないウィンドウ撮影はAndroid 14以上で対応。操作通知は記録します");return}
+  if(cleanQueue.size>=3){done(null,"撮影予約が多いため今回の要求を終了");return}
+  cleanQueue.add(CleanRequest(SystemClock.elapsedRealtime(),done,true));drainCleanQueue()
  }
  private fun drainCleanQueue(){
   if(cleanActive || cleanQueue.isEmpty())return
@@ -260,7 +266,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   }
   if(busy || badgeProbeBusy){captureHandler.postDelayed({drainCleanQueue()},150L);return}
   cleanActive=true;cleanQueue.removeFirst()
-  val restore=service.hideControlBarForScreenshot()
+  val restore:()->Unit=if(request.windowOnly)({}) else service.hideControlBarForScreenshot()
   var finished=false
   fun finish(bitmap:Bitmap?,note:String){
    if(finished){bitmap?.recycle();return}
@@ -275,7 +281,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
    if(!CaptureSlotPolicy.ready(busy || badgeProbeBusy,SystemClock.elapsedRealtime(),lastPlatformCaptureAt)){
     captureHandler.postDelayed({attempt()},150L);return
    }
-   captureRawFrame{bitmap,note->finish(bitmap,note)}
+   captureRawFrame(request.windowOnly){bitmap,note->finish(bitmap,note)}
   }
   captureHandler.postDelayed({attempt()},200L)
  }
@@ -366,8 +372,8 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   * The caller must hide its teaching overlay and collector panel first.
   */
  fun captureForVisualTeaching(done:(Bitmap?,String)->Unit)=captureWithoutControlBar(done)
- private fun captureRawFrame(done:(Bitmap?,String)->Unit){
-  val root=service.rootInActiveWindow
+ private fun captureRawFrame(windowOnly:Boolean=false,done:(Bitmap?,String)->Unit){
+  val root=if(windowOnly)service.manualRecordingRoot() else service.rootInActiveWindow
   if(root?.packageName?.toString()!=TARGET){
    done(null,"学習元がトリマではないため画像を取得できません");return
   }
@@ -392,8 +398,7 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
   },CaptureSlotPolicy.RAW_TIMEOUT_MS)
   try{
    lastPlatformCaptureAt=SystemClock.elapsedRealtime()
-   service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,
-    object:AccessibilityService.TakeScreenshotCallback{
+   val callback=object:AccessibilityService.TakeScreenshotCallback{
      override fun onSuccess(screenshot:AccessibilityService.ScreenshotResult){
       if(completion.finished){screenshot.hardwareBuffer.close();return}
       val image=toSoftwareBitmap(screenshot)
@@ -402,7 +407,10 @@ internal class ScreenshotDiagnostics(private val service:PowlAccessibilityServic
      override fun onFailure(errorCode:Int){
       finish(null,"画面取得が拒否されました(code=$errorCode)")
      }
-    })
+    }
+   if(windowOnly && Build.VERSION.SDK_INT>=34)
+    service.takeScreenshotOfWindow(root.windowId,service.mainExecutor,callback)
+   else service.takeScreenshot(Display.DEFAULT_DISPLAY,service.mainExecutor,callback)
   }catch(e:Exception){
    finish(null,"画像取得例外：${e.javaClass.simpleName}")
   }

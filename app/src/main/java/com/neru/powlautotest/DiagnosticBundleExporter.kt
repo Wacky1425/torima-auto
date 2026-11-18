@@ -47,6 +47,8 @@ internal object DiagnosticBundleExporter {
     writeTextEntry("07_HOME復旧履歴.json",HomeRecoveryJournal.export(ctx))
     val screenshots=ScreenshotDiagnostics.appendToDiagnosticZip(ctx,zip)
     val operationReports=OperationReportStore.append(ctx,zip)
+    val manualSessions=ManualRecordingStore.append(ctx,zip)
+    writeTextEntry("17_手動操作の記録.json",ManualRecordingStore.index(ctx))
     writeTextEntry("manifest.json",JSONObject().apply{
      put("formatVersion",1)
      put("appVersion",installed.versionName?:"unknown")
@@ -57,7 +59,8 @@ internal object DiagnosticBundleExporter {
      put("nodeLearnedCount",LearnedActions.count(ctx))
      put("visualLearnedCount",VisualLearnedActions.count(ctx))
      put("operationReportCount",operationReports)
-     put("containsPersonalScreenImages",screenshots>0 || operationReports>0)
+     put("manualRecordingSessionCount",manualSessions)
+     put("containsPersonalScreenImages",screenshots>0 || operationReports>0 || manualSessions>0)
      put("homeOutcomeSummary",HomeTrialJournal.shortSummary(ctx))
      put("fingerOutcomeSummary",HomeManualComparison.summary(ctx))
      put("homeRecoverySummary",HomeRecoveryJournal.summary(ctx))
@@ -81,6 +84,14 @@ internal object DiagnosticBundleExporter {
      "09_学習診断.json は位置指定・画像取得・指タップ待機・成功/失敗の専用記録です。\n" +
      "10_撮影診断.json は撮影予約・保存結果・失敗理由です。\n" +
      "operation-reports/ には手動で報告した操作の前後画像・指定位置・メモがあります。\n" +
+     "17_手動操作の記録.json と manual-recordings/ に、直近2回の手動記録があります。\n" +
+     "session.jsonのeventsはアプリのクリック/長押し/スクロール通知、framesは操作バーを除いた定期画像です。\n" +
+     "指の正確な座標・圧力・軌跡・入力元は取得していません。boundsはボタン等の範囲です。\n" +
+     "beforeFrame/afterFrameは同じトリマ前面区間内の近い画像だけを関連付け、不明な場合はnullです。\n" +
+     "画面が動く広告は画像差だけでは操作・成功と判断できません。通知の出ない操作は画像から確認してください。\n" +
+     "ウィンドウ画像はAndroid 14以上で対応。取得不可でも操作通知を記録します。\n" +
+     "通常は約2秒間隔＋操作通知後に撮影。上限3分/500通知/90画像。トリマ外の画像や操作は記録しません。\n" +
+     "保存しただけで自動学習や自動実行には使用しません。RECORDINGは終了保存前のチェックポイントです。\n" +
      "ZIP内には画面画像や操作記録が含まれます。共有相手は自分で選んでください。\n")
    }
    if(archive.exists())archive.delete()

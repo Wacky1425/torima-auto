@@ -20,6 +20,31 @@ class PowlAccessibilityService:AccessibilityService(){
  }
  private val autoFlow by lazy { AutoFlow(this){ message -> screenCollector.updateAutoStatus(message) } }
  private val imageDiagnostics by lazy{ScreenshotDiagnostics(this)}
+ private val manualRecorder by lazy{ManualOperationRecorder(this){message->
+  report=message;screenCollector.updateAutoStatus(message)
+ }}
+ internal fun manualRecordingRoot():AccessibilityNodeInfo? {
+  val root=runCatching{rootInActiveWindow}.getOrNull()
+  if(root?.packageName?.toString()==ManualRecordingPolicy.TARGET)return root
+  if(root!=null && root.packageName?.toString()!=packageName)return null
+  return runCatching{windows.orEmpty().firstNotNullOfOrNull{window->
+   if(window.type!=android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION ||
+    (!window.isActive && !window.isFocused))null
+   else window.root?.takeIf{it.packageName?.toString()==ManualRecordingPolicy.TARGET}
+  }}.getOrNull()
+ }
+ internal fun captureManualRecordingFrame(done:(android.graphics.Bitmap?,String)->Unit){
+  imageDiagnostics.captureManualWindow(done)
+ }
+ fun isManualRecordingBusy()=manualRecorder.busy
+ fun isManualRecordingActive()=manualRecorder.active
+ fun toggleManualRecording():String {
+  if(manualRecorder.active)return manualRecorder.stop()
+  if(manualRecorder.saving)return "手動記録を保存中です"
+  stopSequence();manualHomeComparison.cancel();operationReporter.cancel();navigationTeacher.cancel()
+  teachOverlay.cancelCapture("手動記録に切り替え")
+  return manualRecorder.start()
+ }
  private val manualHomeComparison by lazy{
   HomeManualComparison(this){msg->screenCollector.updateAutoStatus(msg)}
  }
@@ -79,6 +104,7 @@ class PowlAccessibilityService:AccessibilityService(){
  fun isManualHomeComparisonRunning():Boolean=manualHomeComparison.isActive()
  fun finishManualHomeComparison(){manualHomeComparison.cancel()}
  fun startManualHomeComparison():String{
+  if(manualRecorder.busy)return "手動記録を保存してから指タップ比較を開始してください"
   if(autoFlow.isRunning())stopAutomaticOperation()
   return manualHomeComparison.start()
  }
@@ -134,9 +160,10 @@ class PowlAccessibilityService:AccessibilityService(){
   return branded && productSheet
  }
  override fun onServiceConnected(){super.onServiceConnected();instance=this;report="サービス接続完了"}
- override fun onInterrupt(){}
+ override fun onInterrupt(){manualRecorder.stop("サービス中断",false)}
  override fun onAccessibilityEvent(e:AccessibilityEvent?){
   if(e==null)return
+  runCatching{manualRecorder.onEvent(e)}
   manualHomeComparison.onEvent(e)
   if(e.eventType==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
    val p=e.packageName?.toString().orEmpty()
@@ -158,11 +185,12 @@ class PowlAccessibilityService:AccessibilityService(){
   }
   if(e.eventType==AccessibilityEvent.TYPE_VIEW_CLICKED &&
    e.packageName?.toString()=="jp.co.incrementp.milemobile" &&
-   screenCollector.isVisible() && !autoFlow.isRunning()){
+   screenCollector.isVisible() && !autoFlow.isRunning() && !manualRecorder.busy){
    teachOverlay.observedClick(e)
   }
  }
  override fun onDestroy(){
+  manualRecorder.close()
   homeRecovery.cancel()
   manualHomeComparison.cancel()
   navigationTeacher.cancel()
@@ -200,6 +228,7 @@ class PowlAccessibilityService:AccessibilityService(){
  }
  internal fun captureNavigationFrame(done:(android.graphics.Bitmap?,String)->Unit){imageDiagnostics.captureWithoutControlBar(done)}
  fun showLearningMenu():String {
+  if(manualRecorder.busy)return "手動記録を保存してから学習・操作報告を選んでください"
   stopAutomaticOperation()
   operationReporter.cancel()
   navigationTeacher.cancel()
@@ -276,6 +305,7 @@ class PowlAccessibilityService:AccessibilityService(){
   dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY);dialog.show()
  }
  fun beginTeachTap(homeOnly:Boolean=false):String {
+  if(manualRecorder.busy)return "手動記録を保存してから学習を開始してください"
   navigationTeacher.cancel()
   stopAutomaticOperation()
   val source=MainScreenReader.read(rootInActiveWindow).screen
@@ -300,6 +330,7 @@ class PowlAccessibilityService:AccessibilityService(){
  }
  fun isAutomaticOperationRunning():Boolean=autoFlow.isRunning()
  fun startAutomaticOperation():String {
+  if(manualRecorder.busy)return "手動記録を保存してから自動操作を開始してください"
   if(operationReporter.active)return "操作の報告を保存または中止してから開始してください"
   if(manualHomeComparison.isActive())
    return "指タップ比較の18秒間は自動操作を開始できません。比較終了後に開始してください"
@@ -314,6 +345,8 @@ class PowlAccessibilityService:AccessibilityService(){
   return message
  }
  fun stopAutomaticOperation():String {
+  if(manualRecorder.active)return manualRecorder.stop()
+  if(manualRecorder.saving)return "手動記録を保存中です"
   autoFlow.stop()
   runId++
   sequenceActive=false
@@ -345,6 +378,7 @@ class PowlAccessibilityService:AccessibilityService(){
  private fun homeLog():String=homeTrace.joinToString("\n")
 
  fun stopSequence(){
+  if(manualRecorder.active)manualRecorder.stop("別の操作へ切り替え",false)
   autoFlow.stop()
   runId++
   sequenceActive=false
@@ -353,6 +387,7 @@ class PowlAccessibilityService:AccessibilityService(){
   report="停止しました。\n"+report
  }
  fun startSequence(){
+  if(manualRecorder.busy){report="手動記録を保存してから自動操作を開始してください";return}
   runId++
   sequenceActive=false
   h.removeCallbacks(adPoll)
@@ -678,6 +713,7 @@ class PowlAccessibilityService:AccessibilityService(){
   }
  }
  fun scheduleAdScan(tap:Boolean=false){
+  if(manualRecorder.busy){report="手動記録を保存してからテストを開始してください";return}
   runId++
   sequenceActive=false
   h.removeCallbacks(adPoll)
@@ -750,6 +786,7 @@ class PowlAccessibilityService:AccessibilityService(){
   return sb.toString().take(15000)
  }
  fun scheduleHomeTest(tap:Boolean){
+  if(manualRecorder.busy){report="手動記録を保存してからテストを開始してください";return}
   report="5秒後にHOME判定。タップ=${if(tap)"あり" else "なし"}"
   h.postDelayed({inspect(tap)},5000)
  }
